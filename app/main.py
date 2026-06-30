@@ -18,7 +18,7 @@ from PySide6.QtGui import QAction, QFont
 from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QHBoxLayout,
                                QVBoxLayout, QSplitter, QToolBar, QLineEdit,
                                QPushButton, QLabel, QCheckBox, QMessageBox, QScrollArea,
-                               QDockWidget)
+                               QDockWidget, QComboBox, QInputDialog)
 
 import core
 import mavlink
@@ -102,6 +102,31 @@ class DroneDeck(QMainWindow):
         zout.clicked.connect(lambda: self.map.set_zoom(self.map.zoom - 1))
         tb.addWidget(zout); tb.addWidget(zin)
 
+        # second toolbar row: flight controls
+        self.addToolBarBreak()
+        tb2 = QToolBar("Flight")
+        tb2.setMovable(False)
+        self.addToolBar(tb2)
+        tb2.addWidget(QLabel(" Mode "))
+        self.mode_combo = QComboBox()
+        self.mode_combo.addItems(["STABILIZE", "ALT_HOLD", "LOITER", "POSHOLD", "GUIDED",
+                                  "AUTO", "RTL", "SMART_RTL", "LAND", "BRAKE"])
+        self.mode_combo.setCurrentText("LOITER")
+        self.mode_combo.activated.connect(self._set_mode)
+        tb2.addWidget(self.mode_combo)
+        tb2.addSeparator()
+        self._flight_btns = []
+        for label, slot in (("Takeoff", self._takeoff), ("Land", self._land),
+                            ("RTL", self._rtl), ("Pause", self._pause)):
+            b = QPushButton(label)
+            b.clicked.connect(slot)
+            tb2.addWidget(b)
+            self._flight_btns.append(b)
+        tb2.addSeparator()
+        hint = QLabel(" click map = Goto ")
+        hint.setStyleSheet("color:#8a90a0;")
+        tb2.addWidget(hint)
+
         # central layout: map | (instruments over telemetry)
         self.map = MapView()
         right = QWidget()
@@ -162,6 +187,7 @@ class DroneDeck(QMainWindow):
         self.link.state.connect(self._on_state)
         self.vehicle.status_text.connect(self.console.add_message)
         self.vehicle.command_ack.connect(self._on_command_ack)
+        self.map.clicked.connect(self._on_map_click)
 
     def _on_command_ack(self, command, result):
         name = self.CMD_NAMES.get(command, f"CMD {command}")
@@ -191,13 +217,62 @@ class DroneDeck(QMainWindow):
     def _on_info(self, msg):
         self.sb_info.setText(msg)
 
+    def _has_vehicle(self):
+        return self.link.is_open and self.link.remote is not None
+
+    def _sysid(self):
+        return self.vehicle.sysid or 1
+
     def _arm(self, arm):
-        if not (self.link.is_open and self.link.remote is not None):
+        if not self._has_vehicle():
             QMessageBox.information(self, "No vehicle", "No telemetry source connected yet.")
             return
-        sysid = self.vehicle.sysid or 1
-        self.link.arm(sysid, arm)
-        self._on_info(f"sent {'ARM' if arm else 'DISARM'} to system {sysid}")
+        self.link.arm(self._sysid(), arm)
+        self._on_info(f"sent {'ARM' if arm else 'DISARM'} to system {self._sysid()}")
+
+    def _set_mode(self):
+        if not self._has_vehicle():
+            return
+        name = self.mode_combo.currentText()
+        num = mavlink.mode_number(self.vehicle.autopilot, self.vehicle.mav_type, name)
+        if num is None:
+            self._on_info(f"mode {name} not available for this vehicle")
+            return
+        self.link.set_mode(self._sysid(), num)
+        self._on_info(f"set mode {name}")
+
+    def _takeoff(self):
+        if not self._has_vehicle():
+            return
+        alt, ok = QInputDialog.getDouble(self, "Takeoff", "Altitude (m):", 30.0, 1.0, 1000.0, 1)
+        if ok:
+            self.link.takeoff(self._sysid(), alt)
+            self._on_info(f"takeoff to {alt:.0f} m")
+
+    def _land(self):
+        if self._has_vehicle():
+            self.link.land(self._sysid())
+            self._on_info("land")
+
+    def _rtl(self):
+        if self._has_vehicle():
+            self.link.rtl(self._sysid())
+            self._on_info("return to launch")
+
+    def _pause(self):
+        if self._has_vehicle():
+            self.link.pause(self._sysid(), cont=False)
+            self._on_info("pause / hold position")
+
+    def _on_map_click(self, lat, lon):
+        if not self._has_vehicle():
+            return
+        alt = max(self.vehicle.alt_rel, 30.0)
+        if QMessageBox.question(self, "Goto",
+                                f"Fly to:\n{lat:.6f}, {lon:.6f}\nat {alt:.0f} m relative altitude?"
+                                ) == QMessageBox.StandardButton.Yes:
+            self.link.goto(self._sysid(), lat, lon, alt)
+            self._on_info(f"goto {lat:.5f}, {lon:.5f} @ {alt:.0f} m")
 
     def _set_follow(self, on):
         self.map.follow = on
@@ -227,6 +302,9 @@ class DroneDeck(QMainWindow):
         connected = self.link.is_open and self.link.remote is not None
         self.btn_arm.setEnabled(connected)
         self.btn_disarm.setEnabled(connected)
+        self.mode_combo.setEnabled(connected)
+        for b in self._flight_btns:
+            b.setEnabled(connected)
 
     def closeEvent(self, e):
         self.link.close()

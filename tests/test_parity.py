@@ -104,6 +104,13 @@ def main():
             check(m.fields.get("text") == "DroneDeck online",
                   f"statustext text {m.fields.get('text')!r}")
 
+        m = roundtrip(mavlink.SET_POSITION_TARGET_GLOBAL_INT,
+                      mavlink.enc_set_position_target_global_int(54.6872, 25.2797, 50.0), crc_fn)
+        if m:  # encoder uses int(deg*1e7); decode must reproduce it bit-for-bit
+            check(m.fields["lat_int"] == int(54.6872 * 1e7), f"spt lat {m.fields.get('lat_int')}")
+            check(m.fields["lon_int"] == int(25.2797 * 1e7), f"spt lon {m.fields.get('lon_int')}")
+            check(approx(m.fields["alt"], 50.0), f"spt alt {m.fields.get('alt')}")
+
     # Assembly CRC must equal the independent Python CRC, byte-for-byte.
     sample = mavlink.enc_attitude(0.3, 0.4, 0.5, 7)
     head = bytes((len(sample), 0, 3, 1, mavlink.ATTITUDE))

@@ -9,7 +9,7 @@ from __future__ import annotations
 import math
 import os
 
-from PySide6.QtCore import Qt, QRectF, QPointF, QUrl
+from PySide6.QtCore import Qt, QRectF, QPointF, QUrl, Signal
 from PySide6.QtGui import (QPainter, QColor, QPen, QBrush, QPixmap, QPolygonF,
                            QFont, QPixmapCache)
 from PySide6.QtWidgets import QWidget
@@ -41,6 +41,8 @@ def num2deg(x, y, z):
 
 
 class MapView(QWidget):
+    clicked = Signal(float, float)            # map click -> (lat, lon)
+
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setMinimumSize(360, 300)
@@ -52,6 +54,8 @@ class MapView(QWidget):
         self.trail = []
         self._pending = set()
         self._drag = None
+        self._press = None
+        self._dragged = False
         QPixmapCache.setCacheLimit(40 * 1024)
         os.makedirs(_CACHE, exist_ok=True)
         self.net = QNetworkAccessManager(self) if _HAVE_NET else None
@@ -217,26 +221,38 @@ class MapView(QWidget):
         p.drawText(8, self.height() - 8, f"z{self.zoom}  {tag}")
 
     # -- interaction ----------------------------------------------------------
+    def _px_to_ll(self, px, py):
+        cfx, cfy = deg2num(self.center[0], self.center[1], self.zoom)
+        fx = cfx + (px - self.width() / 2.0) / TILE
+        fy = cfy + (py - self.height() / 2.0) / TILE
+        return num2deg(fx, fy, self.zoom)
+
     def wheelEvent(self, e):
         self.set_zoom(self.zoom + (1 if e.angleDelta().y() > 0 else -1))
 
     def mousePressEvent(self, e):
         self._drag = e.position()
-        self.follow = False
+        self._press = e.position()
+        self._dragged = False
 
     def mouseMoveEvent(self, e):
         if self._drag is None:
             return
         d = e.position() - self._drag
+        if abs(d.x()) + abs(d.y()) > 2:
+            self._dragged = True
+            self.follow = False        # panning detaches from the vehicle
         self._drag = e.position()
         cfx, cfy = deg2num(self.center[0], self.center[1], self.zoom)
-        cfx -= d.x() / TILE
-        cfy -= d.y() / TILE
-        self.center = num2deg(cfx, cfy, self.zoom)
+        self.center = num2deg(cfx - d.x() / TILE, cfy - d.y() / TILE, self.zoom)
         self.update()
 
-    def mouseReleaseEvent(self, _):
+    def mouseReleaseEvent(self, e):
+        was_click = (self._drag is not None and not self._dragged and self._press is not None)
         self._drag = None
+        if was_click:
+            la, lo = self._px_to_ll(self._press.x(), self._press.y())
+            self.clicked.emit(la, lo)
 
     def mouseDoubleClickEvent(self, _):
         self.follow = True

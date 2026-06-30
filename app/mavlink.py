@@ -17,6 +17,7 @@ GLOBAL_POSITION_INT = 33
 VFR_HUD = 74
 COMMAND_LONG = 76
 COMMAND_ACK = 77
+SET_POSITION_TARGET_GLOBAL_INT = 86
 STATUSTEXT = 253
 
 MSG_NAME = {
@@ -28,6 +29,7 @@ MSG_NAME = {
     VFR_HUD: "VFR_HUD",
     COMMAND_LONG: "COMMAND_LONG",
     COMMAND_ACK: "COMMAND_ACK",
+    SET_POSITION_TARGET_GLOBAL_INT: "SET_POSITION_TARGET_GLOBAL_INT",
     STATUSTEXT: "STATUSTEXT",
 }
 
@@ -35,7 +37,7 @@ MSG_NAME = {
 CRC_EXTRA = {
     HEARTBEAT: 50, SYS_STATUS: 124, GPS_RAW_INT: 24, ATTITUDE: 39,
     GLOBAL_POSITION_INT: 104, VFR_HUD: 20, COMMAND_LONG: 152,
-    COMMAND_ACK: 143, STATUSTEXT: 83,
+    COMMAND_ACK: 143, STATUSTEXT: 83, SET_POSITION_TARGET_GLOBAL_INT: 5,
 }
 
 # Decoded-field order. Index i here is index i in Decoded.f[] from the C++ core.
@@ -48,6 +50,7 @@ FIELDS = {
     VFR_HUD: ["airspeed", "groundspeed", "alt", "climb", "heading", "throttle"],
     COMMAND_LONG: ["command", "param1", "param2", "param3", "param4", "param5", "param6", "param7"],
     COMMAND_ACK: ["command", "result"],
+    SET_POSITION_TARGET_GLOBAL_INT: ["lat_int", "lon_int", "alt", "type_mask"],
     STATUSTEXT: ["severity"],   # `text` is attached separately (string, not in f[])
 }
 
@@ -59,6 +62,18 @@ MAV_MODE_FLAG_CUSTOM_MODE_ENABLED = 0x01
 MAV_STATE_ACTIVE = 4
 GPS_FIX_TYPE_3D_FIX = 3
 MAV_CMD_COMPONENT_ARM_DISARM = 400
+MAV_CMD_NAV_WAYPOINT = 16
+MAV_CMD_NAV_RETURN_TO_LAUNCH = 20
+MAV_CMD_NAV_LAND = 21
+MAV_CMD_NAV_TAKEOFF = 22
+MAV_CMD_DO_SET_MODE = 176
+MAV_CMD_DO_REPOSITION = 192
+MAV_CMD_DO_PAUSE_CONTINUE = 193
+MAV_FRAME_GLOBAL = 0
+MAV_FRAME_GLOBAL_RELATIVE_ALT = 3
+MAV_FRAME_GLOBAL_RELATIVE_ALT_INT = 6
+# SET_POSITION_TARGET type_mask: use position fields only (ignore vel/accel/yaw).
+POSITION_TARGET_TYPEMASK_POS_ONLY = 0x0DF8
 
 MAV_SEVERITY = {0: "EMERGENCY", 1: "ALERT", 2: "CRITICAL", 3: "ERROR",
                 4: "WARNING", 5: "NOTICE", 6: "INFO", 7: "DEBUG"}
@@ -185,6 +200,17 @@ def enc_command_ack(command, result):
     return struct.pack("<HB", int(command) & 0xFFFF, int(result) & 0xFF)
 
 
+def enc_set_position_target_global_int(lat_deg, lon_deg, alt_rel,
+                                       type_mask=POSITION_TARGET_TYPEMASK_POS_ONLY,
+                                       frame=MAV_FRAME_GLOBAL_RELATIVE_ALT_INT,
+                                       target_system=1, target_component=1, time_boot_ms=0):
+    return struct.pack("<Iii" + "f" * 9 + "HBBB",
+                       time_boot_ms & 0xFFFFFFFF, int(lat_deg * 1e7), int(lon_deg * 1e7),
+                       float(alt_rel), 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+                       type_mask & 0xFFFF, target_system & 0xFF, target_component & 0xFF,
+                       frame & 0xFF)
+
+
 def crc16(data: bytes) -> int:
     """CRC-16/MCRF4XX over data only (no extra seed)."""
     crc = 0xFFFF
@@ -240,7 +266,20 @@ _WIRE = {
                     "command", "target_system", "target_component", "confirmation"], 33),
     COMMAND_ACK: ("<HB", ["command", "result"], 3),
     STATUSTEXT: ("<B50s", ["severity", "text"], 51),
+    SET_POSITION_TARGET_GLOBAL_INT: (
+        "<Iii" + "f" * 9 + "HBBB",
+        ["time_boot_ms", "lat_int", "lon_int", "alt", "vx", "vy", "vz",
+         "afx", "afy", "afz", "yaw", "yaw_rate", "type_mask",
+         "target_system", "target_component", "coordinate_frame"], 53),
 }
+
+
+def mode_number(autopilot, mav_type, name):
+    """Reverse of flight_mode_name: mode label -> custom_mode number, or None."""
+    for num, nm in mode_table(autopilot, mav_type).items():
+        if nm == name:
+            return num
+    return None
 
 
 class PyParser:

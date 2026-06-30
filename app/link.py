@@ -97,3 +97,31 @@ class UdpLink(QObject):
     def arm(self, target_sys: int, arm: bool = True):
         self.send_command_long(target_sys, mavlink.MAV_CMD_COMPONENT_ARM_DISARM,
                                [1.0 if arm else 0.0, 0, 0, 0, 0, 0, 0])
+
+    def _send_msg(self, msgid: int, payload: bytes):
+        """Frame an arbitrary message with the asm CRC and send it."""
+        self._send(mavlink.frame(msgid, payload, self._next_seq(),
+                                 self.gcs_sysid, self.gcs_compid, crc_fn=core.crc_extra))
+
+    # -- guided actions -------------------------------------------------------
+    def set_mode(self, target_sys: int, custom_mode: int):
+        self.send_command_long(target_sys, mavlink.MAV_CMD_DO_SET_MODE,
+                               [mavlink.MAV_MODE_FLAG_CUSTOM_MODE_ENABLED, custom_mode, 0, 0, 0, 0, 0])
+
+    def takeoff(self, target_sys: int, alt: float):
+        self.send_command_long(target_sys, mavlink.MAV_CMD_NAV_TAKEOFF, [0, 0, 0, 0, 0, 0, alt])
+
+    def land(self, target_sys: int):
+        self.send_command_long(target_sys, mavlink.MAV_CMD_NAV_LAND, [0, 0, 0, 0, 0, 0, 0])
+
+    def rtl(self, target_sys: int):
+        self.send_command_long(target_sys, mavlink.MAV_CMD_NAV_RETURN_TO_LAUNCH, [0] * 7)
+
+    def pause(self, target_sys: int, cont: bool = False):
+        self.send_command_long(target_sys, mavlink.MAV_CMD_DO_PAUSE_CONTINUE,
+                               [1 if cont else 0, 0, 0, 0, 0, 0, 0])
+
+    def goto(self, target_sys: int, lat: float, lon: float, alt_rel: float):
+        self._send_msg(mavlink.SET_POSITION_TARGET_GLOBAL_INT,
+                       mavlink.enc_set_position_target_global_int(lat, lon, alt_rel,
+                                                                  target_system=target_sys))

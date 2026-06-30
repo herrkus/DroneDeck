@@ -78,6 +78,7 @@ constexpr MsgInfo MSGS[] = {
     {74,  20, 20},   // VFR_HUD
     {76, 152, 33},   // COMMAND_LONG
     {77, 143,  3},   // COMMAND_ACK
+    {86,   5, 53},   // SET_POSITION_TARGET_GLOBAL_INT
     {253, 83, 51},   // STATUSTEXT
 };
 
@@ -136,6 +137,9 @@ void decode(uint32_t msgid, const uint8_t* pl, Decoded& d) {
         break;
     case 77: // COMMAND_ACK: command, result
         push(rd_u16(pl + 0)); push(pl[2]);
+        break;
+    case 86: // SET_POSITION_TARGET_GLOBAL_INT: lat_int, lon_int, alt, type_mask
+        push(rd_i32(pl + 4)); push(rd_i32(pl + 8)); push(rd_f32(pl + 12)); push(rd_u16(pl + 48));
         break;
     case 253: // STATUSTEXT: severity + text[50]
         push(pl[0]);
