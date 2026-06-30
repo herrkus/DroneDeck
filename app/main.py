@@ -20,7 +20,7 @@ from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QHBoxLayout,
                                QVBoxLayout, QSplitter, QToolBar, QLineEdit,
                                QPushButton, QLabel, QCheckBox, QMessageBox, QScrollArea,
                                QDockWidget, QComboBox, QInputDialog, QListWidget,
-                               QGroupBox)
+                               QGroupBox, QTabWidget)
 
 import core
 import mavlink
@@ -32,6 +32,7 @@ from tlog import TlogWriter
 from logdownload import LogManager
 from charts import ChartPanel
 from joystick import VirtualJoystick
+from video import VideoPane
 from instruments import AttitudeIndicator, Compass
 
 LOG_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "logs")
@@ -269,8 +270,13 @@ class DroneDeck(QMainWindow):
         scroll.setFrameShape(QScrollArea.NoFrame)
         rlay.addWidget(scroll, 1)
 
+        # left pane: Map / Video tabs (QGC-style swap)
+        self.video_pane = VideoPane()
+        self.left_tabs = QTabWidget()
+        self.left_tabs.addTab(self.map, "Map")
+        self.left_tabs.addTab(self.video_pane, "Video")
         split = QSplitter(Qt.Horizontal)
-        split.addWidget(self.map)
+        split.addWidget(self.left_tabs)
         split.addWidget(right)
         split.setStretchFactor(0, 3)
         split.setStretchFactor(1, 1)

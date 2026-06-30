@@ -42,6 +42,7 @@ check "tlog"                ""                        tests/test_tlog.py
 check "manual"              ""                        tests/test_manual.py
 check "camera"              ""                        tests/test_camera.py
 check "logs"                ""                        tests/test_logs.py
+check "video"               ""                        tests/test_video.py
 check "settings"            ""                        tests/test_settings.py
 check "smoke (native)"      ""                        tests/smoke_gui.py
 check "smoke (python)"      "DRONEDECK_FORCE_PYTHON=1" tests/smoke_gui.py
