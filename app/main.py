@@ -50,7 +50,7 @@ QLabel { color:#c4c8d0; }
 
 
 class DroneDeck(QMainWindow):
-    def __init__(self, port=14550):
+    def __init__(self, port=14550, replay_path=None):
         super().__init__()
         self.setWindowTitle("DroneDeck -- MAVLink Ground Control")
         self.resize(1240, 770)
@@ -85,7 +85,10 @@ class DroneDeck(QMainWindow):
         self.timer.timeout.connect(self._refresh)
         self.timer.start(50)
 
-        self._connect()           # start listening immediately
+        if replay_path:           # launched on a .tlog -> start in replay mode
+            self.transport_combo.setCurrentText("Replay")
+            self.link_edit.setText(replay_path)
+        self._connect()           # start listening (or replaying) immediately
 
     # -- ui -------------------------------------------------------------------
     def _build_ui(self):
@@ -545,14 +548,16 @@ class DroneDeck(QMainWindow):
 
 def main():
     port = 14550
+    replay_path = None
     if len(sys.argv) > 1:
-        try:
-            port = int(sys.argv[1])
-        except ValueError:
-            pass
+        arg = sys.argv[1]
+        if arg.isdigit():
+            port = int(arg)
+        elif os.path.isfile(arg):          # a .tlog (or any capture) -> replay it
+            replay_path = os.path.abspath(arg)
     app = QApplication(sys.argv)
     app.setStyleSheet(DARK_QSS)
-    win = DroneDeck(port)
+    win = DroneDeck(port, replay_path=replay_path)
     win.show()
     sys.exit(app.exec())
 

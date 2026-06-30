@@ -57,6 +57,13 @@ the native core.
 - **Mission planning** -- plan-mode map clicks drop numbered waypoints; upload /
   download missions over the standard MAVLink mission protocol; one-click
   **survey** grid over a planned area; Clear.
+- **MAVLink inspector** -- a live table of every message type, its rate (Hz) and
+  current field values (bottom "Inspector" tab).
+- **Parameter editor** -- "Params" downloads the autopilot's parameters into a
+  searchable table; edit a value and Write it back (`PARAM_SET`).
+- **Telemetry log + replay** -- "Record" writes a MAVProxy-compatible `.tlog`;
+  the "Replay" link type (or just opening a `.tlog`) plays it back through the
+  GCS at its original cadence.
 
 Supported messages: `HEARTBEAT`, `SYS_STATUS`, `GPS_RAW_INT`, `ATTITUDE`,
 `GLOBAL_POSITION_INT`, `VFR_HUD`, `COMMAND_LONG`, `COMMAND_ACK`, `STATUSTEXT`,

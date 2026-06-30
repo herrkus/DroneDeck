@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Custom MIME type for DroneDeck telemetry logs so *.tlog files open in
+     DroneDeck (replay). Install with:
+       cp packaging/dronedeck-tlog.xml ~/.local/share/mime/packages/
+       update-mime-database ~/.local/share/mime -->
+<mime-info xmlns="http://www.freedesktop.org/standards/shared-mime-info">
+  <mime-type type="application/x-dronedeck-tlog">
+    <comment>MAVLink telemetry log</comment>
+    <sub-class-of type="application/octet-stream"/>
+    <glob pattern="*.tlog"/>
+  </mime-type>
+</mime-info>
