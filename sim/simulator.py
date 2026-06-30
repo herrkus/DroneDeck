@@ -44,6 +44,7 @@ CRUISE_ALT = 80.0
 M_PER_DEG = 111320.0
 
 LOITER, AUTO, GUIDED, RTL, LAND = 5, 3, 4, 6, 9
+ALT_HOLD = 2          # manual stick control with altitude hold (MANUAL_CONTROL)
 
 
 def step_toward(clat, clon, tlat, tlon, max_m, cos_lat):
@@ -129,6 +130,8 @@ def main():
     last = t0
     climb = 0.0
     groundspeed = SPEED
+    man_x = man_y = man_z = man_r = 0.0   # last MANUAL_CONTROL sticks
+    man_t = -99.0                          # time of last manual input
 
     try:
         while True:
@@ -178,6 +181,21 @@ def main():
                 target_alt = CRUISE_ALT if rem > 3.0 else 0.0
             elif mode == LAND:
                 target_alt = 0.0
+            elif mode == ALT_HOLD:
+                # manual stick control: move per pitch/roll, turn per yaw, climb per thrust
+                if armed and (t - man_t) < 1.5:
+                    MAN_SPEED, YAW_RATE = 12.0, 120.0    # m/s, deg/s at full deflection
+                    heading = (heading + (man_r / 1000.0) * YAW_RATE * dt) % 360.0
+                    fwd = (man_x / 1000.0) * MAN_SPEED
+                    lat_v = (man_y / 1000.0) * MAN_SPEED
+                    hr = math.radians(heading)
+                    dn = fwd * math.cos(hr) - lat_v * math.sin(hr)
+                    de = fwd * math.sin(hr) + lat_v * math.cos(hr)
+                    lat += dn * dt / M_PER_DEG
+                    lon += de * dt / (M_PER_DEG * cos_lat)
+                    target_alt = alt + (man_z / 1000.0) * climb_rate
+                else:
+                    target_alt = alt                     # hover / altitude hold
 
             if do_orbit:
                 theta += (SPEED / RADIUS_M) * dt
@@ -292,6 +310,16 @@ def main():
                                                  float(m.fields.get("alt", CRUISE_ALT)))
                                 mode = GUIDED
                                 send(mavlink.STATUSTEXT, mavlink.enc_statustext(6, "Goto target set"))
+                            elif m.msgid == mavlink.MANUAL_CONTROL:
+                                man_x = float(m.fields.get("x", 0))
+                                man_y = float(m.fields.get("y", 0))
+                                man_z = float(m.fields.get("z", 0))
+                                man_r = float(m.fields.get("r", 0))
+                                man_t = t
+                                if armed and mode != ALT_HOLD:
+                                    mode = ALT_HOLD
+                                    send(mavlink.STATUSTEXT,
+                                         mavlink.enc_statustext(6, "Manual control (ALT_HOLD)"))
                             # ---- mission protocol (vehicle side, per mission_type) ----
                             elif m.msgid == mavlink.MISSION_COUNT:
                                 up_mtype = int(m.fields.get("mission_type", 0))

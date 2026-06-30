@@ -97,6 +97,15 @@ def main():
             check(m.fields["heading"] == 270, "vfr heading")
             check(m.fields["throttle"] == 65, "vfr throttle")
 
+        m = roundtrip(mavlink.MANUAL_CONTROL,
+                      mavlink.enc_manual_control(1, 500, -250, 800, -100, 3), crc_fn)
+        if m:
+            check(int(m.fields["x"]) == 500, f"manual x {m.fields['x']}")
+            check(int(m.fields["y"]) == -250, f"manual y {m.fields['y']}")
+            check(int(m.fields["z"]) == 800, "manual z")
+            check(int(m.fields["r"]) == -100, "manual r")
+            check(int(m.fields["buttons"]) == 3 and int(m.fields["target"]) == 1, "manual btn/target")
+
         m = roundtrip(mavlink.COMMAND_ACK, mavlink.enc_command_ack(400, 0), crc_fn)
         if m:
             check(m.fields["command"] == 400, f"ack command {m.fields.get('command')}")

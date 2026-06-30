@@ -95,6 +95,9 @@ NEW = {
     "MISSION_SET_CURRENT": (41, [("uint16_t", "seq", 0), ("uint8_t", "target_system", 0),
                                  ("uint8_t", "target_component", 0)]),
     "MISSION_CLEAR_ALL": (45, [("uint8_t", "target_system", 0), ("uint8_t", "target_component", 0)]),
+    "MANUAL_CONTROL": (69, [("int16_t", "x", 0), ("int16_t", "y", 0), ("int16_t", "z", 0),
+                            ("int16_t", "r", 0), ("uint16_t", "buttons", 0),
+                            ("uint8_t", "target", 0)]),
     "SET_POSITION_TARGET_GLOBAL_INT": (86, [
         ("uint32_t", "time_boot_ms", 0), ("int32_t", "lat_int", 0), ("int32_t", "lon_int", 0),
         ("float", "alt", 0), ("float", "vx", 0), ("float", "vy", 0), ("float", "vz", 0),

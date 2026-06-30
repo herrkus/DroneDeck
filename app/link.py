@@ -126,6 +126,10 @@ class Link(QObject):
         self.send_command_long(target_sys, mavlink.MAV_CMD_DO_PAUSE_CONTINUE,
                                [1 if cont else 0, 0, 0, 0, 0, 0, 0])
 
+    def send_manual_control(self, target_sys, x, y, z, r, buttons=0):
+        self._send_msg(mavlink.MANUAL_CONTROL,
+                       mavlink.enc_manual_control(target_sys, x, y, z, r, buttons))
+
     def goto(self, target_sys: int, lat: float, lon: float, alt_rel: float):
         self._send_msg(mavlink.SET_POSITION_TARGET_GLOBAL_INT,
                        mavlink.enc_set_position_target_global_int(lat, lon, alt_rel,

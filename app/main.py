@@ -30,6 +30,7 @@ from mission import MissionProtocol, MissionItem, survey_grid
 from params import ParamManager, ParamDialog
 from tlog import TlogWriter
 from charts import ChartPanel
+from joystick import VirtualJoystick
 from instruments import AttitudeIndicator, Compass
 
 LOG_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "logs")
@@ -116,6 +117,12 @@ class DroneDeck(QMainWindow):
         self.timer.timeout.connect(self._refresh)
         self.timer.start(50)
 
+        # manual control (virtual joystick + keyboard)
+        self.manual_on = False
+        self._manual_keys = set()
+        self.manual_timer = QTimer(self)
+        self.manual_timer.timeout.connect(self._send_manual)
+
         if replay_path:           # launched on a .tlog -> start in replay mode
             self.transport_combo.setCurrentText("Replay")
             self.link_edit.setText(replay_path)
@@ -186,6 +193,12 @@ class DroneDeck(QMainWindow):
             b.clicked.connect(slot)
             tb2.addWidget(b)
             self._flight_btns.append(b)
+        tb2.addSeparator()
+        self.btn_joystick = QPushButton("Joystick")
+        self.btn_joystick.setCheckable(True)
+        self.btn_joystick.toggled.connect(self._toggle_manual)
+        tb2.addWidget(self.btn_joystick)
+        self._flight_btns.append(self.btn_joystick)
         tb2.addSeparator()
         self.map_hint = QLabel(" click map = Goto ")
         self.map_hint.setStyleSheet("color:#8a90a0;")
@@ -311,6 +324,16 @@ class DroneDeck(QMainWindow):
         cdock.setFeatures(QDockWidget.DockWidgetMovable | QDockWidget.DockWidgetFloatable)
         self.addDockWidget(Qt.BottomDockWidgetArea, cdock)
 
+        # virtual joystick dock (hidden until the Joystick button is toggled)
+        self.joystick = VirtualJoystick()
+        self.jdock = QDockWidget("Manual Control", self)
+        self.jdock.setObjectName("joystick_dock")
+        self.jdock.setWidget(self.joystick)
+        self.jdock.setFeatures(QDockWidget.DockWidgetMovable | QDockWidget.DockWidgetFloatable
+                               | QDockWidget.DockWidgetClosable)
+        self.addDockWidget(Qt.BottomDockWidgetArea, self.jdock)
+        self.jdock.hide()
+
         self.tabifyDockWidget(dock, mdock)
         self.tabifyDockWidget(mdock, idock)
         self.tabifyDockWidget(idock, cdock)
@@ -419,6 +442,53 @@ class DroneDeck(QMainWindow):
             return
         self.link.arm(self._sysid(), arm)
         self._on_info(f"sent {'ARM' if arm else 'DISARM'} to system {self._sysid()}")
+
+    # -- manual control -------------------------------------------------------
+    def _toggle_manual(self, on):
+        self.manual_on = on
+        self._manual_keys.clear()
+        self.joystick.set_keys(0, 0, 0, 0)
+        if on:
+            self.jdock.show()
+            self.jdock.raise_()
+            self.manual_timer.start(40)             # 25 Hz
+            self._on_info("manual control ON -- WASD = throttle/yaw, arrows = pitch/roll")
+        else:
+            self.manual_timer.stop()
+            self.jdock.hide()
+
+    def _send_manual(self):
+        if not (self.manual_on and self._has_vehicle()):
+            return
+        x, y, z, r = self.joystick.values()
+        self.link.send_manual_control(self._sysid(), x, y, z, r)
+
+    _MANUAL_KEYS = {Qt.Key_W, Qt.Key_S, Qt.Key_A, Qt.Key_D,
+                    Qt.Key_Up, Qt.Key_Down, Qt.Key_Left, Qt.Key_Right}
+
+    def _apply_manual_keys(self):
+        k = self._manual_keys
+        up = (1 if Qt.Key_W in k else 0) - (1 if Qt.Key_S in k else 0)
+        yaw = (1 if Qt.Key_D in k else 0) - (1 if Qt.Key_A in k else 0)
+        fwd = (1 if Qt.Key_Up in k else 0) - (1 if Qt.Key_Down in k else 0)
+        right = (1 if Qt.Key_Right in k else 0) - (1 if Qt.Key_Left in k else 0)
+        self.joystick.set_keys(fwd, right, up, yaw)
+
+    def keyPressEvent(self, e):
+        if self.manual_on and not e.isAutoRepeat() and e.key() in self._MANUAL_KEYS:
+            self._manual_keys.add(e.key())
+            self._apply_manual_keys()
+            e.accept()
+            return
+        super().keyPressEvent(e)
+
+    def keyReleaseEvent(self, e):
+        if self.manual_on and not e.isAutoRepeat() and e.key() in self._MANUAL_KEYS:
+            self._manual_keys.discard(e.key())
+            self._apply_manual_keys()
+            e.accept()
+            return
+        super().keyReleaseEvent(e)
 
     def _toggle_record(self, on):
         if on:

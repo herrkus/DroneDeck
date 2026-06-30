@@ -14,6 +14,7 @@ SYS_STATUS = 1
 GPS_RAW_INT = 24
 ATTITUDE = 30
 GLOBAL_POSITION_INT = 33
+MANUAL_CONTROL = 69
 VFR_HUD = 74
 COMMAND_LONG = 76
 COMMAND_ACK = 77
@@ -41,6 +42,7 @@ MSG_NAME = {
     ATTITUDE: "ATTITUDE",
     GLOBAL_POSITION_INT: "GLOBAL_POSITION_INT",
     VFR_HUD: "VFR_HUD",
+    MANUAL_CONTROL: "MANUAL_CONTROL",
     COMMAND_LONG: "COMMAND_LONG",
     COMMAND_ACK: "COMMAND_ACK",
     SET_POSITION_TARGET_GLOBAL_INT: "SET_POSITION_TARGET_GLOBAL_INT",
@@ -67,7 +69,7 @@ CRC_EXTRA = {
     PARAM_REQUEST_READ: 214, PARAM_REQUEST_LIST: 159, PARAM_VALUE: 220, PARAM_SET: 168,
     MISSION_CURRENT: 28, MISSION_REQUEST_LIST: 132, MISSION_COUNT: 221,
     MISSION_CLEAR_ALL: 232, MISSION_ITEM_REACHED: 11, MISSION_ACK: 153,
-    MISSION_REQUEST_INT: 196, MISSION_ITEM_INT: 38,
+    MISSION_REQUEST_INT: 196, MISSION_ITEM_INT: 38, MANUAL_CONTROL: 243,
 }
 
 # Decoded-field order. Index i here is index i in Decoded.f[] from the C++ core.
@@ -79,6 +81,7 @@ FIELDS = {
     ATTITUDE: ["roll", "pitch", "yaw", "rollspeed", "pitchspeed", "yawspeed", "time_boot_ms"],
     GLOBAL_POSITION_INT: ["lat", "lon", "alt", "relative_alt", "vx", "vy", "vz", "hdg", "time_boot_ms"],
     VFR_HUD: ["airspeed", "groundspeed", "alt", "climb", "heading", "throttle"],
+    MANUAL_CONTROL: ["x", "y", "z", "r", "buttons", "target"],
     COMMAND_LONG: ["command", "param1", "param2", "param3", "param4", "param5", "param6", "param7"],
     COMMAND_ACK: ["command", "result"],
     SET_POSITION_TARGET_GLOBAL_INT: ["lat_int", "lon_int", "alt", "type_mask"],
@@ -246,6 +249,13 @@ def enc_global_position_int(lat, lon, alt_mm, rel_alt_mm, hdg_cdeg, t_ms, vx=0, 
 def enc_vfr_hud(airspeed, groundspeed, alt, climb, heading_deg, throttle_pct):
     return struct.pack("<ffffhH", airspeed, groundspeed, alt, climb,
                        int(heading_deg), int(throttle_pct))
+
+
+def enc_manual_control(target, x, y, z, r, buttons=0):
+    """x=pitch, y=roll, z=thrust, r=yaw, each -1000..1000 (z 0..1000 = throttle)."""
+    clamp = lambda v: max(-1000, min(1000, int(v)))
+    return struct.pack("<hhhhHB", clamp(x), clamp(y), clamp(z), clamp(r),
+                       buttons & 0xFFFF, target & 0xFF)
 
 
 def enc_command_long(command, params7, target_system=1, target_component=1, confirmation=0):
@@ -422,6 +432,7 @@ _WIRE = {
                            "vx", "vy", "vz", "hdg"], 28),
     VFR_HUD: ("<ffffhH",
               ["airspeed", "groundspeed", "alt", "climb", "heading", "throttle"], 20),
+    MANUAL_CONTROL: ("<hhhhHB", ["x", "y", "z", "r", "buttons", "target"], 11),
     COMMAND_LONG: ("<fffffffHBBB",
                    ["param1", "param2", "param3", "param4", "param5", "param6", "param7",
                     "command", "target_system", "target_component", "confirmation"], 33),
