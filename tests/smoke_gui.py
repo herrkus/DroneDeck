@@ -56,7 +56,8 @@ def finish():
                  volt=ve.voltage, sats=ve.satellites, ok=ok, drop=drop,
                  trail=len(ve.trail), mode=ve.mode, statustexts=len(ve.messages),
                  ack=ve.last_ack, armed=ve.armed,
-                 goto_seen=any("Goto" in t for _, t in ve.messages))
+                 goto_seen=any("Goto" in t for _, t in ve.messages),
+                 inspector_types=len(win.inspector.stats))
     try:
         win.grab().save(OUT)
     except Exception as e:
@@ -97,6 +98,8 @@ if state.get("mode") != "GUIDED":
     fail.append(f"Goto did not switch vehicle to GUIDED (mode={state.get('mode')})")
 if not state.get("goto_seen"):
     fail.append("no Goto acknowledgement from vehicle")
+if state.get("inspector_types", 0) < 5:
+    fail.append(f"inspector saw only {state.get('inspector_types')} message types")
 
 print(f"screenshot: {OUT}")
 print("SMOKE FAILED: " + "; ".join(fail) if fail else "SMOKE PASSED")

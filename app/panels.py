@@ -1,10 +1,13 @@
 """panels.py -- text telemetry readouts grouped like a GCS sidebar."""
 from __future__ import annotations
 
+import time
+
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QFont, QColor
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QFormLayout, QGroupBox, QLabel,
-                               QListWidget, QListWidgetItem)
+                               QListWidget, QListWidgetItem, QTableWidget,
+                               QTableWidgetItem, QHeaderView)
 
 import mavlink
 
@@ -120,3 +123,75 @@ class MessageConsole(QListWidget):
         while self.count() > 300:
             self.takeItem(0)
         self.scrollToBottom()
+
+
+class MavInspector(QWidget):
+    """Live table of every received message type: rate (Hz) and last field values.
+
+    Like QGroundControl's MAVLink Inspector. Counts are accumulated from the link
+    stream; refresh() (called from the UI timer) recomputes per-type rates and
+    repaints, throttled so a busy stream doesn't thrash the table."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.stats = {}                 # msgid -> dict(name, count, last_count, hz, fields)
+        self._last_t = time.monotonic()
+        lay = QVBoxLayout(self)
+        lay.setContentsMargins(0, 0, 0, 0)
+        self.table = QTableWidget(0, 4)
+        self.table.setHorizontalHeaderLabels(["Message", "ID", "Hz", "Fields"])
+        self.table.verticalHeader().setVisible(False)
+        self.table.setEditTriggers(QTableWidget.NoEditTriggers)
+        self.table.setSelectionMode(QTableWidget.NoSelection)
+        self.table.setFont(QFont("DejaVu Sans Mono", 9))
+        hh = self.table.horizontalHeader()
+        hh.setSectionResizeMode(0, QHeaderView.ResizeToContents)
+        hh.setSectionResizeMode(1, QHeaderView.ResizeToContents)
+        hh.setSectionResizeMode(2, QHeaderView.ResizeToContents)
+        hh.setSectionResizeMode(3, QHeaderView.Stretch)
+        lay.addWidget(self.table)
+
+    def consume(self, batch):
+        for m in batch:
+            s = self.stats.get(m.msgid)
+            if s is None:
+                s = {"name": m.name, "count": 0, "last_count": 0, "hz": 0.0, "fields": {}}
+                self.stats[m.msgid] = s
+            s["count"] += 1
+            s["fields"] = m.fields
+
+    def refresh(self):
+        now = time.monotonic()
+        dt = now - self._last_t
+        if dt < 0.25:                   # cap table repaint at ~4 Hz
+            return
+        self._last_t = now
+        for s in self.stats.values():
+            s["hz"] = (s["count"] - s["last_count"]) / dt
+            s["last_count"] = s["count"]
+        order = sorted(self.stats.keys())
+        if self.table.rowCount() != len(order):
+            self.table.setRowCount(len(order))
+        for row, mid in enumerate(order):
+            s = self.stats[mid]
+            self._set(row, 0, s["name"])
+            self._set(row, 1, str(mid))
+            self._set(row, 2, f"{s['hz']:4.1f}")
+            self._set(row, 3, self._fmt_fields(s["fields"]))
+
+    def _set(self, row, col, text):
+        it = self.table.item(row, col)
+        if it is None:
+            it = QTableWidgetItem(text)
+            if col == 3:
+                it.setForeground(QColor("#9aa4b2"))
+            self.table.setItem(row, col, it)
+        elif it.text() != text:
+            it.setText(text)
+
+    @staticmethod
+    def _fmt_fields(fields):
+        parts = []
+        for k, v in fields.items():
+            parts.append(f"{k}={v:.4g}" if isinstance(v, float) else f"{k}={v}")
+        return "  ".join(parts)[:240]

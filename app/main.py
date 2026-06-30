@@ -27,7 +27,7 @@ from link import UdpLink, TcpLink, SerialLink
 from mission import MissionProtocol, MissionItem, survey_grid
 from instruments import AttitudeIndicator, Compass
 from mapview import MapView
-from panels import TelemetryPanel, MessageConsole
+from panels import TelemetryPanel, MessageConsole, MavInspector
 
 DARK_QSS = """
 QMainWindow, QWidget { background:#15171c; color:#d6d9df; }
@@ -215,7 +215,16 @@ class DroneDeck(QMainWindow):
         mdock.setWidget(self.mission_list)
         mdock.setFeatures(QDockWidget.DockWidgetMovable | QDockWidget.DockWidgetFloatable)
         self.addDockWidget(Qt.BottomDockWidgetArea, mdock)
+
+        # MAVLink inspector (live message rates + fields), also tabbed at the bottom
+        self.inspector = MavInspector()
+        idock = QDockWidget("Inspector", self)
+        idock.setObjectName("inspector_dock")
+        idock.setWidget(self.inspector)
+        idock.setFeatures(QDockWidget.DockWidgetMovable | QDockWidget.DockWidgetFloatable)
+        self.addDockWidget(Qt.BottomDockWidgetArea, idock)
         self.tabifyDockWidget(dock, mdock)
+        self.tabifyDockWidget(mdock, idock)
         dock.raise_()
 
         self.sb_info = QLabel("starting...")
@@ -240,6 +249,7 @@ class DroneDeck(QMainWindow):
         link = cls()
         link.messages.connect(self.vehicle.consume)
         link.messages.connect(self.mission.handle_messages)
+        link.messages.connect(self.inspector.consume)
         link.info.connect(self._on_info)
         link.state.connect(self._on_state)
         return link
@@ -462,6 +472,8 @@ class DroneDeck(QMainWindow):
             b.setEnabled(connected)
         for label, b in self._mission_btns:
             b.setEnabled(connected if label in ("Upload", "Download") else True)
+
+        self.inspector.refresh()
 
     def closeEvent(self, e):
         if self.link is not None:
