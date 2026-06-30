@@ -10,6 +10,7 @@ import os
 import sys
 import time
 import math
+import json
 
 # Make sibling modules importable whether launched as a script or a module.
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -33,6 +34,7 @@ from logdownload import LogManager
 from charts import ChartPanel
 from joystick import VirtualJoystick
 from video import VideoPane
+from links_manager import LinksDialog
 from instruments import AttitudeIndicator, Compass
 
 LOG_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "logs")
@@ -91,6 +93,7 @@ class DroneDeck(QMainWindow):
         # settings persistence (only the real app opts in; tests stay deterministic)
         self._persist = False
         self.settings = QSettings("DroneDeck", "DroneDeck")
+        self.link_configs = []                          # saved comm-link configs
 
         # flight-time tracking (since arm)
         self._arm_t0 = None
@@ -157,6 +160,9 @@ class DroneDeck(QMainWindow):
         self.btn_conn = QPushButton("Disconnect")
         self.btn_conn.clicked.connect(self._toggle_conn)
         tb.addWidget(self.btn_conn)
+        self.btn_links = QPushButton("Links…")
+        self.btn_links.clicked.connect(self._open_links)
+        tb.addWidget(self.btn_links)
         tb.addSeparator()
 
         self.btn_arm = QPushButton("Arm")
@@ -488,6 +494,21 @@ class DroneDeck(QMainWindow):
             self.link.close()
         else:
             self._connect()
+
+    def _open_links(self):
+        dlg = LinksDialog(self.link_configs, self)
+        dlg.connectRequested.connect(self._connect_saved)
+        dlg.exec()
+        self.link_configs = dlg.configs
+        if self._persist:
+            self.settings.setValue("links/configs", json.dumps(self.link_configs))
+            self.settings.sync()
+
+    def _connect_saved(self, cfg):
+        self.transport_combo.setCurrentText(cfg.get("transport", "UDP"))
+        self.link_edit.setText(cfg.get("target", ""))
+        self._connect()
+        self._on_info(f"connecting to '{cfg.get('name', '')}'")
 
     def _on_state(self, up):
         self.btn_conn.setText("Disconnect" if up else "Connect")
@@ -1019,6 +1040,12 @@ class DroneDeck(QMainWindow):
         except (TypeError, ValueError):
             pass
         self.chk_follow.setChecked(s.value("map/follow", True, type=bool))
+        raw = s.value("links/configs")
+        if raw:
+            try:
+                self.link_configs = json.loads(raw)
+            except (ValueError, TypeError):
+                self.link_configs = []
 
     def save_settings(self):
         s = self.settings
@@ -1030,6 +1057,7 @@ class DroneDeck(QMainWindow):
         s.setValue("map/lon", float(self.map.center[1]))
         s.setValue("map/zoom", int(self.map.zoom))
         s.setValue("map/follow", bool(self.map.follow))
+        s.setValue("links/configs", json.dumps(self.link_configs))
         s.sync()
 
     def closeEvent(self, e):
