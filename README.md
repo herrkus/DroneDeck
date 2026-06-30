@@ -1,8 +1,9 @@
 # DroneDeck
 
 A QGroundControl-style **MAVLink ground control station**: live map, attitude
-and heading instruments, and a telemetry sidebar, fed by a hand-optimized native
-protocol core.
+and heading instruments, a telemetry sidebar, flight commands and mission
+planning -- over UDP, TCP or serial -- fed by a hand-optimized native protocol
+core.
 
 Built deliberately across three languages, each where it earns its place:
 
@@ -10,7 +11,7 @@ Built deliberately across three languages, each where it earns its place:
 |-------|----------|-----|
 | Hot path | **x86-64 assembly** (`core/crc_x25.S`) | The CRC-16/MCRF4XX checksum MAVLink runs over every byte of every frame. Slicing-by-8 breaks the serial dependency the compiler can't, beating `-O3` C by ~4x. |
 | Engine | **C++** (`core/dronecore.cpp`) | Streaming MAVLink v1/v2 parser with CRC-gated resync, message decoders and encoders, exposed through a flat `extern "C"` ABI. |
-| App | **Python / PySide6** (`app/`, `sim/`) | GUI, UDP link, vehicle model and the test telemetry source. Binds the native core via `ctypes`. |
+| App | **Python / PySide6** (`app/`, `sim/`) | GUI, UDP/TCP/serial links, vehicle model, mission protocol and the test telemetry source. Binds the native core via `ctypes`. |
 
 > No 3D/vehicle model is included by design -- the map uses a simple heading
 > marker. Connect your own drone (or model) when ready.
@@ -39,16 +40,29 @@ the native core.
 ## What you get
 
 - **Map** -- OpenStreetMap tiles (disk-cached; offline falls back to a lat/lon
-  graticule), with the vehicle marker, flight trail and home point. Wheel to
-  zoom, drag to pan, double-click to re-center, "Follow" to track.
+  graticule), with the vehicle marker, flight trail, home point and the planned
+  mission path. Wheel to zoom, drag to pan, double-click to re-center, "Follow"
+  to track.
 - **Attitude indicator** -- artificial horizon with pitch ladder and bank scale.
 - **Compass** -- heading card with digital readout.
-- **Telemetry** -- link health + message rate, arm state, battery, GPS fix/sats,
-  position, altitude, speeds, throttle, heading.
-- **Commands** -- Arm / Disarm via `COMMAND_LONG` (and a 1 Hz GCS heartbeat).
+- **Telemetry** -- link health + message rate, arm state, flight mode, battery,
+  GPS fix/sats, position, altitude, speeds, throttle, heading.
+- **Links** -- connect over **UDP**, **TCP** or **serial** (USB / SiK radio),
+  chosen from the toolbar; a 1 Hz GCS heartbeat goes back on all of them.
+- **Safety feedback** -- live flight mode, a colour-coded `STATUSTEXT` console,
+  and per-command `COMMAND_ACK` results.
+- **Flying controls** -- set flight mode (Loiter/Auto/Guided/RTL/...), plus
+  Takeoff, Land, Return-to-Launch, Pause, and **click-on-map to fly there**
+  (guided goto).
+- **Mission planning** -- plan-mode map clicks drop numbered waypoints; upload /
+  download missions over the standard MAVLink mission protocol; one-click
+  **survey** grid over a planned area; Clear.
 
 Supported messages: `HEARTBEAT`, `SYS_STATUS`, `GPS_RAW_INT`, `ATTITUDE`,
-`GLOBAL_POSITION_INT`, `VFR_HUD`, `COMMAND_LONG`.
+`GLOBAL_POSITION_INT`, `VFR_HUD`, `COMMAND_LONG`, `COMMAND_ACK`, `STATUSTEXT`,
+`SET_POSITION_TARGET_GLOBAL_INT`, and the mission set (`MISSION_COUNT`,
+`MISSION_ITEM_INT`, `MISSION_REQUEST_INT`, `MISSION_REQUEST_LIST`,
+`MISSION_ACK`, `MISSION_CLEAR_ALL`, `MISSION_CURRENT`, `MISSION_ITEM_REACHED`).
 
 ---
 
@@ -61,14 +75,19 @@ core/    crc_x25.S        x86-64 assembly CRC (slicing-by-8)
 app/     main.py          GCS entry point
          core.py          ctypes binding (+ pure-Python fallback selector)
          mavlink.py       message catalogue, encoders, pure-Python parser
-         link.py          UDP link (QUdpSocket)
+         link.py          UDP / TCP / serial links (common Link base)
+         mission.py       mission upload/download protocol + survey grids
          vehicle.py       live state model
          instruments.py   attitude + compass widgets
-         mapview.py       tile map widget
-         panels.py        telemetry readouts
-sim/     simulator.py     TEST telemetry source (flies a circle; not a drone model)
+         mapview.py       tile map widget (+ mission path, click-to-plan)
+         panels.py        telemetry readouts + message console
+sim/     simulator.py     TEST telemetry source (flies + obeys commands; not a drone model)
 tests/   selftest.cpp     native CRC/parser checks + benchmark
-         test_parity.py   Python-encode -> C++-decode parity
+         crc_extra_calc.py CRC_EXTRA derivation, validated vs known messages
+         test_parity.py   Python-encode -> C++-decode parity (incl. missions)
+         test_links.py    TCP + serial transports end to end
+         test_mission.py  mission upload/download round-trip vs the simulator
+         test_mission_gui.py  plan -> upload -> download through the real window
          smoke_gui.py     headless end-to-end + screenshot
 build.sh   run.sh
 ```
@@ -77,11 +96,17 @@ build.sh   run.sh
 
 ## Connecting a real drone
 
-Point the autopilot's telemetry at this machine's UDP **14550** (the MAVLink GCS
-convention) -- e.g. a SiK radio bridged with `mavlink-routerd`, an ESP/UDP
-telemetry link, or ArduPilot/PX4 SITL's UDP out. The link learns the drone's
-address from its first packet and starts sending the GCS heartbeat back.
-Serial links can be bridged to UDP with `mavlink-router` or `mavproxy`.
+Pick the transport in the toolbar's **Link** selector:
+
+- **UDP** (default, port `14550`): the MAVLink GCS convention -- a SiK radio
+  bridged with `mavlink-routerd`, an ESP/UDP link, or ArduPilot/PX4 SITL's UDP
+  out. The link learns the drone's address from its first packet.
+- **TCP** (`host:port`, e.g. `127.0.0.1:5760`): SITL's TCP server, or a bridge.
+- **Serial** (`port:baud`, e.g. `/dev/ttyACM0:57600`): a USB autopilot or SiK
+  radio directly -- available ports are pre-filled.
+
+A 1 Hz GCS heartbeat is sent back on whichever link is active. Modern
+ArduPilot/PX4 use the `_INT` mission messages this GCS speaks.
 
 ---
 
@@ -118,7 +143,11 @@ all.
 
 ```bash
 ./build.sh                      # native self-test: known CRC vector, asm==C, parser, benchmark
+python3 tests/crc_extra_calc.py # derive + validate every CRC_EXTRA seed
 python3 tests/test_parity.py    # cross-language: Python-encode -> C++/asm-decode parity
+python3 tests/test_links.py     # TCP + serial transports end to end
+python3 tests/test_mission.py   # mission upload/download round-trip vs the simulator
+python3 tests/test_mission_gui.py  # plan -> upload -> download through the real window
 python3 tests/smoke_gui.py      # headless end-to-end with the simulator + screenshot
 DRONEDECK_FORCE_PYTHON=1 python3 tests/smoke_gui.py   # same, exercising the fallback
 ```
