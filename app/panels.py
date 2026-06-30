@@ -3,11 +3,12 @@ from __future__ import annotations
 
 import time
 
-from PySide6.QtCore import Qt, QRectF, QPointF
+from PySide6.QtCore import Qt, QRectF, QPointF, Signal
 from PySide6.QtGui import QFont, QColor, QPainter, QPen
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QFormLayout, QGroupBox, QLabel,
                                QListWidget, QListWidgetItem, QTableWidget,
-                               QTableWidgetItem, QHeaderView)
+                               QTableWidgetItem, QHeaderView, QPushButton, QSlider,
+                               QSpinBox, QHBoxLayout, QGridLayout)
 
 import mavlink
 
@@ -102,6 +103,78 @@ class TelemetryPanel(QWidget):
         self._set("flight_time", nav.get("flight_time", "--"))
         self._set("home_eta", nav.get("home_eta", "--"))
         self._set("wp_dist", nav.get("wp_dist", "--"))
+
+
+class CameraPanel(QWidget):
+    """Camera trigger / video / trigger-distance and a gimbal pitch+yaw control.
+    Emits intent signals; main wires them to the link's COMMAND_LONG helpers."""
+
+    photoRequested = Signal()
+    videoToggled = Signal(bool)
+    triggerDistance = Signal(float)
+    gimbalChanged = Signal(float, float)        # pitch, yaw degrees
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        g = QGridLayout(self)
+        g.setContentsMargins(8, 6, 8, 6)
+        g.setVerticalSpacing(6)
+
+        self.btn_photo = QPushButton("Photo")
+        self.btn_photo.clicked.connect(self.photoRequested.emit)
+        self.btn_video = QPushButton("Video ●")
+        self.btn_video.setCheckable(True)
+        self.btn_video.toggled.connect(self._on_video)
+        g.addWidget(self.btn_photo, 0, 0)
+        g.addWidget(self.btn_video, 0, 1)
+
+        g.addWidget(QLabel("Trigger dist"), 1, 0)
+        trow = QHBoxLayout()
+        self.trig = QSpinBox()
+        self.trig.setRange(0, 1000)
+        self.trig.setSuffix(" m")
+        btn_trig = QPushButton("Set")
+        btn_trig.clicked.connect(lambda: self.triggerDistance.emit(float(self.trig.value())))
+        trow.addWidget(self.trig)
+        trow.addWidget(btn_trig)
+        g.addLayout(trow, 1, 1)
+
+        self.pitch = QSlider(Qt.Horizontal)
+        self.pitch.setRange(-90, 30)
+        self.yaw = QSlider(Qt.Horizontal)
+        self.yaw.setRange(-180, 180)
+        self.lbl_pitch = QLabel("pitch   0°")
+        self.lbl_yaw = QLabel("yaw   0°")
+        self.lbl_pitch.setFont(_MONO)
+        self.lbl_yaw.setFont(_MONO)
+        for s in (self.pitch, self.yaw):
+            s.valueChanged.connect(self._on_gimbal_label)
+            s.sliderReleased.connect(self._emit_gimbal)
+        g.addWidget(self.lbl_pitch, 2, 0)
+        g.addWidget(self.pitch, 2, 1)
+        g.addWidget(self.lbl_yaw, 3, 0)
+        g.addWidget(self.yaw, 3, 1)
+        btn_center = QPushButton("Center gimbal")
+        btn_center.clicked.connect(self._center)
+        g.addWidget(btn_center, 4, 0, 1, 2)
+        g.setRowStretch(5, 1)
+
+    def _on_video(self, on):
+        self.btn_video.setText("Video ■" if on else "Video ●")
+        self.btn_video.setStyleSheet("color:#e05050;" if on else "")
+        self.videoToggled.emit(on)
+
+    def _on_gimbal_label(self):
+        self.lbl_pitch.setText(f"pitch {self.pitch.value():4d}°")
+        self.lbl_yaw.setText(f"yaw {self.yaw.value():4d}°")
+
+    def _emit_gimbal(self):
+        self.gimbalChanged.emit(float(self.pitch.value()), float(self.yaw.value()))
+
+    def _center(self):
+        self.pitch.setValue(0)
+        self.yaw.setValue(0)
+        self._emit_gimbal()
 
 
 class StatusStrip(QWidget):

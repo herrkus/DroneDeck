@@ -35,7 +35,8 @@ from instruments import AttitudeIndicator, Compass
 
 LOG_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "logs")
 from mapview import MapView
-from panels import TelemetryPanel, MessageConsole, MavInspector, HealthPanel, StatusStrip
+from panels import (TelemetryPanel, MessageConsole, MavInspector, HealthPanel,
+                    StatusStrip, CameraPanel)
 
 
 def haversine(lat1, lon1, lat2, lon2):
@@ -341,6 +342,19 @@ class DroneDeck(QMainWindow):
         cdock.setFeatures(QDockWidget.DockWidgetMovable | QDockWidget.DockWidgetFloatable)
         self.addDockWidget(Qt.BottomDockWidgetArea, cdock)
 
+        # camera + gimbal control, tabbed at the bottom
+        self.camera = CameraPanel()
+        camdock = QDockWidget("Camera", self)
+        camdock.setObjectName("camera_dock")
+        camdock.setWidget(self.camera)
+        camdock.setFeatures(QDockWidget.DockWidgetMovable | QDockWidget.DockWidgetFloatable)
+        self.addDockWidget(Qt.BottomDockWidgetArea, camdock)
+        self.tabifyDockWidget(cdock, camdock)
+        self.camera.photoRequested.connect(self._cam_photo)
+        self.camera.videoToggled.connect(self._cam_video)
+        self.camera.triggerDistance.connect(self._cam_trigdist)
+        self.camera.gimbalChanged.connect(self._cam_gimbal)
+
         # virtual joystick dock (hidden until the Joystick button is toggled)
         self.joystick = VirtualJoystick()
         self.jdock = QDockWidget("Manual Control", self)
@@ -459,6 +473,26 @@ class DroneDeck(QMainWindow):
             return
         self.link.arm(self._sysid(), arm)
         self._on_info(f"sent {'ARM' if arm else 'DISARM'} to system {self._sysid()}")
+
+    # -- camera + gimbal ------------------------------------------------------
+    def _cam_photo(self):
+        if self._has_vehicle():
+            self.link.trigger_camera(self._sysid())
+            self._on_info("camera: photo trigger sent")
+
+    def _cam_video(self, on):
+        if self._has_vehicle():
+            self.link.video_capture(self._sysid(), on)
+            self._on_info(f"camera: video {'start' if on else 'stop'} sent")
+
+    def _cam_trigdist(self, metres):
+        if self._has_vehicle():
+            self.link.set_trigger_distance(self._sysid(), metres)
+            self._on_info(f"camera: trigger distance {metres:.0f} m")
+
+    def _cam_gimbal(self, pitch, yaw):
+        if self._has_vehicle():
+            self.link.set_gimbal(self._sysid(), pitch, yaw)
 
     # -- manual control -------------------------------------------------------
     def _toggle_manual(self, on):

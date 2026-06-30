@@ -304,6 +304,22 @@ def main():
                                         mode = GUIDED
                                         guided_target = (lat, lon, alt)
                                     send(mavlink.STATUSTEXT, mavlink.enc_statustext(5, "Pause/Continue"))
+                                elif cmd in (mavlink.MAV_CMD_IMAGE_START_CAPTURE,
+                                             mavlink.MAV_CMD_DO_DIGICAM_CONTROL):
+                                    send(mavlink.STATUSTEXT, mavlink.enc_statustext(6, "Photo captured"))
+                                elif cmd == mavlink.MAV_CMD_DO_SET_CAM_TRIGG_DIST:
+                                    d = m.fields.get("param1", 0)
+                                    send(mavlink.STATUSTEXT, mavlink.enc_statustext(
+                                        6, f"Camera trigger dist {d:.0f} m" if d > 0 else "Camera trigger off"))
+                                elif cmd in (mavlink.MAV_CMD_VIDEO_START_CAPTURE,
+                                             mavlink.MAV_CMD_VIDEO_STOP_CAPTURE):
+                                    on = (cmd == mavlink.MAV_CMD_VIDEO_START_CAPTURE)
+                                    send(mavlink.STATUSTEXT, mavlink.enc_statustext(
+                                        6, "Video recording" if on else "Video stopped"))
+                                elif cmd == mavlink.MAV_CMD_DO_MOUNT_CONTROL:
+                                    send(mavlink.STATUSTEXT, mavlink.enc_statustext(
+                                        6, f"Gimbal pitch {m.fields.get('param1', 0):.0f} "
+                                           f"yaw {m.fields.get('param3', 0):.0f}"))
                             elif m.msgid == mavlink.SET_POSITION_TARGET_GLOBAL_INT:
                                 guided_target = (m.fields.get("lat_int", 0) / 1e7,
                                                  m.fields.get("lon_int", 0) / 1e7,

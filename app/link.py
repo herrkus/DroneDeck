@@ -130,6 +130,26 @@ class Link(QObject):
         self._send_msg(mavlink.MANUAL_CONTROL,
                        mavlink.enc_manual_control(target_sys, x, y, z, r, buttons))
 
+    # -- camera + gimbal ------------------------------------------------------
+    def trigger_camera(self, target_sys):
+        self.send_command_long(target_sys, mavlink.MAV_CMD_IMAGE_START_CAPTURE,
+                               [0, 0, 1, 0, 0, 0, 0])      # interval 0, count 1
+
+    def set_trigger_distance(self, target_sys, metres):
+        self.send_command_long(target_sys, mavlink.MAV_CMD_DO_SET_CAM_TRIGG_DIST,
+                               [float(metres), 0, 0, 0, 0, 0, 0])
+
+    def video_capture(self, target_sys, start):
+        cmd = (mavlink.MAV_CMD_VIDEO_START_CAPTURE if start
+               else mavlink.MAV_CMD_VIDEO_STOP_CAPTURE)
+        self.send_command_long(target_sys, cmd, [0, 0, 0, 0, 0, 0, 0])
+
+    def set_gimbal(self, target_sys, pitch_deg, yaw_deg):
+        # DO_MOUNT_CONTROL: param1=pitch, param2=roll, param3=yaw, param7=mode
+        self.send_command_long(target_sys, mavlink.MAV_CMD_DO_MOUNT_CONTROL,
+                               [float(pitch_deg), 0.0, float(yaw_deg), 0, 0, 0,
+                                mavlink.MAV_MOUNT_MODE_MAVLINK_TARGETING])
+
     def goto(self, target_sys: int, lat: float, lon: float, alt_rel: float):
         self._send_msg(mavlink.SET_POSITION_TARGET_GLOBAL_INT,
                        mavlink.enc_set_position_target_global_int(lat, lon, alt_rel,
