@@ -14,7 +14,7 @@ import math
 # Make sibling modules importable whether launched as a script or a module.
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from PySide6.QtCore import Qt, QTimer
+from PySide6.QtCore import Qt, QTimer, QSettings
 from PySide6.QtGui import QAction, QFont
 from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QHBoxLayout,
                                QVBoxLayout, QSplitter, QToolBar, QLineEdit,
@@ -84,6 +84,10 @@ class DroneDeck(QMainWindow):
         self.vehicle = Vehicle()
         self.link = None
         self.default_port = port
+
+        # settings persistence (only the real app opts in; tests stay deterministic)
+        self._persist = False
+        self.settings = QSettings("DroneDeck", "DroneDeck")
 
         # flight-time tracking (since arm)
         self._arm_t0 = None
@@ -804,7 +808,50 @@ class DroneDeck(QMainWindow):
         self.inspector.refresh()
         self.charts.sample(ve)
 
+    # -- settings persistence -------------------------------------------------
+    def load_settings(self):
+        s = self.settings
+        geo = s.value("win/geometry")
+        if geo is not None:
+            self.restoreGeometry(geo)
+        st = s.value("win/state")
+        if st is not None:
+            self.restoreState(st)
+        tr = s.value("link/transport")
+        if tr in ("UDP", "TCP", "Serial", "Replay"):
+            self.transport_combo.setCurrentText(tr)
+        tgt = s.value("link/target")
+        if tgt:
+            self.link_edit.setText(str(tgt))
+        try:
+            lat, lon = s.value("map/lat", type=float), s.value("map/lon", type=float)
+            if lat and lon:
+                self.map.center = (lat, lon)
+            z = s.value("map/zoom", type=int)
+            if z:
+                self.map.set_zoom(z)
+        except (TypeError, ValueError):
+            pass
+        self.chk_follow.setChecked(s.value("map/follow", True, type=bool))
+
+    def save_settings(self):
+        s = self.settings
+        s.setValue("win/geometry", self.saveGeometry())
+        s.setValue("win/state", self.saveState())
+        s.setValue("link/transport", self.transport_combo.currentText())
+        s.setValue("link/target", self.link_edit.text())
+        s.setValue("map/lat", float(self.map.center[0]))
+        s.setValue("map/lon", float(self.map.center[1]))
+        s.setValue("map/zoom", int(self.map.zoom))
+        s.setValue("map/follow", bool(self.map.follow))
+        s.sync()
+
     def closeEvent(self, e):
+        if self._persist:
+            try:
+                self.save_settings()
+            except Exception:
+                pass
         if self.link is not None:
             self.link.close()
         super().closeEvent(e)
@@ -822,6 +869,8 @@ def main():
     app = QApplication(sys.argv)
     app.setStyleSheet(DARK_QSS)
     win = DroneDeck(port, replay_path=replay_path)
+    win._persist = True
+    win.load_settings()
     win.show()
     sys.exit(app.exec())
 
