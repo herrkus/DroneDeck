@@ -9,6 +9,7 @@ from __future__ import annotations
 import os
 import sys
 import time
+import math
 
 # Make sibling modules importable whether launched as a script or a module.
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -33,6 +34,26 @@ from instruments import AttitudeIndicator, Compass
 LOG_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "logs")
 from mapview import MapView
 from panels import TelemetryPanel, MessageConsole, MavInspector
+
+
+def haversine(lat1, lon1, lat2, lon2):
+    """Great-circle distance in metres."""
+    r = 6371000.0
+    p1, p2 = math.radians(lat1), math.radians(lat2)
+    dp = math.radians(lat2 - lat1)
+    dl = math.radians(lon2 - lon1)
+    a = math.sin(dp / 2) ** 2 + math.cos(p1) * math.cos(p2) * math.sin(dl / 2) ** 2
+    return 2 * r * math.asin(min(1.0, math.sqrt(a)))
+
+
+def _fmt_dist(d):
+    return f"{d:6.0f} m" if d < 10000 else f"{d / 1000:6.2f} km"
+
+
+def _fmt_mmss(s):
+    s = int(s)
+    return f"{s // 60:02d}:{s % 60:02d}"
+
 
 DARK_QSS = """
 QMainWindow, QWidget { background:#15171c; color:#d6d9df; }
@@ -61,6 +82,10 @@ class DroneDeck(QMainWindow):
         self.vehicle = Vehicle()
         self.link = None
         self.default_port = port
+
+        # flight-time tracking (since arm)
+        self._arm_t0 = None
+        self._flight_time = 0.0
 
         # mission planning state
         self.plan_mode = False
@@ -205,8 +230,8 @@ class DroneDeck(QMainWindow):
         ilay.setSpacing(10)
         self.adi = AttitudeIndicator()
         self.compass = Compass()
-        ilay.addWidget(self.adi)
-        ilay.addWidget(self.compass)
+        ilay.addWidget(self.adi, 3)
+        ilay.addWidget(self.compass, 2)
         rlay.addWidget(inst)
         self.panel = TelemetryPanel()
         scroll = QScrollArea()
@@ -649,7 +674,8 @@ class DroneDeck(QMainWindow):
     # -- refresh --------------------------------------------------------------
     def _refresh(self):
         ve = self.vehicle
-        self.adi.set_attitude(ve.roll, ve.pitch)
+        self.adi.set_data(ve.roll, ve.pitch, ve.airspeed or ve.groundspeed,
+                          ve.alt_rel, ve.heading, ve.climb)
         self.compass.set_heading(ve.heading)
         if ve.have_position:
             self.map.update_vehicle(ve.lat, ve.lon, ve.heading, ve.home, ve.trail)
@@ -666,7 +692,26 @@ class DroneDeck(QMainWindow):
         state = "connected" if is_open else "disconnected"
         if is_open and not ve.link_alive and link.remote is None:
             state = "listening"
-        self.panel.update_all(ve, state, self._rate, ok, drop)
+
+        # navigation readouts
+        if ve.armed:
+            if self._arm_t0 is None:
+                self._arm_t0 = now
+            self._flight_time = now - self._arm_t0
+        else:
+            self._arm_t0 = None
+        nav = {"flight_time": _fmt_mmss(self._flight_time)}
+        if ve.have_position and ve.home:
+            d = haversine(ve.lat, ve.lon, ve.home[0], ve.home[1])
+            nav["home_dist"] = _fmt_dist(d)
+            nav["home_eta"] = _fmt_mmss(d / ve.groundspeed) if ve.groundspeed > 0.4 else "--"
+        if ve.have_position and self.mission_items:
+            wps = [it for it in self.mission_items
+                   if not (abs(it.lat) < 1e-6 and abs(it.lon) < 1e-6)]
+            if wps:
+                nav["wp_dist"] = _fmt_dist(min(haversine(ve.lat, ve.lon, it.lat, it.lon)
+                                               for it in wps))
+        self.panel.update_all(ve, state, self._rate, ok, drop, nav)
 
         connected = self._has_vehicle()
         self.btn_arm.setEnabled(connected)

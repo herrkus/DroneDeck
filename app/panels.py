@@ -33,6 +33,9 @@ class TelemetryPanel(QWidget):
         lay.addWidget(self._group("MOTION", [
             ("gspeed", "Ground spd"), ("aspeed", "Air spd"),
             ("climb", "Climb"), ("throttle", "Throttle"), ("hdg", "Heading")]))
+        lay.addWidget(self._group("NAVIGATION", [
+            ("home_dist", "Dist to home"), ("flight_time", "Flight time"),
+            ("home_eta", "Home ETA"), ("wp_dist", "Dist to WP")]))
         lay.addWidget(self._group("GPS", [
             ("fix", "Fix"), ("sats", "Satellites")]))
         lay.addStretch(1)
@@ -55,7 +58,7 @@ class TelemetryPanel(QWidget):
         lbl.setText(text)
         lbl.setStyleSheet(f"color:{color};" if color else "")
 
-    def update_all(self, ve, link_state: str, rate: float, ok: int, drop: int):
+    def update_all(self, ve, link_state: str, rate: float, ok: int, drop: int, nav=None):
         alive = ve.link_alive
         self._set("link", link_state, "#37d67a" if alive else "#e0a030")
         self._set("rate", f"{rate:5.1f} Hz")
@@ -93,6 +96,12 @@ class TelemetryPanel(QWidget):
 
         self._set("fix", ve.fix_text, "#37d67a" if ve.fix_type >= 3 else "#e0a030")
         self._set("sats", str(ve.satellites))
+
+        nav = nav or {}
+        self._set("home_dist", nav.get("home_dist", "--"))
+        self._set("flight_time", nav.get("flight_time", "--"))
+        self._set("home_eta", nav.get("home_eta", "--"))
+        self._set("wp_dist", nav.get("wp_dist", "--"))
 
 
 class MessageConsole(QListWidget):
