@@ -38,6 +38,10 @@ class Vehicle(QObject):
         self.voltage = 0.0
         self.current = 0.0
         self.battery_remaining = -1
+        # sensor health bitmasks (SYS_STATUS)
+        self.sensors_present = 0
+        self.sensors_enabled = 0
+        self.sensors_health = 0
         # gps
         self.fix_type = 0
         self.satellites = 0
@@ -125,6 +129,9 @@ class Vehicle(QObject):
         self.voltage = f.get("voltage_battery", 0) / 1000.0
         self.current = f.get("current_battery", 0) / 100.0
         self.battery_remaining = int(f.get("battery_remaining", -1))
+        self.sensors_present = int(f.get("onboard_present", 0))
+        self.sensors_enabled = int(f.get("onboard_enabled", 0))
+        self.sensors_health = int(f.get("onboard_health", 0))
 
     def _on_gps_raw(self, f):
         self.fix_type = int(f.get("fix_type", 0))

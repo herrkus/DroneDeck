@@ -19,7 +19,8 @@ from PySide6.QtGui import QAction, QFont
 from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QHBoxLayout,
                                QVBoxLayout, QSplitter, QToolBar, QLineEdit,
                                QPushButton, QLabel, QCheckBox, QMessageBox, QScrollArea,
-                               QDockWidget, QComboBox, QInputDialog, QListWidget)
+                               QDockWidget, QComboBox, QInputDialog, QListWidget,
+                               QGroupBox)
 
 import core
 import mavlink
@@ -33,7 +34,7 @@ from instruments import AttitudeIndicator, Compass
 
 LOG_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "logs")
 from mapview import MapView
-from panels import TelemetryPanel, MessageConsole, MavInspector
+from panels import TelemetryPanel, MessageConsole, MavInspector, HealthPanel
 
 
 def haversine(lat1, lon1, lat2, lon2):
@@ -233,6 +234,13 @@ class DroneDeck(QMainWindow):
         ilay.addWidget(self.adi, 3)
         ilay.addWidget(self.compass, 2)
         rlay.addWidget(inst)
+
+        self.health = HealthPanel()
+        hbox = QGroupBox("SYSTEM HEALTH")
+        hb = QVBoxLayout(hbox)
+        hb.setContentsMargins(8, 4, 8, 6)
+        hb.addWidget(self.health)
+        rlay.addWidget(hbox)
         self.panel = TelemetryPanel()
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
@@ -677,6 +685,7 @@ class DroneDeck(QMainWindow):
         self.adi.set_data(ve.roll, ve.pitch, ve.airspeed or ve.groundspeed,
                           ve.alt_rel, ve.heading, ve.climb)
         self.compass.set_heading(ve.heading)
+        self.health.set_health(ve.sensors_present, ve.sensors_enabled, ve.sensors_health)
         if ve.have_position:
             self.map.update_vehicle(ve.lat, ve.lon, ve.heading, ve.home, ve.trail)
 

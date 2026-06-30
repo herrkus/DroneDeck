@@ -70,12 +70,16 @@ def main():
             check(m.fields["relative_alt"] == 50000, "gpi rel_alt")
             check(m.fields["hdg"] == 27000, f"gpi hdg {m.fields['hdg']}")
 
+        sens = (1 << 0) | (1 << 1) | (1 << 5) | (1 << 25)        # gyro|accel|gps|battery
         m = roundtrip(mavlink.SYS_STATUS,
-                      mavlink.enc_sys_status(12600, 1500, 87), crc_fn)
+                      mavlink.enc_sys_status(12600, 1500, 87, present=sens,
+                                             enabled=sens, health=sens ^ (1 << 5)), crc_fn)
         if m:
             check(m.fields["voltage_battery"] == 12600, "sys voltage")
             check(m.fields["current_battery"] == 1500, "sys current")
             check(m.fields["battery_remaining"] == 87, "sys remaining")
+            check(int(m.fields["onboard_present"]) == sens, "sys sensors present")
+            check(int(m.fields["onboard_health"]) == sens ^ (1 << 5), "sys sensors health")
 
         m = roundtrip(mavlink.GPS_RAW_INT,
                       mavlink.enc_gps_raw_int(int(54.6872e7), int(25.2797e7), 121000,

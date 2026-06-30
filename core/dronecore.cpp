@@ -123,8 +123,10 @@ void decode(uint32_t msgid, const uint8_t* pl, Decoded& d) {
     case 0:  // HEARTBEAT: type, autopilot, base_mode, custom_mode, system_status, mavlink_version
         push(pl[4]); push(pl[5]); push(pl[6]); push(rd_u32(pl + 0)); push(pl[7]); push(pl[8]);
         break;
-    case 1:  // SYS_STATUS: voltage_battery(mV), current_battery(cA), battery_remaining(%), load(0.1%)
+    case 1:  // SYS_STATUS: voltage_battery(mV), current_battery(cA), battery_remaining(%), load(0.1%),
+             //            then sensors present/enabled/health bitmasks (uint32 each)
         push(rd_u16(pl + 14)); push(rd_i16(pl + 16)); push(int8_t(pl[30])); push(rd_u16(pl + 12));
+        push(rd_u32(pl + 0)); push(rd_u32(pl + 4)); push(rd_u32(pl + 8));
         break;
     case 24: // GPS_RAW_INT: fix_type, sats, lat(1e7), lon(1e7), alt(mm), eph, vel(cm/s), cog(cdeg)
         push(pl[28]); push(pl[29]); push(rd_i32(pl + 8)); push(rd_i32(pl + 12));

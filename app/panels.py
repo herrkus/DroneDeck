@@ -3,8 +3,8 @@ from __future__ import annotations
 
 import time
 
-from PySide6.QtCore import Qt
-from PySide6.QtGui import QFont, QColor
+from PySide6.QtCore import Qt, QRectF, QPointF
+from PySide6.QtGui import QFont, QColor, QPainter
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QFormLayout, QGroupBox, QLabel,
                                QListWidget, QListWidgetItem, QTableWidget,
                                QTableWidgetItem, QHeaderView)
@@ -102,6 +102,52 @@ class TelemetryPanel(QWidget):
         self._set("flight_time", nav.get("flight_time", "--"))
         self._set("home_eta", nav.get("home_eta", "--"))
         self._set("wp_dist", nav.get("wp_dist", "--"))
+
+
+class HealthPanel(QWidget):
+    """Compact sensor-health grid from the SYS_STATUS bitmasks (QGC style):
+    green = present + healthy, amber = present but unhealthy, grey = absent."""
+
+    GREEN = QColor("#37d67a")
+    AMBER = QColor("#e0a030")
+    GREY = QColor("#4a4f5a")
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.present = self.enabled = self.health = 0
+        self.cols = 2
+        rows = (len(mavlink.SENSOR_BITS) + self.cols - 1) // self.cols
+        self._rh = 16
+        self.setMinimumHeight(rows * self._rh + 8)
+
+    def set_health(self, present, enabled, health):
+        self.present, self.enabled, self.health = present, enabled, health
+        self.update()
+
+    def paintEvent(self, _):
+        p = QPainter(self)
+        p.setRenderHint(QPainter.Antialiasing)
+        items = mavlink.SENSOR_BITS
+        rows = (len(items) + self.cols - 1) // self.cols
+        cw = self.width() / self.cols
+        p.setFont(QFont("DejaVu Sans", 8))
+        for idx, (bit, label) in enumerate(items):
+            col, row = idx // rows, idx % rows
+            x = col * cw + 8
+            y = 4 + row * self._rh
+            if not (self.present & bit):
+                dot, txt = self.GREY, QColor("#6a6f7a")
+            elif self.health & bit:
+                dot, txt = self.GREEN, QColor("#c4c8d0")
+            else:
+                dot, txt = self.AMBER, QColor("#e8c070")
+            p.setPen(Qt.NoPen)
+            p.setBrush(dot)
+            p.drawEllipse(QPointF(x + 4, y + self._rh / 2), 4, 4)
+            p.setPen(txt)
+            p.drawText(QRectF(x + 14, y, cw - 20, self._rh),
+                       Qt.AlignVCenter | Qt.AlignLeft, label)
+        p.end()
 
 
 class MessageConsole(QListWidget):

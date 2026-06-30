@@ -229,8 +229,13 @@ def main():
                     groundspeed, groundspeed, alt, climb, heading, 55 if armed else 0))
             if t >= next_t["sys"]:
                 next_t["sys"] += period["sys"]
+                # present/enabled: gyro, accel, mag, baro, gps, motors, rc, ahrs, logging, battery
+                sens = ((1 << 0) | (1 << 1) | (1 << 2) | (1 << 3) | (1 << 5) | (1 << 15)
+                        | (1 << 16) | (1 << 21) | (1 << 24) | (1 << 25))
+                health = sens                      # all healthy (drop GPS bit if no fix)
                 send(mavlink.SYS_STATUS, mavlink.enc_sys_status(
-                    int(voltage * 1000), int(current * 100), batt_pct))
+                    int(voltage * 1000), int(current * 100), batt_pct,
+                    present=sens, enabled=sens, health=health))
             if t >= next_t["gps"]:
                 next_t["gps"] += period["gps"]
                 send(mavlink.GPS_RAW_INT, mavlink.enc_gps_raw_int(

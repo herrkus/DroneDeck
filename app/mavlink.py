@@ -73,7 +73,8 @@ CRC_EXTRA = {
 # Decoded-field order. Index i here is index i in Decoded.f[] from the C++ core.
 FIELDS = {
     HEARTBEAT: ["type", "autopilot", "base_mode", "custom_mode", "system_status", "mavlink_version"],
-    SYS_STATUS: ["voltage_battery", "current_battery", "battery_remaining", "load"],
+    SYS_STATUS: ["voltage_battery", "current_battery", "battery_remaining", "load",
+                 "onboard_present", "onboard_enabled", "onboard_health"],
     GPS_RAW_INT: ["fix_type", "satellites_visible", "lat", "lon", "alt", "eph", "vel", "cog"],
     ATTITUDE: ["roll", "pitch", "yaw", "rollspeed", "pitchspeed", "yawspeed", "time_boot_ms"],
     GLOBAL_POSITION_INT: ["lat", "lon", "alt", "relative_alt", "vx", "vy", "vz", "hdg", "time_boot_ms"],
@@ -121,6 +122,15 @@ MAV_MISSION_TYPE_FENCE = 1
 MAV_MISSION_TYPE_RALLY = 2
 MAV_CMD_NAV_FENCE_POLYGON_VERTEX_INCLUSION = 5001
 MAV_CMD_NAV_RALLY_POINT = 5100
+
+# MAV_SYS_STATUS_SENSOR bits (SYS_STATUS onboard_control_sensors_*). Curated set
+# shown in the health panel: (bit, short label).
+SENSOR_BITS = [
+    (1 << 0, "Gyro"), (1 << 1, "Accel"), (1 << 2, "Mag"), (1 << 3, "Baro"),
+    (1 << 4, "AirSpd"), (1 << 5, "GPS"), (1 << 6, "OptFlow"), (1 << 15, "Motors"),
+    (1 << 16, "RC"), (1 << 20, "Fence"), (1 << 21, "AHRS"), (1 << 22, "Terrain"),
+    (1 << 24, "Logging"), (1 << 25, "Battery"),
+]
 # SET_POSITION_TARGET type_mask: use position fields only (ignore vel/accel/yaw).
 POSITION_TARGET_TYPEMASK_POS_ONLY = 0x0DF8
 
@@ -210,8 +220,11 @@ def enc_heartbeat(mav_type=MAV_TYPE_QUADROTOR, autopilot=MAV_AUTOPILOT_ARDUPILOT
     return struct.pack("<IBBBBB", custom_mode, mav_type, autopilot, base_mode, system_status, 3)
 
 
-def enc_sys_status(voltage_mv, current_ca, remaining_pct, load=250):
-    return struct.pack("<IIIHHhHHHHHHb", 0, 0, 0, load, int(voltage_mv), int(current_ca),
+def enc_sys_status(voltage_mv, current_ca, remaining_pct, load=250,
+                   present=0, enabled=0, health=0):
+    return struct.pack("<IIIHHhHHHHHHb", int(present) & 0xFFFFFFFF,
+                       int(enabled) & 0xFFFFFFFF, int(health) & 0xFFFFFFFF,
+                       load, int(voltage_mv), int(current_ca),
                        0, 0, 0, 0, 0, 0, int(remaining_pct))
 
 
