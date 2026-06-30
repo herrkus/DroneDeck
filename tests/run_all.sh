@@ -37,6 +37,7 @@ check "mission"             ""                        tests/test_mission.py
 check "mission_gui"         ""                        tests/test_mission_gui.py
 check "mission_edit"        ""                        tests/test_mission_edit.py
 check "fence_rally"         ""                        tests/test_fence_rally.py
+check "fence_shapes"        ""                        tests/test_fence_shapes.py
 check "params"              ""                        tests/test_params.py
 check "tlog"                ""                        tests/test_tlog.py
 check "manual"              ""                        tests/test_manual.py

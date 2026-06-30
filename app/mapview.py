@@ -55,7 +55,9 @@ class MapView(QWidget):
         self.home = None
         self.trail = []
         self.mission = []                     # list of (lat, lon) planned waypoints
-        self.fence = []                       # list of (lat, lon) geofence polygon
+        self.fence = []                       # inclusion polygon vertices (lat, lon)
+        self.fence_exc = []                   # exclusion polygon vertices
+        self.fence_circles = []               # [{"lat","lon","radius","incl"}]
         self.rally = []                       # list of (lat, lon) rally points
         self.selected_wp = -1
         self._wp_drag = None
@@ -90,6 +92,12 @@ class MapView(QWidget):
 
     def set_fence(self, pts):
         self.fence = list(pts)
+        self.update()
+
+    def set_fence_shapes(self, inc, exc, circles):
+        self.fence = list(inc)
+        self.fence_exc = list(exc)
+        self.fence_circles = list(circles)
         self.update()
 
     def set_rally(self, pts):
@@ -219,12 +227,30 @@ class MapView(QWidget):
             p.drawEllipse(hp, 5, 5)
             p.drawText(QRectF(hp.x() + 8, hp.y() - 8, 50, 16), Qt.AlignVCenter, "H")
 
-        # geofence polygon (dashed red, translucent fill)
+        # inclusion geofence polygon (dashed red, translucent fill)
         if len(self.fence) >= 2:
             fp = [self._ll_to_px(la, lo, cfx, cfy) for la, lo in self.fence]
             p.setPen(QPen(QColor(255, 80, 80, 230), 2, Qt.DashLine))
             p.setBrush(QBrush(QColor(255, 80, 80, 30)))
             p.drawPolygon(QPolygonF(fp))
+
+        # exclusion geofence polygon (dashed orange)
+        if len(self.fence_exc) >= 2:
+            ep = [self._ll_to_px(la, lo, cfx, cfy) for la, lo in self.fence_exc]
+            p.setPen(QPen(QColor(255, 160, 40, 230), 2, Qt.DashLine))
+            p.setBrush(QBrush(QColor(255, 160, 40, 40)))
+            p.drawPolygon(QPolygonF(ep))
+
+        # geofence circles (inclusion red, exclusion orange)
+        for c in self.fence_circles:
+            cp = self._ll_to_px(c["lat"], c["lon"], cfx, cfy)
+            mpp = 156543.03392 * math.cos(math.radians(c["lat"])) / (2 ** self.zoom)
+            r_px = float(c.get("radius", 0)) / mpp if mpp else 0
+            col = QColor(255, 80, 80, 230) if c.get("incl", True) else QColor(255, 160, 40, 230)
+            fill = QColor(255, 80, 80, 30) if c.get("incl", True) else QColor(255, 160, 40, 40)
+            p.setPen(QPen(col, 2, Qt.DashLine))
+            p.setBrush(QBrush(fill))
+            p.drawEllipse(cp, r_px, r_px)
 
         # rally points (green diamonds)
         if self.rally:

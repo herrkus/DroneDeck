@@ -20,7 +20,7 @@ from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QHBoxLayout,
                                QVBoxLayout, QSplitter, QToolBar, QLineEdit,
                                QPushButton, QLabel, QCheckBox, QMessageBox, QScrollArea,
                                QDockWidget, QComboBox, QInputDialog, QListWidget,
-                               QGroupBox, QTabWidget)
+                               QGroupBox, QTabWidget, QSpinBox)
 
 import core
 import mavlink
@@ -100,7 +100,10 @@ class DroneDeck(QMainWindow):
         self.plan_mode = False
         self.plan_type = "Mission"                      # Mission | Fence | Rally
         self.mission_items = []                         # list[MissionItem]
-        self.fence_pts = []                             # list[(lat, lon)]
+        self.fence_inc = []                             # inclusion polygon [(lat, lon)]
+        self.fence_exc = []                             # exclusion polygon [(lat, lon)]
+        self.fence_circles = []                         # [{"lat","lon","radius","incl"}]
+        self.fence_radius = 50                          # m, for new circles
         self.rally_pts = []                             # list[(lat, lon)]
         self._selecting = False
         self.mission = MissionProtocol(lambda: self.link, self._sysid)
@@ -223,9 +226,17 @@ class DroneDeck(QMainWindow):
         self.btn_plan.toggled.connect(self._toggle_plan)
         tb3.addWidget(self.btn_plan)
         self.plan_type_combo = QComboBox()
-        self.plan_type_combo.addItems(["Mission", "Fence", "Rally"])
+        self.plan_type_combo.addItems(["Mission", "Fence incl", "Fence excl",
+                                       "Circle incl", "Circle excl", "Rally"])
         self.plan_type_combo.currentTextChanged.connect(self._on_plan_type)
         tb3.addWidget(self.plan_type_combo)
+        self.radius_spin = QSpinBox()
+        self.radius_spin.setRange(5, 5000)
+        self.radius_spin.setValue(self.fence_radius)
+        self.radius_spin.setSuffix(" m")
+        self.radius_spin.setToolTip("circle radius")
+        self.radius_spin.valueChanged.connect(lambda v: setattr(self, "fence_radius", v))
+        tb3.addWidget(self.radius_spin)
         self._mission_btns = []
         for label, slot in (("Survey", self._survey), ("Clear", self._clear_mission),
                             ("Upload", self._upload_mission), ("Download", self._download_mission)):
@@ -670,11 +681,28 @@ class DroneDeck(QMainWindow):
     def _on_plan_type(self, text):
         self.plan_type = text
 
+    def _is_fence(self):
+        return self.plan_type in ("Fence incl", "Fence excl", "Circle incl", "Circle excl")
+
+    def _redraw_fence(self):
+        self.map.set_fence_shapes(self.fence_inc, self.fence_exc, self.fence_circles)
+
     def _add_waypoint(self, lat, lon):
-        if self.plan_type == "Fence":
-            self.fence_pts.append((lat, lon))
-            self.map.set_fence(self.fence_pts)
-            self.mission_status.setText(f"fence: {len(self.fence_pts)} vertices")
+        if self.plan_type == "Fence incl":
+            self.fence_inc.append((lat, lon))
+            self._redraw_fence()
+            self.mission_status.setText(f"inclusion fence: {len(self.fence_inc)} vertices")
+        elif self.plan_type == "Fence excl":
+            self.fence_exc.append((lat, lon))
+            self._redraw_fence()
+            self.mission_status.setText(f"exclusion fence: {len(self.fence_exc)} vertices")
+        elif self.plan_type in ("Circle incl", "Circle excl"):
+            incl = self.plan_type == "Circle incl"
+            self.fence_circles.append({"lat": lat, "lon": lon,
+                                       "radius": float(self.fence_radius), "incl": incl})
+            self._redraw_fence()
+            self.mission_status.setText(f"{'incl' if incl else 'excl'} circle r={self.fence_radius}m "
+                                        f"({len(self.fence_circles)} total)")
         elif self.plan_type == "Rally":
             self.rally_pts.append((lat, lon))
             self.map.set_rally(self.rally_pts)
@@ -779,10 +807,32 @@ class DroneDeck(QMainWindow):
             self._refresh_mission_view()
             self._on_info(f"survey grid: {len(grid)} waypoints")
 
+    def _build_fence_items(self):
+        """Whole geofence (inclusion/exclusion polygons + circles) as MISSION_ITEM_INTs."""
+        items = []
+        seq = 0
+        for la, lo in self.fence_inc:
+            items.append(MissionItem(seq, la, lo, 0.0,
+                                     command=mavlink.MAV_CMD_NAV_FENCE_POLYGON_VERTEX_INCLUSION,
+                                     param1=float(len(self.fence_inc))))
+            seq += 1
+        for la, lo in self.fence_exc:
+            items.append(MissionItem(seq, la, lo, 0.0,
+                                     command=mavlink.MAV_CMD_NAV_FENCE_POLYGON_VERTEX_EXCLUSION,
+                                     param1=float(len(self.fence_exc))))
+            seq += 1
+        for c in self.fence_circles:
+            cmd = (mavlink.MAV_CMD_NAV_FENCE_CIRCLE_INCLUSION if c["incl"]
+                   else mavlink.MAV_CMD_NAV_FENCE_CIRCLE_EXCLUSION)
+            items.append(MissionItem(seq, c["lat"], c["lon"], 0.0, command=cmd,
+                                     param1=float(c["radius"])))
+            seq += 1
+        return items
+
     def _clear_mission(self):
-        if self.plan_type == "Fence":
-            self.fence_pts = []
-            self.map.set_fence([])
+        if self._is_fence():
+            self.fence_inc, self.fence_exc, self.fence_circles = [], [], []
+            self._redraw_fence()
             mt = mavlink.MAV_MISSION_TYPE_FENCE
         elif self.plan_type == "Rally":
             self.rally_pts = []
@@ -799,14 +849,14 @@ class DroneDeck(QMainWindow):
         if not self._has_vehicle():
             QMessageBox.information(self, "Upload", "No vehicle connected.")
             return
-        if self.plan_type == "Fence":
-            if len(self.fence_pts) < 3:
-                QMessageBox.information(self, "Upload", "A fence needs at least 3 vertices.")
+        if self._is_fence():
+            if len(self.fence_inc) in (1, 2) or len(self.fence_exc) in (1, 2):
+                QMessageBox.information(self, "Upload", "A fence polygon needs at least 3 vertices.")
                 return
-            items = [MissionItem(i, la, lo, 0.0,
-                                 command=mavlink.MAV_CMD_NAV_FENCE_POLYGON_VERTEX_INCLUSION,
-                                 param1=float(len(self.fence_pts)))
-                     for i, (la, lo) in enumerate(self.fence_pts)]
+            items = self._build_fence_items()
+            if not items:
+                QMessageBox.information(self, "Upload", "No fence shapes to upload.")
+                return
             self.mission.upload(items, mavlink.MAV_MISSION_TYPE_FENCE)
         elif self.plan_type == "Rally":
             if not self.rally_pts:
@@ -826,8 +876,10 @@ class DroneDeck(QMainWindow):
         if not self._has_vehicle():
             QMessageBox.information(self, "Download", "No vehicle connected.")
             return
-        self.mission.download({"Fence": mavlink.MAV_MISSION_TYPE_FENCE,
-                               "Rally": mavlink.MAV_MISSION_TYPE_RALLY}.get(self.plan_type, 0))
+        mt = (mavlink.MAV_MISSION_TYPE_FENCE if self._is_fence()
+              else mavlink.MAV_MISSION_TYPE_RALLY if self.plan_type == "Rally"
+              else mavlink.MAV_MISSION_TYPE_MISSION)
+        self.mission.download(mt)
 
     def _on_mission_progress(self, msg):
         self.mission_status.setText(msg)
@@ -839,8 +891,18 @@ class DroneDeck(QMainWindow):
     def _on_mission_downloaded(self, items):
         mt = self.mission.mtype
         if mt == mavlink.MAV_MISSION_TYPE_FENCE:
-            self.fence_pts = [(it.lat, it.lon) for it in items]
-            self.map.set_fence(self.fence_pts)
+            self.fence_inc, self.fence_exc, self.fence_circles = [], [], []
+            for it in items:
+                if it.command == mavlink.MAV_CMD_NAV_FENCE_POLYGON_VERTEX_INCLUSION:
+                    self.fence_inc.append((it.lat, it.lon))
+                elif it.command == mavlink.MAV_CMD_NAV_FENCE_POLYGON_VERTEX_EXCLUSION:
+                    self.fence_exc.append((it.lat, it.lon))
+                elif it.command in (mavlink.MAV_CMD_NAV_FENCE_CIRCLE_INCLUSION,
+                                    mavlink.MAV_CMD_NAV_FENCE_CIRCLE_EXCLUSION):
+                    self.fence_circles.append({
+                        "lat": it.lat, "lon": it.lon, "radius": float(it.param1),
+                        "incl": it.command == mavlink.MAV_CMD_NAV_FENCE_CIRCLE_INCLUSION})
+            self._redraw_fence()
         elif mt == mavlink.MAV_MISSION_TYPE_RALLY:
             self.rally_pts = [(it.lat, it.lon) for it in items]
             self.map.set_rally(self.rally_pts)
