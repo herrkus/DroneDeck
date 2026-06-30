@@ -80,6 +80,10 @@ constexpr MsgInfo MSGS[] = {
     {77, 143,  3},   // COMMAND_ACK
     {86,   5, 53},   // SET_POSITION_TARGET_GLOBAL_INT
     {253, 83, 51},   // STATUSTEXT
+    {20, 214, 20},   // PARAM_REQUEST_READ
+    {21, 159,  2},   // PARAM_REQUEST_LIST
+    {22, 220, 25},   // PARAM_VALUE
+    {23, 168, 23},   // PARAM_SET
     {42,  28,  2},   // MISSION_CURRENT
     {43, 132,  2},   // MISSION_REQUEST_LIST
     {44, 221,  4},   // MISSION_COUNT
@@ -153,6 +157,21 @@ void decode(uint32_t msgid, const uint8_t* pl, Decoded& d) {
         push(pl[0]);
         std::memcpy(d.text, pl + 1, 50);
         d.text[50] = '\0';
+        break;
+    case 20: // PARAM_REQUEST_READ: param_index (+ param_id in text)
+        push(rd_i16(pl + 0));
+        std::memcpy(d.text, pl + 4, 16); d.text[16] = '\0';
+        break;
+    case 21: // PARAM_REQUEST_LIST: target_system, target_component
+        push(pl[0]); push(pl[1]);
+        break;
+    case 22: // PARAM_VALUE: param_value, param_count, param_index, param_type (+ param_id in text)
+        push(rd_f32(pl + 0)); push(rd_u16(pl + 4)); push(rd_u16(pl + 6)); push(pl[24]);
+        std::memcpy(d.text, pl + 8, 16); d.text[16] = '\0';
+        break;
+    case 23: // PARAM_SET: param_value, param_type (+ param_id in text)
+        push(rd_f32(pl + 0)); push(pl[22]);
+        std::memcpy(d.text, pl + 6, 16); d.text[16] = '\0';
         break;
     case 42: // MISSION_CURRENT: seq
         push(rd_u16(pl + 0));

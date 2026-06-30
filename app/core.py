@@ -108,6 +108,8 @@ class Parser:
             fields = {names[i]: d.f[i] for i in range(min(d.nfields, len(names)))}
             if d.msgid == mavlink.STATUSTEXT:
                 fields["text"] = d.text.decode("utf-8", "replace")
+            elif d.msgid in (mavlink.PARAM_VALUE, mavlink.PARAM_SET, mavlink.PARAM_REQUEST_READ):
+                fields["param_id"] = d.text.decode("utf-8", "replace")
             out.append(Message(d.msgid, d.sysid, d.compid, d.seq, fields))
         return out
 

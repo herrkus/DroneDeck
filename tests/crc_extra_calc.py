@@ -65,6 +65,15 @@ KNOWN = {
 
 NEW = {
     "STATUSTEXT": (253, [("uint8_t", "severity", 0), ("char", "text", 50)]),
+    "PARAM_REQUEST_READ": (20, [("int16_t", "param_index", 0), ("uint8_t", "target_system", 0),
+                                ("uint8_t", "target_component", 0), ("char", "param_id", 16)]),
+    "PARAM_REQUEST_LIST": (21, [("uint8_t", "target_system", 0), ("uint8_t", "target_component", 0)]),
+    "PARAM_VALUE": (22, [("float", "param_value", 0), ("uint16_t", "param_count", 0),
+                         ("uint16_t", "param_index", 0), ("char", "param_id", 16),
+                         ("uint8_t", "param_type", 0)]),
+    "PARAM_SET": (23, [("float", "param_value", 0), ("uint8_t", "target_system", 0),
+                       ("uint8_t", "target_component", 0), ("char", "param_id", 16),
+                       ("uint8_t", "param_type", 0)]),
     "COMMAND_ACK": (77, [("uint16_t", "command", 0), ("uint8_t", "result", 0)]),
     "SET_MODE": (11, [("uint32_t", "custom_mode", 0), ("uint8_t", "target_system", 0),
                       ("uint8_t", "base_mode", 0)]),

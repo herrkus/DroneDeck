@@ -136,6 +136,20 @@ def main():
             check(approx(m.fields["z"], 50.0), f"item z {m.fields.get('z')}")
             check(approx(m.fields["param1"], 5.0), f"item param1 {m.fields.get('param1')}")
 
+        # --- parameter protocol messages ---
+        m = roundtrip(mavlink.PARAM_VALUE,
+                      mavlink.enc_param_value("WPNAV_SPEED", 500.0, count=12, index=3), crc_fn)
+        if m:
+            check(m.fields.get("param_id") == "WPNAV_SPEED", f"param id {m.fields.get('param_id')!r}")
+            check(approx(m.fields["param_value"], 500.0), f"param value {m.fields.get('param_value')}")
+            check(m.fields["param_count"] == 12, f"param count {m.fields.get('param_count')}")
+            check(m.fields["param_index"] == 3, f"param index {m.fields.get('param_index')}")
+
+        m = roundtrip(mavlink.PARAM_SET, mavlink.enc_param_set("RTL_ALT", 1500.0), crc_fn)
+        if m:
+            check(m.fields.get("param_id") == "RTL_ALT", f"set id {m.fields.get('param_id')!r}")
+            check(approx(m.fields["param_value"], 1500.0), f"set value {m.fields.get('param_value')}")
+
     # Assembly CRC must equal the independent Python CRC, byte-for-byte.
     sample = mavlink.enc_attitude(0.3, 0.4, 0.5, 7)
     head = bytes((len(sample), 0, 3, 1, mavlink.ATTITUDE))

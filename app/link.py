@@ -122,6 +122,18 @@ class Link(QObject):
                        mavlink.enc_set_position_target_global_int(lat, lon, alt_rel,
                                                                   target_system=target_sys))
 
+    # -- parameter protocol ---------------------------------------------------
+    def request_params(self, target_sys: int):
+        self._send_msg(mavlink.PARAM_REQUEST_LIST, mavlink.enc_param_request_list(target_sys))
+
+    def request_param_read(self, target_sys: int, param_id: str = "", index: int = -1):
+        self._send_msg(mavlink.PARAM_REQUEST_READ,
+                       mavlink.enc_param_request_read(param_id, index, target_sys))
+
+    def set_param(self, target_sys: int, param_id: str, value: float,
+                  ptype: int = mavlink.MAV_PARAM_TYPE_REAL32):
+        self._send_msg(mavlink.PARAM_SET, mavlink.enc_param_set(param_id, value, ptype, target_sys))
+
     # -- mission protocol -----------------------------------------------------
     def send_mission_count(self, target_sys: int, count: int):
         self._send_msg(mavlink.MISSION_COUNT, mavlink.enc_mission_count(count, target_sys))

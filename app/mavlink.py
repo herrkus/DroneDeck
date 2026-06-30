@@ -19,6 +19,11 @@ COMMAND_LONG = 76
 COMMAND_ACK = 77
 SET_POSITION_TARGET_GLOBAL_INT = 86
 STATUSTEXT = 253
+# parameter protocol
+PARAM_REQUEST_READ = 20
+PARAM_REQUEST_LIST = 21
+PARAM_VALUE = 22
+PARAM_SET = 23
 # mission protocol
 MISSION_CURRENT = 42
 MISSION_REQUEST_LIST = 43
@@ -40,6 +45,10 @@ MSG_NAME = {
     COMMAND_ACK: "COMMAND_ACK",
     SET_POSITION_TARGET_GLOBAL_INT: "SET_POSITION_TARGET_GLOBAL_INT",
     STATUSTEXT: "STATUSTEXT",
+    PARAM_REQUEST_READ: "PARAM_REQUEST_READ",
+    PARAM_REQUEST_LIST: "PARAM_REQUEST_LIST",
+    PARAM_VALUE: "PARAM_VALUE",
+    PARAM_SET: "PARAM_SET",
     MISSION_CURRENT: "MISSION_CURRENT",
     MISSION_REQUEST_LIST: "MISSION_REQUEST_LIST",
     MISSION_COUNT: "MISSION_COUNT",
@@ -55,6 +64,7 @@ CRC_EXTRA = {
     HEARTBEAT: 50, SYS_STATUS: 124, GPS_RAW_INT: 24, ATTITUDE: 39,
     GLOBAL_POSITION_INT: 104, VFR_HUD: 20, COMMAND_LONG: 152,
     COMMAND_ACK: 143, STATUSTEXT: 83, SET_POSITION_TARGET_GLOBAL_INT: 5,
+    PARAM_REQUEST_READ: 214, PARAM_REQUEST_LIST: 159, PARAM_VALUE: 220, PARAM_SET: 168,
     MISSION_CURRENT: 28, MISSION_REQUEST_LIST: 132, MISSION_COUNT: 221,
     MISSION_CLEAR_ALL: 232, MISSION_ITEM_REACHED: 11, MISSION_ACK: 153,
     MISSION_REQUEST_INT: 196, MISSION_ITEM_INT: 38,
@@ -72,6 +82,10 @@ FIELDS = {
     COMMAND_ACK: ["command", "result"],
     SET_POSITION_TARGET_GLOBAL_INT: ["lat_int", "lon_int", "alt", "type_mask"],
     STATUSTEXT: ["severity"],   # `text` is attached separately (string, not in f[])
+    PARAM_REQUEST_LIST: ["target_system", "target_component"],
+    PARAM_REQUEST_READ: ["param_index"],          # `param_id` attached as string
+    PARAM_VALUE: ["param_value", "param_count", "param_index", "param_type"],  # +param_id string
+    PARAM_SET: ["param_value", "param_type"],      # +param_id string
     MISSION_CURRENT: ["seq"],
     MISSION_REQUEST_LIST: ["target_system", "target_component"],
     MISSION_COUNT: ["count", "target_system", "target_component"],
@@ -101,6 +115,7 @@ MAV_CMD_DO_PAUSE_CONTINUE = 193
 MAV_FRAME_GLOBAL = 0
 MAV_FRAME_GLOBAL_RELATIVE_ALT = 3
 MAV_FRAME_GLOBAL_RELATIVE_ALT_INT = 6
+MAV_PARAM_TYPE_REAL32 = 9          # ArduPilot stores every parameter as REAL32
 # SET_POSITION_TARGET type_mask: use position fields only (ignore vel/accel/yaw).
 POSITION_TARGET_TYPEMASK_POS_ONLY = 0x0DF8
 
@@ -240,6 +255,30 @@ def enc_set_position_target_global_int(lat_deg, lon_deg, alt_rel,
                        frame & 0xFF)
 
 
+def _pid(param_id):
+    return param_id.encode("ascii", "replace")[:16] if isinstance(param_id, str) else bytes(param_id)[:16]
+
+
+def enc_param_request_list(target_system=1, target_component=1):
+    return struct.pack("<BB", target_system & 0xFF, target_component & 0xFF)
+
+
+def enc_param_request_read(param_id="", param_index=-1, target_system=1, target_component=1):
+    return struct.pack("<hBB16s", int(param_index), target_system & 0xFF,
+                       target_component & 0xFF, _pid(param_id))
+
+
+def enc_param_value(param_id, value, param_type=MAV_PARAM_TYPE_REAL32, count=1, index=0):
+    return struct.pack("<fHH16sB", float(value), int(count) & 0xFFFF, int(index) & 0xFFFF,
+                       _pid(param_id), param_type & 0xFF)
+
+
+def enc_param_set(param_id, value, param_type=MAV_PARAM_TYPE_REAL32,
+                  target_system=1, target_component=1):
+    return struct.pack("<fBB16sB", float(value), target_system & 0xFF,
+                       target_component & 0xFF, _pid(param_id), param_type & 0xFF)
+
+
 def enc_mission_count(count, target_system=1, target_component=1):
     return struct.pack("<HBB", int(count) & 0xFFFF, target_system & 0xFF, target_component & 0xFF)
 
@@ -332,6 +371,13 @@ _WIRE = {
         ["time_boot_ms", "lat_int", "lon_int", "alt", "vx", "vy", "vz",
          "afx", "afy", "afz", "yaw", "yaw_rate", "type_mask",
          "target_system", "target_component", "coordinate_frame"], 53),
+    PARAM_REQUEST_LIST: ("<BB", ["target_system", "target_component"], 2),
+    PARAM_REQUEST_READ: ("<hBB16s", ["param_index", "target_system", "target_component",
+                                     "param_id"], 20),
+    PARAM_VALUE: ("<fHH16sB", ["param_value", "param_count", "param_index", "param_id",
+                               "param_type"], 25),
+    PARAM_SET: ("<fBB16sB", ["param_value", "target_system", "target_component", "param_id",
+                             "param_type"], 23),
     MISSION_CURRENT: ("<H", ["seq"], 2),
     MISSION_REQUEST_LIST: ("<BB", ["target_system", "target_component"], 2),
     MISSION_COUNT: ("<HBB", ["count", "target_system", "target_component"], 4),
@@ -417,8 +463,9 @@ class PyParser:
             pl = bytes(self.buf[pos + hdr: pos + hdr + payload])
             pl = pl[:full] if len(pl) >= full else pl + b"\x00" * (full - len(pl))
             fields = dict(zip(names, struct.unpack(fmt, pl)))
-            if msgid == STATUSTEXT:
-                fields["text"] = fields["text"].split(b"\x00")[0].decode("utf-8", "replace")
+            for sk in ("text", "param_id"):           # char[] fields -> str
+                if isinstance(fields.get(sk), bytes):
+                    fields[sk] = fields[sk].split(b"\x00")[0].decode("utf-8", "replace")
             out.append(Message(msgid, sysid, compid, seq, fields))
             self.ok += 1
             pos += total

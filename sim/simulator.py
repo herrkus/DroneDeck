@@ -105,6 +105,14 @@ def main():
     up_expected = 0       # >0 while receiving an upload
     up_items = []
     up_next = 0
+    sim_params = {        # a small ArduCopter-like parameter set to browse/edit
+        "SYSID_THISMAV": 1.0, "WPNAV_SPEED": 500.0, "WPNAV_RADIUS": 200.0,
+        "RTL_ALT": 1500.0, "FENCE_ENABLE": 0.0, "FENCE_ALT_MAX": 100.0,
+        "BATT_LOW_VOLT": 10.5, "ANGLE_MAX": 4500.0, "PILOT_SPEED_UP": 250.0,
+        "ARMING_CHECK": 1.0, "GPS_TYPE": 1.0, "FS_THR_ENABLE": 1.0,
+        "LOITER_SPEED": 1250.0, "LOG_BITMASK": 176126.0,
+    }
+    param_order = list(sim_params.keys())
 
     def enter_loiter():
         nonlocal theta, loiter_center
@@ -324,6 +332,29 @@ def main():
                                 auto_idx = 0
                                 send(mavlink.MISSION_ACK, mavlink.enc_mission_ack(0))
                                 send(mavlink.STATUSTEXT, mavlink.enc_statustext(6, "Mission cleared"))
+                            # ---- parameter protocol (vehicle side) ----
+                            elif m.msgid == mavlink.PARAM_REQUEST_LIST:
+                                for i, name in enumerate(param_order):
+                                    send(mavlink.PARAM_VALUE, mavlink.enc_param_value(
+                                        name, sim_params[name], count=len(param_order), index=i))
+                            elif m.msgid == mavlink.PARAM_SET:
+                                name = m.fields.get("param_id", "")
+                                if name in sim_params:
+                                    sim_params[name] = float(m.fields.get("param_value", 0.0))
+                                    i = param_order.index(name)
+                                    send(mavlink.PARAM_VALUE, mavlink.enc_param_value(
+                                        name, sim_params[name], count=len(param_order), index=i))
+                                    send(mavlink.STATUSTEXT, mavlink.enc_statustext(
+                                        6, f"{name} = {sim_params[name]:g}"))
+                            elif m.msgid == mavlink.PARAM_REQUEST_READ:
+                                idx = int(m.fields.get("param_index", -1))
+                                name = m.fields.get("param_id", "")
+                                if 0 <= idx < len(param_order):
+                                    name = param_order[idx]
+                                if name in sim_params:
+                                    i = param_order.index(name)
+                                    send(mavlink.PARAM_VALUE, mavlink.enc_param_value(
+                                        name, sim_params[name], count=len(param_order), index=i))
                 except BlockingIOError:
                     pass
                 except OSError:

@@ -25,6 +25,7 @@ import mavlink
 from vehicle import Vehicle
 from link import UdpLink, TcpLink, SerialLink
 from mission import MissionProtocol, MissionItem, survey_grid
+from params import ParamManager, ParamDialog
 from instruments import AttitudeIndicator, Compass
 from mapview import MapView
 from panels import TelemetryPanel, MessageConsole, MavInspector
@@ -61,6 +62,10 @@ class DroneDeck(QMainWindow):
         self.plan_mode = False
         self.mission_items = []                         # list[MissionItem]
         self.mission = MissionProtocol(lambda: self.link, self._sysid)
+
+        # parameter editor
+        self.params = ParamManager(lambda: self.link, self._sysid)
+        self._param_dialog = None
 
         self._build_ui()
         self._wire()
@@ -101,6 +106,9 @@ class DroneDeck(QMainWindow):
         self.btn_disarm.clicked.connect(lambda: self._arm(False))
         tb.addWidget(self.btn_arm)
         tb.addWidget(self.btn_disarm)
+        self.btn_params = QPushButton("Params")
+        self.btn_params.clicked.connect(self._open_params)
+        tb.addWidget(self.btn_params)
         tb.addSeparator()
 
         self.chk_follow = QCheckBox("Follow")
@@ -249,6 +257,7 @@ class DroneDeck(QMainWindow):
         link = cls()
         link.messages.connect(self.vehicle.consume)
         link.messages.connect(self.mission.handle_messages)
+        link.messages.connect(self.params.handle_messages)
         link.messages.connect(self.inspector.consume)
         link.info.connect(self._on_info)
         link.state.connect(self._on_state)
@@ -319,6 +328,15 @@ class DroneDeck(QMainWindow):
             return
         self.link.arm(self._sysid(), arm)
         self._on_info(f"sent {'ARM' if arm else 'DISARM'} to system {self._sysid()}")
+
+    def _open_params(self):
+        if self._param_dialog is None:
+            self._param_dialog = ParamDialog(self.params, self)
+        self._param_dialog.show()
+        self._param_dialog.raise_()
+        self._param_dialog.activateWindow()
+        if self._has_vehicle() and not self.params.values:
+            self.params.download()
 
     def _set_mode(self):
         if not self._has_vehicle():
