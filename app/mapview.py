@@ -42,6 +42,8 @@ def num2deg(x, y, z):
 
 class MapView(QWidget):
     clicked = Signal(float, float)            # map click -> (lat, lon)
+    waypoint_selected = Signal(int)           # a planned waypoint was clicked
+    waypoint_moved = Signal(int, float, float)  # waypoint dragged -> (index, lat, lon)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -53,6 +55,10 @@ class MapView(QWidget):
         self.home = None
         self.trail = []
         self.mission = []                     # list of (lat, lon) planned waypoints
+        self.fence = []                       # list of (lat, lon) geofence polygon
+        self.rally = []                       # list of (lat, lon) rally points
+        self.selected_wp = -1
+        self._wp_drag = None
         self._pending = set()
         self._drag = None
         self._press = None
@@ -78,7 +84,33 @@ class MapView(QWidget):
 
     def set_mission(self, pts):
         self.mission = list(pts)
+        if self.selected_wp >= len(self.mission):
+            self.selected_wp = -1
         self.update()
+
+    def set_fence(self, pts):
+        self.fence = list(pts)
+        self.update()
+
+    def set_rally(self, pts):
+        self.rally = list(pts)
+        self.update()
+
+    def set_selected(self, idx):
+        self.selected_wp = idx
+        self.update()
+
+    def _nearest_wp(self, pos):
+        if not self.mission:
+            return -1
+        cfx, cfy = deg2num(self.center[0], self.center[1], self.zoom)
+        best, bestd = -1, 14.0
+        for i, (la, lo) in enumerate(self.mission):
+            p = self._ll_to_px(la, lo, cfx, cfy)
+            d = ((p.x() - pos.x()) ** 2 + (p.y() - pos.y()) ** 2) ** 0.5
+            if d < bestd:
+                best, bestd = i, d
+        return best
 
     # -- tile cache -----------------------------------------------------------
     def _tile_path(self, z, x, y):
@@ -187,6 +219,22 @@ class MapView(QWidget):
             p.drawEllipse(hp, 5, 5)
             p.drawText(QRectF(hp.x() + 8, hp.y() - 8, 50, 16), Qt.AlignVCenter, "H")
 
+        # geofence polygon (dashed red, translucent fill)
+        if len(self.fence) >= 2:
+            fp = [self._ll_to_px(la, lo, cfx, cfy) for la, lo in self.fence]
+            p.setPen(QPen(QColor(255, 80, 80, 230), 2, Qt.DashLine))
+            p.setBrush(QBrush(QColor(255, 80, 80, 30)))
+            p.drawPolygon(QPolygonF(fp))
+
+        # rally points (green diamonds)
+        if self.rally:
+            p.setPen(QPen(QColor(20, 60, 20), 1.5))
+            p.setBrush(QBrush(QColor(90, 220, 130)))
+            for la, lo in self.rally:
+                rp = self._ll_to_px(la, lo, cfx, cfy)
+                p.drawPolygon(QPolygonF([QPointF(rp.x(), rp.y() - 8), QPointF(rp.x() + 8, rp.y()),
+                                         QPointF(rp.x(), rp.y() + 8), QPointF(rp.x() - 8, rp.y())]))
+
         # planned mission: path + numbered waypoints
         if self.mission:
             pts = [self._ll_to_px(la, lo, cfx, cfy) for la, lo in self.mission]
@@ -196,9 +244,14 @@ class MapView(QWidget):
             wpf = QFont("DejaVu Sans Mono", 8)
             wpf.setBold(True)
             for i, pt in enumerate(pts):
-                p.setPen(QPen(QColor(40, 30, 0), 1.5))
-                p.setBrush(QBrush(QColor(255, 190, 0)))
-                p.drawEllipse(pt, 9, 9)
+                if i == self.selected_wp:
+                    p.setPen(QPen(QColor(255, 255, 255), 2))
+                    p.setBrush(QBrush(QColor(255, 140, 0)))
+                    p.drawEllipse(pt, 11, 11)
+                else:
+                    p.setPen(QPen(QColor(40, 30, 0), 1.5))
+                    p.setBrush(QBrush(QColor(255, 190, 0)))
+                    p.drawEllipse(pt, 9, 9)
                 p.setPen(QColor(20, 20, 20))
                 p.setFont(wpf)
                 p.drawText(QRectF(pt.x() - 9, pt.y() - 8, 18, 16), Qt.AlignCenter, str(i))
@@ -252,11 +305,25 @@ class MapView(QWidget):
         self.set_zoom(self.zoom + (1 if e.angleDelta().y() > 0 else -1))
 
     def mousePressEvent(self, e):
+        idx = self._nearest_wp(e.position())
+        if idx >= 0:                           # grab a waypoint to drag
+            self._wp_drag = idx
+            self.selected_wp = idx
+            self.waypoint_selected.emit(idx)
+            self.update()
+            return
         self._drag = e.position()
         self._press = e.position()
         self._dragged = False
 
     def mouseMoveEvent(self, e):
+        if self._wp_drag is not None:
+            la, lo = self._px_to_ll(e.position().x(), e.position().y())
+            if 0 <= self._wp_drag < len(self.mission):
+                self.mission[self._wp_drag] = (la, lo)
+                self.waypoint_moved.emit(self._wp_drag, la, lo)
+                self.update()
+            return
         if self._drag is None:
             return
         d = e.position() - self._drag
@@ -269,6 +336,9 @@ class MapView(QWidget):
         self.update()
 
     def mouseReleaseEvent(self, e):
+        if self._wp_drag is not None:          # finished moving a waypoint
+            self._wp_drag = None
+            return
         was_click = (self._drag is not None and not self._dragged and self._press is not None)
         self._drag = None
         if was_click:

@@ -143,27 +143,33 @@ class Link(QObject):
                   ptype: int = mavlink.MAV_PARAM_TYPE_REAL32):
         self._send_msg(mavlink.PARAM_SET, mavlink.enc_param_set(param_id, value, ptype, target_sys))
 
-    # -- mission protocol -----------------------------------------------------
-    def send_mission_count(self, target_sys: int, count: int):
-        self._send_msg(mavlink.MISSION_COUNT, mavlink.enc_mission_count(count, target_sys))
+    # -- mission protocol (mission_type: 0=mission, 1=fence, 2=rally) ----------
+    def send_mission_count(self, target_sys: int, count: int, mission_type: int = 0):
+        self._send_msg(mavlink.MISSION_COUNT,
+                       mavlink.enc_mission_count(count, target_sys, mission_type=mission_type))
 
-    def send_mission_item(self, target_sys: int, item):
+    def send_mission_item(self, target_sys: int, item, mission_type: int = 0):
         self._send_msg(mavlink.MISSION_ITEM_INT, mavlink.enc_mission_item_int(
             item.seq, item.lat, item.lon, item.alt, command=item.command, frame=item.frame,
             autocontinue=item.autocontinue, param1=item.param1, param2=item.param2,
-            param3=item.param3, param4=item.param4, target_system=target_sys))
+            param3=item.param3, param4=item.param4, target_system=target_sys,
+            mission_type=mission_type))
 
-    def send_mission_request_list(self, target_sys: int):
-        self._send_msg(mavlink.MISSION_REQUEST_LIST, mavlink.enc_mission_request_list(target_sys))
+    def send_mission_request_list(self, target_sys: int, mission_type: int = 0):
+        self._send_msg(mavlink.MISSION_REQUEST_LIST,
+                       mavlink.enc_mission_request_list(target_sys, mission_type=mission_type))
 
-    def send_mission_request_int(self, target_sys: int, seq: int):
-        self._send_msg(mavlink.MISSION_REQUEST_INT, mavlink.enc_mission_request_int(seq, target_sys))
+    def send_mission_request_int(self, target_sys: int, seq: int, mission_type: int = 0):
+        self._send_msg(mavlink.MISSION_REQUEST_INT,
+                       mavlink.enc_mission_request_int(seq, target_sys, mission_type=mission_type))
 
-    def send_mission_ack(self, target_sys: int, result: int = 0):
-        self._send_msg(mavlink.MISSION_ACK, mavlink.enc_mission_ack(result, target_sys))
+    def send_mission_ack(self, target_sys: int, result: int = 0, mission_type: int = 0):
+        self._send_msg(mavlink.MISSION_ACK,
+                       mavlink.enc_mission_ack(result, target_sys, mission_type=mission_type))
 
-    def send_mission_clear(self, target_sys: int):
-        self._send_msg(mavlink.MISSION_CLEAR_ALL, mavlink.enc_mission_clear_all(target_sys))
+    def send_mission_clear(self, target_sys: int, mission_type: int = 0):
+        self._send_msg(mavlink.MISSION_CLEAR_ALL,
+                       mavlink.enc_mission_clear_all(target_sys, mission_type=mission_type))
 
 
 class UdpLink(Link):

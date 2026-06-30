@@ -87,14 +87,14 @@ FIELDS = {
     PARAM_VALUE: ["param_value", "param_count", "param_index", "param_type"],  # +param_id string
     PARAM_SET: ["param_value", "param_type"],      # +param_id string
     MISSION_CURRENT: ["seq"],
-    MISSION_REQUEST_LIST: ["target_system", "target_component"],
-    MISSION_COUNT: ["count", "target_system", "target_component"],
-    MISSION_CLEAR_ALL: ["target_system", "target_component"],
+    MISSION_REQUEST_LIST: ["target_system", "target_component", "mission_type"],
+    MISSION_COUNT: ["count", "target_system", "target_component", "mission_type"],
+    MISSION_CLEAR_ALL: ["target_system", "target_component", "mission_type"],
     MISSION_ITEM_REACHED: ["seq"],
-    MISSION_ACK: ["target_system", "target_component", "type"],
-    MISSION_REQUEST_INT: ["seq", "target_system", "target_component"],
+    MISSION_ACK: ["target_system", "target_component", "type", "mission_type"],
+    MISSION_REQUEST_INT: ["seq", "target_system", "target_component", "mission_type"],
     MISSION_ITEM_INT: ["seq", "frame", "command", "current", "autocontinue",
-                       "param1", "param2", "param3", "param4", "x", "y", "z"],
+                       "param1", "param2", "param3", "param4", "x", "y", "z", "mission_type"],
 }
 
 # --- selected enums ---------------------------------------------------------
@@ -116,6 +116,11 @@ MAV_FRAME_GLOBAL = 0
 MAV_FRAME_GLOBAL_RELATIVE_ALT = 3
 MAV_FRAME_GLOBAL_RELATIVE_ALT_INT = 6
 MAV_PARAM_TYPE_REAL32 = 9          # ArduPilot stores every parameter as REAL32
+MAV_MISSION_TYPE_MISSION = 0
+MAV_MISSION_TYPE_FENCE = 1
+MAV_MISSION_TYPE_RALLY = 2
+MAV_CMD_NAV_FENCE_POLYGON_VERTEX_INCLUSION = 5001
+MAV_CMD_NAV_RALLY_POINT = 5100
 # SET_POSITION_TARGET type_mask: use position fields only (ignore vel/accel/yaw).
 POSITION_TARGET_TYPEMASK_POS_ONLY = 0x0DF8
 
@@ -279,36 +284,39 @@ def enc_param_set(param_id, value, param_type=MAV_PARAM_TYPE_REAL32,
                        target_component & 0xFF, _pid(param_id), param_type & 0xFF)
 
 
-def enc_mission_count(count, target_system=1, target_component=1):
-    return struct.pack("<HBB", int(count) & 0xFFFF, target_system & 0xFF, target_component & 0xFF)
+def enc_mission_count(count, target_system=1, target_component=1, mission_type=0):
+    return struct.pack("<HBBB", int(count) & 0xFFFF, target_system & 0xFF,
+                       target_component & 0xFF, mission_type & 0xFF)
 
 
-def enc_mission_request_list(target_system=1, target_component=1):
-    return struct.pack("<BB", target_system & 0xFF, target_component & 0xFF)
+def enc_mission_request_list(target_system=1, target_component=1, mission_type=0):
+    return struct.pack("<BBB", target_system & 0xFF, target_component & 0xFF, mission_type & 0xFF)
 
 
-def enc_mission_request_int(seq, target_system=1, target_component=1):
-    return struct.pack("<HBB", int(seq) & 0xFFFF, target_system & 0xFF, target_component & 0xFF)
+def enc_mission_request_int(seq, target_system=1, target_component=1, mission_type=0):
+    return struct.pack("<HBBB", int(seq) & 0xFFFF, target_system & 0xFF,
+                       target_component & 0xFF, mission_type & 0xFF)
 
 
-def enc_mission_ack(result=0, target_system=1, target_component=1):
-    return struct.pack("<BBB", target_system & 0xFF, target_component & 0xFF, int(result) & 0xFF)
+def enc_mission_ack(result=0, target_system=1, target_component=1, mission_type=0):
+    return struct.pack("<BBBB", target_system & 0xFF, target_component & 0xFF,
+                       int(result) & 0xFF, mission_type & 0xFF)
 
 
-def enc_mission_clear_all(target_system=1, target_component=1):
-    return struct.pack("<BB", target_system & 0xFF, target_component & 0xFF)
+def enc_mission_clear_all(target_system=1, target_component=1, mission_type=0):
+    return struct.pack("<BBB", target_system & 0xFF, target_component & 0xFF, mission_type & 0xFF)
 
 
 def enc_mission_item_int(seq, lat_deg, lon_deg, alt, command=MAV_CMD_NAV_WAYPOINT,
                          frame=MAV_FRAME_GLOBAL_RELATIVE_ALT_INT, current=0, autocontinue=1,
                          param1=0.0, param2=0.0, param3=0.0, param4=0.0,
-                         target_system=1, target_component=1):
-    return struct.pack("<ffffiifHHBBBBB",
+                         target_system=1, target_component=1, mission_type=0):
+    return struct.pack("<ffffiifHHBBBBBB",
                        float(param1), float(param2), float(param3), float(param4),
                        int(lat_deg * 1e7), int(lon_deg * 1e7), float(alt),
                        int(seq) & 0xFFFF, int(command) & 0xFFFF,
                        target_system & 0xFF, target_component & 0xFF,
-                       frame & 0xFF, current & 0xFF, autocontinue & 0xFF)
+                       frame & 0xFF, current & 0xFF, autocontinue & 0xFF, mission_type & 0xFF)
 
 
 def crc16(data: bytes) -> int:
@@ -419,16 +427,16 @@ _WIRE = {
     PARAM_SET: ("<fBB16sB", ["param_value", "target_system", "target_component", "param_id",
                              "param_type"], 23),
     MISSION_CURRENT: ("<H", ["seq"], 2),
-    MISSION_REQUEST_LIST: ("<BB", ["target_system", "target_component"], 2),
-    MISSION_COUNT: ("<HBB", ["count", "target_system", "target_component"], 4),
-    MISSION_CLEAR_ALL: ("<BB", ["target_system", "target_component"], 2),
+    MISSION_REQUEST_LIST: ("<BBB", ["target_system", "target_component", "mission_type"], 3),
+    MISSION_COUNT: ("<HBBB", ["count", "target_system", "target_component", "mission_type"], 5),
+    MISSION_CLEAR_ALL: ("<BBB", ["target_system", "target_component", "mission_type"], 3),
     MISSION_ITEM_REACHED: ("<H", ["seq"], 2),
-    MISSION_ACK: ("<BBB", ["target_system", "target_component", "type"], 3),
-    MISSION_REQUEST_INT: ("<HBB", ["seq", "target_system", "target_component"], 4),
-    MISSION_ITEM_INT: ("<ffffiifHHBBBBB",
+    MISSION_ACK: ("<BBBB", ["target_system", "target_component", "type", "mission_type"], 4),
+    MISSION_REQUEST_INT: ("<HBBB", ["seq", "target_system", "target_component", "mission_type"], 5),
+    MISSION_ITEM_INT: ("<ffffiifHHBBBBBB",
                        ["param1", "param2", "param3", "param4", "x", "y", "z",
                         "seq", "command", "target_system", "target_component",
-                        "frame", "current", "autocontinue"], 37),
+                        "frame", "current", "autocontinue", "mission_type"], 38),
 }
 
 

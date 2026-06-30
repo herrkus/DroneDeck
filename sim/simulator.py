@@ -100,11 +100,12 @@ def main():
     theta = 0.0
     # centre so that at theta=0 the vehicle sits exactly at (lat,lon): no jump.
     loiter_center = [lat - RADIUS_M / M_PER_DEG, lon]
-    mission = []          # list of dicts: seq, lat, lon, alt, command, frame
+    missions = {0: [], 1: [], 2: []}   # 0=mission (flown in AUTO), 1=fence, 2=rally
     auto_idx = 0          # current waypoint index in AUTO
     up_expected = 0       # >0 while receiving an upload
     up_items = []
     up_next = 0
+    up_mtype = 0
     sim_params = {        # a small ArduCopter-like parameter set to browse/edit
         "SYSID_THISMAV": 1.0, "WPNAV_SPEED": 500.0, "WPNAV_RADIUS": 200.0,
         "RTL_ALT": 1500.0, "FENCE_ENABLE": 0.0, "FENCE_ALT_MAX": 100.0,
@@ -146,7 +147,7 @@ def main():
             elif mode == LOITER:
                 do_orbit = True
             elif mode == AUTO:
-                nav = [it for it in mission if it["command"] in (16, 22)
+                nav = [it for it in missions[0] if it["command"] in (16, 22)
                        and not (abs(it["lat"]) < 1e-6 and abs(it["lon"]) < 1e-6)]
                 if nav:
                     if auto_idx >= len(nav):
@@ -286,17 +287,21 @@ def main():
                                                  float(m.fields.get("alt", CRUISE_ALT)))
                                 mode = GUIDED
                                 send(mavlink.STATUSTEXT, mavlink.enc_statustext(6, "Goto target set"))
-                            # ---- mission protocol (vehicle side) ----
+                            # ---- mission protocol (vehicle side, per mission_type) ----
                             elif m.msgid == mavlink.MISSION_COUNT:
+                                up_mtype = int(m.fields.get("mission_type", 0))
                                 up_expected = int(m.fields.get("count", 0))
                                 up_items = []
                                 up_next = 0
                                 if up_expected == 0:
-                                    mission = []
-                                    auto_idx = 0
-                                    send(mavlink.MISSION_ACK, mavlink.enc_mission_ack(0))
+                                    missions[up_mtype] = []
+                                    if up_mtype == 0:
+                                        auto_idx = 0
+                                    send(mavlink.MISSION_ACK,
+                                         mavlink.enc_mission_ack(0, mission_type=up_mtype))
                                 else:
-                                    send(mavlink.MISSION_REQUEST_INT, mavlink.enc_mission_request_int(0))
+                                    send(mavlink.MISSION_REQUEST_INT,
+                                         mavlink.enc_mission_request_int(0, mission_type=up_mtype))
                             elif m.msgid == mavlink.MISSION_ITEM_INT:
                                 seq = int(m.fields.get("seq", -1))
                                 if up_expected and seq == up_next:
@@ -305,33 +310,49 @@ def main():
                                                      "lon": m.fields["y"] / 1e7,
                                                      "alt": float(m.fields["z"]),
                                                      "command": int(m.fields["command"]),
-                                                     "frame": int(m.fields["frame"])})
+                                                     "frame": int(m.fields["frame"]),
+                                                     "p1": float(m.fields["param1"]),
+                                                     "p2": float(m.fields["param2"]),
+                                                     "p3": float(m.fields["param3"]),
+                                                     "p4": float(m.fields["param4"])})
                                     up_next += 1
                                     if up_next >= up_expected:
-                                        mission = up_items
+                                        missions[up_mtype] = up_items
                                         up_expected = 0
-                                        auto_idx = 0
-                                        send(mavlink.MISSION_ACK, mavlink.enc_mission_ack(0))
+                                        if up_mtype == 0:
+                                            auto_idx = 0
+                                        send(mavlink.MISSION_ACK,
+                                             mavlink.enc_mission_ack(0, mission_type=up_mtype))
+                                        kind = {0: "Mission", 1: "Fence", 2: "Rally"}.get(up_mtype, "?")
                                         send(mavlink.STATUSTEXT, mavlink.enc_statustext(
-                                            6, f"Mission received: {len(mission)} items"))
+                                            6, f"{kind} received: {len(up_items)} items"))
                                     else:
                                         send(mavlink.MISSION_REQUEST_INT,
-                                             mavlink.enc_mission_request_int(up_next))
+                                             mavlink.enc_mission_request_int(up_next, mission_type=up_mtype))
                             elif m.msgid == mavlink.MISSION_REQUEST_LIST:
-                                send(mavlink.MISSION_COUNT, mavlink.enc_mission_count(len(mission)))
+                                mt = int(m.fields.get("mission_type", 0))
+                                send(mavlink.MISSION_COUNT,
+                                     mavlink.enc_mission_count(len(missions.get(mt, [])), mission_type=mt))
                             elif m.msgid == mavlink.MISSION_REQUEST_INT:
+                                mt = int(m.fields.get("mission_type", 0))
                                 seq = int(m.fields.get("seq", 0))
-                                if 0 <= seq < len(mission):
-                                    it = mission[seq]
+                                lst = missions.get(mt, [])
+                                if 0 <= seq < len(lst):
+                                    it = lst[seq]
                                     send(mavlink.MISSION_ITEM_INT, mavlink.enc_mission_item_int(
                                         it["seq"], it["lat"], it["lon"], it["alt"],
                                         command=it["command"], frame=it.get("frame", 6),
-                                        current=1 if seq == 0 else 0))
+                                        param1=it.get("p1", 0.0), param2=it.get("p2", 0.0),
+                                        param3=it.get("p3", 0.0), param4=it.get("p4", 0.0),
+                                        current=1 if seq == 0 else 0, mission_type=mt))
                             elif m.msgid == mavlink.MISSION_CLEAR_ALL:
-                                mission = []
-                                auto_idx = 0
-                                send(mavlink.MISSION_ACK, mavlink.enc_mission_ack(0))
-                                send(mavlink.STATUSTEXT, mavlink.enc_statustext(6, "Mission cleared"))
+                                mt = int(m.fields.get("mission_type", 0))
+                                missions[mt] = []
+                                if mt == 0:
+                                    auto_idx = 0
+                                send(mavlink.MISSION_ACK, mavlink.enc_mission_ack(0, mission_type=mt))
+                                kind = {0: "Mission", 1: "Fence", 2: "Rally"}.get(mt, "?")
+                                send(mavlink.STATUSTEXT, mavlink.enc_statustext(6, f"{kind} cleared"))
                             # ---- parameter protocol (vehicle side) ----
                             elif m.msgid == mavlink.PARAM_REQUEST_LIST:
                                 for i, name in enumerate(param_order):

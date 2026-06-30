@@ -85,13 +85,13 @@ constexpr MsgInfo MSGS[] = {
     {22, 220, 25},   // PARAM_VALUE
     {23, 168, 23},   // PARAM_SET
     {42,  28,  2},   // MISSION_CURRENT
-    {43, 132,  2},   // MISSION_REQUEST_LIST
-    {44, 221,  4},   // MISSION_COUNT
-    {45, 232,  2},   // MISSION_CLEAR_ALL
+    {43, 132,  3},   // MISSION_REQUEST_LIST (+mission_type)
+    {44, 221,  5},   // MISSION_COUNT (+mission_type)
+    {45, 232,  3},   // MISSION_CLEAR_ALL (+mission_type)
     {46,  11,  2},   // MISSION_ITEM_REACHED
-    {47, 153,  3},   // MISSION_ACK
-    {51, 196,  4},   // MISSION_REQUEST_INT
-    {73,  38, 37},   // MISSION_ITEM_INT
+    {47, 153,  4},   // MISSION_ACK (+mission_type)
+    {51, 196,  5},   // MISSION_REQUEST_INT (+mission_type)
+    {73,  38, 38},   // MISSION_ITEM_INT (+mission_type)
 };
 
 const MsgInfo* find_info(uint32_t id) {
@@ -176,28 +176,28 @@ void decode(uint32_t msgid, const uint8_t* pl, Decoded& d) {
     case 42: // MISSION_CURRENT: seq
         push(rd_u16(pl + 0));
         break;
-    case 43: // MISSION_REQUEST_LIST: target_system, target_component
-        push(pl[0]); push(pl[1]);
+    case 43: // MISSION_REQUEST_LIST: target_system, target_component, mission_type
+        push(pl[0]); push(pl[1]); push(pl[2]);
         break;
-    case 44: // MISSION_COUNT: count, target_system, target_component
-        push(rd_u16(pl + 0)); push(pl[2]); push(pl[3]);
+    case 44: // MISSION_COUNT: count, target_system, target_component, mission_type
+        push(rd_u16(pl + 0)); push(pl[2]); push(pl[3]); push(pl[4]);
         break;
-    case 45: // MISSION_CLEAR_ALL: target_system, target_component
-        push(pl[0]); push(pl[1]);
+    case 45: // MISSION_CLEAR_ALL: target_system, target_component, mission_type
+        push(pl[0]); push(pl[1]); push(pl[2]);
         break;
     case 46: // MISSION_ITEM_REACHED: seq
         push(rd_u16(pl + 0));
         break;
-    case 47: // MISSION_ACK: target_system, target_component, type
-        push(pl[0]); push(pl[1]); push(pl[2]);
+    case 47: // MISSION_ACK: target_system, target_component, type, mission_type
+        push(pl[0]); push(pl[1]); push(pl[2]); push(pl[3]);
         break;
-    case 51: // MISSION_REQUEST_INT: seq, target_system, target_component
-        push(rd_u16(pl + 0)); push(pl[2]); push(pl[3]);
+    case 51: // MISSION_REQUEST_INT: seq, target_system, target_component, mission_type
+        push(rd_u16(pl + 0)); push(pl[2]); push(pl[3]); push(pl[4]);
         break;
-    case 73: // MISSION_ITEM_INT: seq, frame, command, current, autocontinue, param1..4, x, y, z
+    case 73: // MISSION_ITEM_INT: seq, frame, command, current, autocontinue, param1..4, x, y, z, mission_type
         push(rd_u16(pl + 28)); push(pl[34]); push(rd_u16(pl + 30)); push(pl[35]); push(pl[36]);
         push(rd_f32(pl + 0)); push(rd_f32(pl + 4)); push(rd_f32(pl + 8)); push(rd_f32(pl + 12));
-        push(rd_i32(pl + 16)); push(rd_i32(pl + 20)); push(rd_f32(pl + 24));
+        push(rd_i32(pl + 16)); push(rd_i32(pl + 20)); push(rd_f32(pl + 24)); push(pl[37]);
         break;
     default: break;
     }

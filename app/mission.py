@@ -89,6 +89,7 @@ class MissionProtocol(QObject):
         self.expected = 0
         self.next_seq = 0
         self.retries = 0
+        self.mtype = 0          # 0=mission, 1=fence, 2=rally
         self.timer = QTimer(self)
         self.timer.setSingleShot(True)
         self.timer.timeout.connect(self._on_timeout)
@@ -111,12 +112,13 @@ class MissionProtocol(QObject):
         self.finished.emit(ok, msg)
 
     # -- public actions -------------------------------------------------------
-    def upload(self, items):
+    def upload(self, items, mission_type=0):
         if not self._ready():
             self.finished.emit(False, "no vehicle connected")
             return
         if self.busy:
             return
+        self.mtype = mission_type
         self.items = [MissionItem(i, *(it.lat, it.lon, it.alt), command=it.command,
                                   frame=it.frame, autocontinue=it.autocontinue,
                                   param1=it.param1, param2=it.param2,
@@ -125,32 +127,34 @@ class MissionProtocol(QObject):
         self.state = "upload"
         self.retries = 0
         self.progress.emit(f"uploading {len(self.items)} items")
-        self._link().send_mission_count(self._target(), len(self.items))
+        self._link().send_mission_count(self._target(), len(self.items), self.mtype)
         self._arm()
 
-    def download(self):
+    def download(self, mission_type=0):
         if not self._ready():
             self.finished.emit(False, "no vehicle connected")
             return
         if self.busy:
             return
+        self.mtype = mission_type
         self.items = []
         self.state = "dl_count"
         self.retries = 0
         self.progress.emit("requesting mission")
-        self._link().send_mission_request_list(self._target())
+        self._link().send_mission_request_list(self._target(), self.mtype)
         self._arm()
 
-    def clear(self):
+    def clear(self, mission_type=0):
         if not self._ready():
             self.finished.emit(False, "no vehicle connected")
             return
         if self.busy:
             return
+        self.mtype = mission_type
         self.state = "clear"
         self.retries = 0
         self.progress.emit("clearing mission")
-        self._link().send_mission_clear(self._target())
+        self._link().send_mission_clear(self._target(), self.mtype)
         self._arm()
 
     # -- inbound --------------------------------------------------------------
@@ -166,7 +170,7 @@ class MissionProtocol(QObject):
             seq = int(m.fields.get("seq", 0))
             if 0 <= seq < len(self.items):
                 self.retries = 0
-                self._link().send_mission_item(self._target(), self.items[seq])
+                self._link().send_mission_item(self._target(), self.items[seq], self.mtype)
                 self.progress.emit(f"sent item {seq + 1}/{len(self.items)}")
                 self._arm()
         elif self.state == "upload" and mid == mavlink.MISSION_ACK:
@@ -178,17 +182,17 @@ class MissionProtocol(QObject):
             self.next_seq = 0
             self.retries = 0
             if self.expected == 0:
-                self._link().send_mission_ack(self._target())
+                self._link().send_mission_ack(self._target(), 0, self.mtype)
                 self.downloaded.emit([])
                 self._done(True, "no mission on vehicle")
                 return
             self.state = "dl_item"
-            self._link().send_mission_request_int(self._target(), 0)
+            self._link().send_mission_request_int(self._target(), 0, self.mtype)
             self._arm()
         elif self.state == "dl_item" and mid == mavlink.MISSION_ITEM_INT:
             seq = int(m.fields.get("seq", -1))
             if seq != self.next_seq:                       # out of order: re-request
-                self._link().send_mission_request_int(self._target(), self.next_seq)
+                self._link().send_mission_request_int(self._target(), self.next_seq, self.mtype)
                 self._arm()
                 return
             self.items.append(MissionItem(
@@ -200,12 +204,12 @@ class MissionProtocol(QObject):
             self.next_seq += 1
             self.retries = 0
             if self.next_seq >= self.expected:
-                self._link().send_mission_ack(self._target())
+                self._link().send_mission_ack(self._target(), 0, self.mtype)
                 self.downloaded.emit(self.items)
                 self._done(True, f"downloaded {len(self.items)} items")
             else:
                 self.progress.emit(f"item {self.next_seq}/{self.expected}")
-                self._link().send_mission_request_int(self._target(), self.next_seq)
+                self._link().send_mission_request_int(self._target(), self.next_seq, self.mtype)
                 self._arm()
         elif self.state == "clear" and mid == mavlink.MISSION_ACK:
             res = int(m.fields.get("type", 0))
@@ -222,12 +226,12 @@ class MissionProtocol(QObject):
         tgt = self._target()
         link = self._link()
         if self.state == "upload":
-            link.send_mission_count(tgt, len(self.items))
+            link.send_mission_count(tgt, len(self.items), self.mtype)
         elif self.state == "dl_count":
-            link.send_mission_request_list(tgt)
+            link.send_mission_request_list(tgt, self.mtype)
         elif self.state == "dl_item":
-            link.send_mission_request_int(tgt, self.next_seq)
+            link.send_mission_request_int(tgt, self.next_seq, self.mtype)
         elif self.state == "clear":
-            link.send_mission_clear(tgt)
+            link.send_mission_clear(tgt, self.mtype)
         self.progress.emit(f"retry {self.retries}/{MAX_RETRIES}")
         self._arm()

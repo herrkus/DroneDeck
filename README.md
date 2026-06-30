@@ -54,9 +54,10 @@ the native core.
 - **Flying controls** -- set flight mode (Loiter/Auto/Guided/RTL/...), plus
   Takeoff, Land, Return-to-Launch, Pause, and **click-on-map to fly there**
   (guided goto).
-- **Mission planning** -- plan-mode map clicks drop numbered waypoints; upload /
-  download missions over the standard MAVLink mission protocol; one-click
-  **survey** grid over a planned area; Clear.
+- **Mission planning** -- plan-mode map clicks drop numbered waypoints; **edit**
+  them (drag on the map, delete, reorder, edit altitude); upload / download over
+  the standard MAVLink mission protocol; one-click **survey** grid; plus
+  **geofence** polygons and **rally points** (`MAV_MISSION_TYPE_FENCE/RALLY`).
 - **MAVLink inspector** -- a live table of every message type, its rate (Hz) and
   current field values (bottom "Inspector" tab).
 - **Parameter editor** -- "Params" downloads the autopilot's parameters into a
@@ -95,6 +96,10 @@ tests/   selftest.cpp     native CRC/parser checks + benchmark
          test_links.py    TCP + serial transports end to end
          test_mission.py  mission upload/download round-trip vs the simulator
          test_mission_gui.py  plan -> upload -> download through the real window
+         test_mission_edit.py  waypoint move/delete/reorder editing
+         test_fence_rally.py   geofence + rally upload/download (mission_type)
+         test_params.py   parameter download + set echo
+         test_tlog.py     record a session, read it back, replay it
          smoke_gui.py     headless end-to-end + screenshot
 build.sh   run.sh
 ```
@@ -154,7 +159,11 @@ python3 tests/crc_extra_calc.py # derive + validate every CRC_EXTRA seed
 python3 tests/test_parity.py    # cross-language: Python-encode -> C++/asm-decode parity
 python3 tests/test_links.py     # TCP + serial transports end to end
 python3 tests/test_mission.py   # mission upload/download round-trip vs the simulator
-python3 tests/test_mission_gui.py  # plan -> upload -> download through the real window
+python3 tests/test_mission_gui.py   # plan -> upload -> download through the real window
+python3 tests/test_mission_edit.py  # waypoint move/delete/reorder editing
+python3 tests/test_fence_rally.py   # geofence + rally upload/download
+python3 tests/test_params.py    # parameter download + set echo
+python3 tests/test_tlog.py      # record a session, read it back, replay it
 python3 tests/smoke_gui.py      # headless end-to-end with the simulator + screenshot
 DRONEDECK_FORCE_PYTHON=1 python3 tests/smoke_gui.py   # same, exercising the fallback
 ```

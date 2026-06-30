@@ -63,7 +63,11 @@ class DroneDeck(QMainWindow):
 
         # mission planning state
         self.plan_mode = False
+        self.plan_type = "Mission"                      # Mission | Fence | Rally
         self.mission_items = []                         # list[MissionItem]
+        self.fence_pts = []                             # list[(lat, lon)]
+        self.rally_pts = []                             # list[(lat, lon)]
+        self._selecting = False
         self.mission = MissionProtocol(lambda: self.link, self._sysid)
 
         # parameter editor
@@ -170,6 +174,10 @@ class DroneDeck(QMainWindow):
         self.btn_plan.setCheckable(True)
         self.btn_plan.toggled.connect(self._toggle_plan)
         tb3.addWidget(self.btn_plan)
+        self.plan_type_combo = QComboBox()
+        self.plan_type_combo.addItems(["Mission", "Fence", "Rally"])
+        self.plan_type_combo.currentTextChanged.connect(self._on_plan_type)
+        tb3.addWidget(self.plan_type_combo)
         self._mission_btns = []
         for label, slot in (("Survey", self._survey), ("Clear", self._clear_mission),
                             ("Upload", self._upload_mission), ("Download", self._download_mission)):
@@ -227,14 +235,29 @@ class DroneDeck(QMainWindow):
         dock.setFeatures(QDockWidget.DockWidgetMovable | QDockWidget.DockWidgetFloatable)
         self.addDockWidget(Qt.BottomDockWidgetArea, dock)
 
-        # mission waypoint list, tabbed with Messages at the bottom
+        # mission waypoint list + edit buttons, tabbed with Messages at the bottom
         self.mission_list = QListWidget()
         self.mission_list.setFont(QFont("DejaVu Sans Mono", 9))
-        self.mission_list.setMinimumHeight(90)
-        self.mission_list.setMaximumHeight(170)
+        self.mission_list.itemSelectionChanged.connect(self._wp_list_selected)
+        self.mission_list.itemDoubleClicked.connect(self._wp_edit_alt)
+        mwrap = QWidget()
+        mv = QVBoxLayout(mwrap)
+        mv.setContentsMargins(2, 2, 2, 2)
+        mv.setSpacing(2)
+        mrow = QHBoxLayout()
+        for label, slot in (("Delete", self._wp_delete), ("Up", self._wp_up), ("Down", self._wp_down)):
+            b = QPushButton(label)
+            b.clicked.connect(slot)
+            mrow.addWidget(b)
+        hint = QLabel("double-click = edit alt, drag on map = move")
+        hint.setStyleSheet("color:#8a90a0;")
+        mrow.addWidget(hint)
+        mrow.addStretch(1)
+        mv.addLayout(mrow)
+        mv.addWidget(self.mission_list)
         mdock = QDockWidget("Mission", self)
         mdock.setObjectName("mission_dock")
-        mdock.setWidget(self.mission_list)
+        mdock.setWidget(mwrap)
         mdock.setFeatures(QDockWidget.DockWidgetMovable | QDockWidget.DockWidgetFloatable)
         self.addDockWidget(Qt.BottomDockWidgetArea, mdock)
 
@@ -262,6 +285,8 @@ class DroneDeck(QMainWindow):
         self.vehicle.status_text.connect(self.console.add_message)
         self.vehicle.command_ack.connect(self._on_command_ack)
         self.map.clicked.connect(self._on_map_click)
+        self.map.waypoint_selected.connect(self._wp_selected)
+        self.map.waypoint_moved.connect(self._wp_moved)
         self.mission.progress.connect(self._on_mission_progress)
         self.mission.finished.connect(self._on_mission_finished)
         self.mission.downloaded.connect(self._on_mission_downloaded)
@@ -438,11 +463,23 @@ class DroneDeck(QMainWindow):
         self.map_hint.setText(" click map = add waypoint " if on else " click map = Goto ")
         self.btn_plan.setText("Plan mode ON" if on else "Plan mode")
 
+    def _on_plan_type(self, text):
+        self.plan_type = text
+
     def _add_waypoint(self, lat, lon):
-        alt = self.mission_items[-1].alt if self.mission_items else 50.0
-        seq = len(self.mission_items)
-        self.mission_items.append(MissionItem(seq, lat, lon, alt))
-        self._refresh_mission_view()
+        if self.plan_type == "Fence":
+            self.fence_pts.append((lat, lon))
+            self.map.set_fence(self.fence_pts)
+            self.mission_status.setText(f"fence: {len(self.fence_pts)} vertices")
+        elif self.plan_type == "Rally":
+            self.rally_pts.append((lat, lon))
+            self.map.set_rally(self.rally_pts)
+            self.mission_status.setText(f"rally: {len(self.rally_pts)} points")
+        else:
+            alt = self.mission_items[-1].alt if self.mission_items else 50.0
+            seq = len(self.mission_items)
+            self.mission_items.append(MissionItem(seq, lat, lon, alt))
+            self._refresh_mission_view()
 
     def _refresh_mission_view(self):
         self.mission_list.clear()
@@ -457,6 +494,61 @@ class DroneDeck(QMainWindow):
         for i, it in enumerate(self.mission_items):
             it.seq = i
 
+    def _update_wp_row(self, idx):
+        it = self.mission_items[idx]
+        item = self.mission_list.item(idx)
+        if item:
+            item.setText(f"{it.seq:2d}  {it.cmd_name:9s} {it.lat:10.6f} {it.lon:11.6f}  {it.alt:5.0f} m")
+
+    def _wp_selected(self, idx):
+        self._selecting = True
+        self.mission_list.setCurrentRow(idx)
+        self._selecting = False
+
+    def _wp_list_selected(self):
+        if not self._selecting:
+            self.map.set_selected(self.mission_list.currentRow())
+
+    def _wp_moved(self, idx, lat, lon):
+        if 0 <= idx < len(self.mission_items):
+            self.mission_items[idx].lat = lat
+            self.mission_items[idx].lon = lon
+            self._update_wp_row(idx)
+
+    def _wp_delete(self):
+        i = self.mission_list.currentRow()
+        if 0 <= i < len(self.mission_items):
+            del self.mission_items[i]
+            self._renumber()
+            self._refresh_mission_view()
+            self.mission_list.setCurrentRow(min(i, len(self.mission_items) - 1))
+
+    def _wp_up(self):
+        i = self.mission_list.currentRow()
+        if 1 <= i < len(self.mission_items):
+            self.mission_items[i - 1], self.mission_items[i] = self.mission_items[i], self.mission_items[i - 1]
+            self._renumber()
+            self._refresh_mission_view()
+            self.mission_list.setCurrentRow(i - 1)
+
+    def _wp_down(self):
+        i = self.mission_list.currentRow()
+        if 0 <= i < len(self.mission_items) - 1:
+            self.mission_items[i + 1], self.mission_items[i] = self.mission_items[i], self.mission_items[i + 1]
+            self._renumber()
+            self._refresh_mission_view()
+            self.mission_list.setCurrentRow(i + 1)
+
+    def _wp_edit_alt(self, _item=None):
+        i = self.mission_list.currentRow()
+        if 0 <= i < len(self.mission_items):
+            alt, ok = QInputDialog.getDouble(self, "Waypoint altitude",
+                                             f"Altitude for WP {i} (m):",
+                                             self.mission_items[i].alt, 0.0, 2000.0, 1)
+            if ok:
+                self.mission_items[i].alt = alt
+                self._update_wp_row(i)
+
     def _survey(self):
         if len(self.mission_items) < 2:
             QMessageBox.information(self, "Survey",
@@ -470,26 +562,54 @@ class DroneDeck(QMainWindow):
             self._on_info(f"survey grid: {len(grid)} waypoints")
 
     def _clear_mission(self):
-        self.mission_items = []
-        self._refresh_mission_view()
+        if self.plan_type == "Fence":
+            self.fence_pts = []
+            self.map.set_fence([])
+            mt = mavlink.MAV_MISSION_TYPE_FENCE
+        elif self.plan_type == "Rally":
+            self.rally_pts = []
+            self.map.set_rally([])
+            mt = mavlink.MAV_MISSION_TYPE_RALLY
+        else:
+            self.mission_items = []
+            self._refresh_mission_view()
+            mt = mavlink.MAV_MISSION_TYPE_MISSION
         if self._has_vehicle():
-            self.mission.clear()
+            self.mission.clear(mt)
 
     def _upload_mission(self):
         if not self._has_vehicle():
             QMessageBox.information(self, "Upload", "No vehicle connected.")
             return
-        if not self.mission_items:
-            QMessageBox.information(self, "Upload", "No waypoints to upload.")
-            return
-        self._renumber()
-        self.mission.upload(self.mission_items)
+        if self.plan_type == "Fence":
+            if len(self.fence_pts) < 3:
+                QMessageBox.information(self, "Upload", "A fence needs at least 3 vertices.")
+                return
+            items = [MissionItem(i, la, lo, 0.0,
+                                 command=mavlink.MAV_CMD_NAV_FENCE_POLYGON_VERTEX_INCLUSION,
+                                 param1=float(len(self.fence_pts)))
+                     for i, (la, lo) in enumerate(self.fence_pts)]
+            self.mission.upload(items, mavlink.MAV_MISSION_TYPE_FENCE)
+        elif self.plan_type == "Rally":
+            if not self.rally_pts:
+                QMessageBox.information(self, "Upload", "No rally points to upload.")
+                return
+            items = [MissionItem(i, la, lo, 50.0, command=mavlink.MAV_CMD_NAV_RALLY_POINT)
+                     for i, (la, lo) in enumerate(self.rally_pts)]
+            self.mission.upload(items, mavlink.MAV_MISSION_TYPE_RALLY)
+        else:
+            if not self.mission_items:
+                QMessageBox.information(self, "Upload", "No waypoints to upload.")
+                return
+            self._renumber()
+            self.mission.upload(self.mission_items, mavlink.MAV_MISSION_TYPE_MISSION)
 
     def _download_mission(self):
         if not self._has_vehicle():
             QMessageBox.information(self, "Download", "No vehicle connected.")
             return
-        self.mission.download()
+        self.mission.download({"Fence": mavlink.MAV_MISSION_TYPE_FENCE,
+                               "Rally": mavlink.MAV_MISSION_TYPE_RALLY}.get(self.plan_type, 0))
 
     def _on_mission_progress(self, msg):
         self.mission_status.setText(msg)
@@ -499,8 +619,16 @@ class DroneDeck(QMainWindow):
         self.console.add_note(f"mission: {msg}", "#4caf50" if ok else "#ff6b6b")
 
     def _on_mission_downloaded(self, items):
-        self.mission_items = list(items)
-        self._refresh_mission_view()
+        mt = self.mission.mtype
+        if mt == mavlink.MAV_MISSION_TYPE_FENCE:
+            self.fence_pts = [(it.lat, it.lon) for it in items]
+            self.map.set_fence(self.fence_pts)
+        elif mt == mavlink.MAV_MISSION_TYPE_RALLY:
+            self.rally_pts = [(it.lat, it.lon) for it in items]
+            self.map.set_rally(self.rally_pts)
+        else:
+            self.mission_items = list(items)
+            self._refresh_mission_view()
 
     def _set_follow(self, on):
         self.map.follow = on
