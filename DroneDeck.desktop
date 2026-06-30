@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=DroneDeck
+GenericName=Ground Control Station
+Comment=MAVLink ground control -- listens for your drone on UDP 14550
+Exec="/home/Herkutis/Desktop/Drone py-cpp-x86-64/run.sh"
+Path=/home/Herkutis/Desktop/Drone py-cpp-x86-64
+Icon=/home/Herkutis/Desktop/Drone py-cpp-x86-64/app/assets/icon.png
+Terminal=false
+Categories=Utility;
+Keywords=drone;mavlink;uav;telemetry;gcs;

@@ -1,0 +1,6 @@
+__pycache__/
+*.pyc
+/build/
+/tiles_cache/
+core/libdronecore.so
+.directory
