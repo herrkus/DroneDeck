@@ -106,6 +106,20 @@ def main():
             check(int(m.fields["r"]) == -100, "manual r")
             check(int(m.fields["buttons"]) == 3 and int(m.fields["target"]) == 1, "manual btn/target")
 
+        m = roundtrip(mavlink.LOG_ENTRY,
+                      mavlink.enc_log_entry(2, 3, 2, 4096, time_utc=1700000000), crc_fn)
+        if m:
+            check(int(m.fields["id"]) == 2, "log_entry id")
+            check(int(m.fields["num_logs"]) == 3, "log_entry num_logs")
+            check(int(m.fields["size"]) == 4096, "log_entry size")
+
+        blob = bytes((i * 7) & 0xFF for i in range(90))
+        m = roundtrip(mavlink.LOG_DATA, mavlink.enc_log_data(2, 180, blob), crc_fn)
+        if m:
+            check(int(m.fields["ofs"]) == 180, "log_data ofs")
+            check(int(m.fields["count"]) == 90, "log_data count")
+            check(bytes(m.fields["data"])[:90] == blob, "log_data blob round-trip")
+
         m = roundtrip(mavlink.COMMAND_ACK, mavlink.enc_command_ack(400, 0), crc_fn)
         if m:
             check(m.fields["command"] == 400, f"ack command {m.fields.get('command')}")

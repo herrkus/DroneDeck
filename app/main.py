@@ -29,6 +29,7 @@ from link import UdpLink, TcpLink, SerialLink, ReplayLink
 from mission import MissionProtocol, MissionItem, survey_grid
 from params import ParamManager, ParamDialog
 from tlog import TlogWriter
+from logdownload import LogManager
 from charts import ChartPanel
 from joystick import VirtualJoystick
 from instruments import AttitudeIndicator, Compass
@@ -36,7 +37,7 @@ from instruments import AttitudeIndicator, Compass
 LOG_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "logs")
 from mapview import MapView
 from panels import (TelemetryPanel, MessageConsole, MavInspector, HealthPanel,
-                    StatusStrip, CameraPanel)
+                    StatusStrip, CameraPanel, LogPanel)
 
 
 def haversine(lat1, lon1, lat2, lon2):
@@ -105,6 +106,7 @@ class DroneDeck(QMainWindow):
 
         # parameter editor
         self.params = ParamManager(lambda: self.link, self._sysid)
+        self.logs = LogManager(lambda: self.link, self._sysid, LOG_DIR)
         self._param_dialog = None
 
         # telemetry recording
@@ -355,6 +357,20 @@ class DroneDeck(QMainWindow):
         self.camera.triggerDistance.connect(self._cam_trigdist)
         self.camera.gimbalChanged.connect(self._cam_gimbal)
 
+        # onboard log download, tabbed at the bottom
+        self.log_panel = LogPanel()
+        ldock = QDockWidget("Logs", self)
+        ldock.setObjectName("logs_dock")
+        ldock.setWidget(self.log_panel)
+        ldock.setFeatures(QDockWidget.DockWidgetMovable | QDockWidget.DockWidgetFloatable)
+        self.addDockWidget(Qt.BottomDockWidgetArea, ldock)
+        self.tabifyDockWidget(camdock, ldock)
+        self.log_panel.refreshRequested.connect(self._logs_refresh)
+        self.log_panel.downloadRequested.connect(self._logs_download)
+        self.logs.entries.connect(self.log_panel.set_entries)
+        self.logs.progress.connect(self.log_panel.set_progress)
+        self.logs.finished.connect(self._logs_finished)
+
         # virtual joystick dock (hidden until the Joystick button is toggled)
         self.joystick = VirtualJoystick()
         self.jdock = QDockWidget("Manual Control", self)
@@ -396,6 +412,7 @@ class DroneDeck(QMainWindow):
         link.messages.connect(self.vehicle.consume)
         link.messages.connect(self.mission.handle_messages)
         link.messages.connect(self.params.handle_messages)
+        link.messages.connect(self.logs.handle_messages)
         link.messages.connect(self.inspector.consume)
         link.info.connect(self._on_info)
         link.state.connect(self._on_state)
@@ -493,6 +510,22 @@ class DroneDeck(QMainWindow):
     def _cam_gimbal(self, pitch, yaw):
         if self._has_vehicle():
             self.link.set_gimbal(self._sysid(), pitch, yaw)
+
+    # -- onboard logs ---------------------------------------------------------
+    def _logs_refresh(self):
+        if not self._has_vehicle():
+            QMessageBox.information(self, "Logs", "No vehicle connected.")
+            return
+        self.log_panel.set_status("requesting log list...")
+        self.logs.request_list()
+
+    def _logs_download(self, log_id):
+        if self._has_vehicle():
+            self.logs.download(log_id)
+
+    def _logs_finished(self, ok, path, msg):
+        self.log_panel.set_status(msg)
+        self.console.add_note(f"log: {msg}", "#4caf50" if ok else "#ff6b6b")
 
     # -- manual control -------------------------------------------------------
     def _toggle_manual(self, on):

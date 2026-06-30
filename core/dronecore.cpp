@@ -93,6 +93,11 @@ constexpr MsgInfo MSGS[] = {
     {47, 153,  4},   // MISSION_ACK (+mission_type)
     {51, 196,  5},   // MISSION_REQUEST_INT (+mission_type)
     {73,  38, 38},   // MISSION_ITEM_INT (+mission_type)
+    {117, 128,  6},  // LOG_REQUEST_LIST
+    {118,  56, 14},  // LOG_ENTRY
+    {119, 116, 12},  // LOG_REQUEST_DATA
+    {120, 134, 97},  // LOG_DATA
+    {122, 203,  2},  // LOG_REQUEST_END
 };
 
 const MsgInfo* find_info(uint32_t id) {
@@ -112,7 +117,8 @@ struct Decoded {
     uint8_t  seq;       // 6
     uint8_t  nfields;   // 7
     double   f[24];     // 8
-    char     text[51];  // 200: STATUSTEXT payload, NUL-terminated; empty otherwise
+    char     text[96];  // 200: STATUSTEXT/param_id (NUL-terminated) or LOG_DATA's
+                        //      90-byte blob (length given by the `count` field)
 };
 
 namespace {
@@ -205,6 +211,23 @@ void decode(uint32_t msgid, const uint8_t* pl, Decoded& d) {
         push(rd_u16(pl + 28)); push(pl[34]); push(rd_u16(pl + 30)); push(pl[35]); push(pl[36]);
         push(rd_f32(pl + 0)); push(rd_f32(pl + 4)); push(rd_f32(pl + 8)); push(rd_f32(pl + 12));
         push(rd_i32(pl + 16)); push(rd_i32(pl + 20)); push(rd_f32(pl + 24)); push(pl[37]);
+        break;
+    case 117: // LOG_REQUEST_LIST: start, end, target_system, target_component
+        push(rd_u16(pl + 0)); push(rd_u16(pl + 2)); push(pl[4]); push(pl[5]);
+        break;
+    case 118: // LOG_ENTRY: time_utc, size, id, num_logs, last_log_num
+        push(rd_u32(pl + 0)); push(rd_u32(pl + 4)); push(rd_u16(pl + 8));
+        push(rd_u16(pl + 10)); push(rd_u16(pl + 12));
+        break;
+    case 119: // LOG_REQUEST_DATA: ofs, count, id, target_system, target_component
+        push(rd_u32(pl + 0)); push(rd_u32(pl + 4)); push(rd_u16(pl + 8)); push(pl[10]); push(pl[11]);
+        break;
+    case 120: // LOG_DATA: ofs, id, count + 90-byte blob into text[]
+        push(rd_u32(pl + 0)); push(rd_u16(pl + 4)); push(pl[6]);
+        std::memcpy(d.text, pl + 7, 90);
+        break;
+    case 122: // LOG_REQUEST_END: target_system, target_component
+        push(pl[0]); push(pl[1]);
         break;
     default: break;
     }

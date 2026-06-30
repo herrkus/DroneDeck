@@ -28,7 +28,7 @@ class Decoded(ctypes.Structure):
         ("seq", ctypes.c_uint8),
         ("nfields", ctypes.c_uint8),
         ("f", ctypes.c_double * 24),
-        ("text", ctypes.c_char * 51),
+        ("text", ctypes.c_ubyte * 96),       # NUL-terminated string, or LOG_DATA blob
     ]
 
 
@@ -107,9 +107,11 @@ class Parser:
             names = mavlink.FIELDS.get(d.msgid, [])
             fields = {names[i]: d.f[i] for i in range(min(d.nfields, len(names)))}
             if d.msgid == mavlink.STATUSTEXT:
-                fields["text"] = d.text.decode("utf-8", "replace")
+                fields["text"] = bytes(d.text).split(b"\x00")[0].decode("utf-8", "replace")
             elif d.msgid in (mavlink.PARAM_VALUE, mavlink.PARAM_SET, mavlink.PARAM_REQUEST_READ):
-                fields["param_id"] = d.text.decode("utf-8", "replace")
+                fields["param_id"] = bytes(d.text).split(b"\x00")[0].decode("utf-8", "replace")
+            elif d.msgid == mavlink.LOG_DATA:
+                fields["data"] = bytes(d.text)[:int(fields.get("count", 0))]
             out.append(Message(d.msgid, d.sysid, d.compid, d.seq, fields))
         return out
 

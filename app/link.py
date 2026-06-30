@@ -150,6 +150,18 @@ class Link(QObject):
                                [float(pitch_deg), 0.0, float(yaw_deg), 0, 0, 0,
                                 mavlink.MAV_MOUNT_MODE_MAVLINK_TARGETING])
 
+    # -- onboard log download -------------------------------------------------
+    def request_log_list(self, target_sys, start=0, end=0xFFFF):
+        self._send_msg(mavlink.LOG_REQUEST_LIST,
+                       mavlink.enc_log_request_list(start, end, target_sys, 1))
+
+    def request_log_data(self, target_sys, log_id, ofs=0, count=0xFFFFFFFF):
+        self._send_msg(mavlink.LOG_REQUEST_DATA,
+                       mavlink.enc_log_request_data(log_id, ofs, count, target_sys, 1))
+
+    def log_request_end(self, target_sys):
+        self._send_msg(mavlink.LOG_REQUEST_END, mavlink.enc_log_request_end(target_sys, 1))
+
     def goto(self, target_sys: int, lat: float, lon: float, alt_rel: float):
         self._send_msg(mavlink.SET_POSITION_TARGET_GLOBAL_INT,
                        mavlink.enc_set_position_target_global_int(lat, lon, alt_rel,

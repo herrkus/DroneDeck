@@ -8,7 +8,8 @@ from PySide6.QtGui import QFont, QColor, QPainter, QPen
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QFormLayout, QGroupBox, QLabel,
                                QListWidget, QListWidgetItem, QTableWidget,
                                QTableWidgetItem, QHeaderView, QPushButton, QSlider,
-                               QSpinBox, QHBoxLayout, QGridLayout)
+                               QSpinBox, QHBoxLayout, QGridLayout, QProgressBar,
+                               QAbstractItemView)
 
 import mavlink
 
@@ -103,6 +104,73 @@ class TelemetryPanel(QWidget):
         self._set("flight_time", nav.get("flight_time", "--"))
         self._set("home_eta", nav.get("home_eta", "--"))
         self._set("wp_dist", nav.get("wp_dist", "--"))
+
+
+class LogPanel(QWidget):
+    """Onboard log browser: refresh the list, pick a log, download it with a
+    progress bar. Emits intent signals wired to a LogManager in main."""
+
+    refreshRequested = Signal()
+    downloadRequested = Signal(int)        # log id
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        v = QVBoxLayout(self)
+        v.setContentsMargins(6, 6, 6, 6)
+        v.setSpacing(4)
+        row = QHBoxLayout()
+        self.btn_refresh = QPushButton("Refresh list")
+        self.btn_refresh.clicked.connect(self.refreshRequested.emit)
+        self.btn_dl = QPushButton("Download")
+        self.btn_dl.clicked.connect(self._download)
+        row.addWidget(self.btn_refresh)
+        row.addWidget(self.btn_dl)
+        row.addStretch(1)
+        v.addLayout(row)
+        self.table = QTableWidget(0, 3)
+        self.table.setHorizontalHeaderLabels(["#", "Size", "Date (UTC)"])
+        self.table.horizontalHeader().setSectionResizeMode(2, QHeaderView.Stretch)
+        self.table.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        self.table.setSelectionBehavior(QAbstractItemView.SelectRows)
+        self.table.setSelectionMode(QAbstractItemView.SingleSelection)
+        self.table.setFont(_MONO)
+        v.addWidget(self.table)
+        self.bar = QProgressBar()
+        self.bar.setTextVisible(True)
+        v.addWidget(self.bar)
+        self.status = QLabel("idle")
+        self.status.setStyleSheet("color:#8fa3bf;")
+        v.addWidget(self.status)
+
+    def set_entries(self, entries):
+        self.table.setRowCount(len(entries))
+        for r, e in enumerate(entries):
+            kib = e["size"] / 1024.0
+            size = f"{kib:.1f} KiB" if kib < 1024 else f"{kib / 1024:.1f} MiB"
+            utc = e.get("time_utc", 0)
+            date = time.strftime("%Y-%m-%d %H:%M", time.gmtime(utc)) if utc else "--"
+            id_item = QTableWidgetItem(str(e["id"]))
+            id_item.setData(Qt.UserRole, e["id"])
+            self.table.setItem(r, 0, id_item)
+            self.table.setItem(r, 1, QTableWidgetItem(size))
+            self.table.setItem(r, 2, QTableWidgetItem(date))
+        self.status.setText(f"{len(entries)} log(s)" if entries else "no logs on vehicle")
+        if entries:
+            self.table.selectRow(0)
+
+    def set_progress(self, got, total):
+        self.bar.setMaximum(max(1, total))
+        self.bar.setValue(got)
+        self.status.setText(f"downloading... {got}/{total} bytes")
+
+    def set_status(self, text):
+        self.status.setText(text)
+
+    def _download(self):
+        items = self.table.selectedItems()
+        if items:
+            lid = self.table.item(items[0].row(), 0).data(Qt.UserRole)
+            self.downloadRequested.emit(int(lid))
 
 
 class CameraPanel(QWidget):

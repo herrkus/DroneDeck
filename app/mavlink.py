@@ -34,6 +34,12 @@ MISSION_ITEM_REACHED = 46
 MISSION_ACK = 47
 MISSION_REQUEST_INT = 51
 MISSION_ITEM_INT = 73
+# onboard log download protocol
+LOG_REQUEST_LIST = 117
+LOG_ENTRY = 118
+LOG_REQUEST_DATA = 119
+LOG_DATA = 120
+LOG_REQUEST_END = 122
 
 MSG_NAME = {
     HEARTBEAT: "HEARTBEAT",
@@ -59,6 +65,11 @@ MSG_NAME = {
     MISSION_ACK: "MISSION_ACK",
     MISSION_REQUEST_INT: "MISSION_REQUEST_INT",
     MISSION_ITEM_INT: "MISSION_ITEM_INT",
+    LOG_REQUEST_LIST: "LOG_REQUEST_LIST",
+    LOG_ENTRY: "LOG_ENTRY",
+    LOG_REQUEST_DATA: "LOG_REQUEST_DATA",
+    LOG_DATA: "LOG_DATA",
+    LOG_REQUEST_END: "LOG_REQUEST_END",
 }
 
 # Per-message CRC_EXTRA seed bytes (derived + validated in tests/crc_extra_calc.py).
@@ -70,6 +81,8 @@ CRC_EXTRA = {
     MISSION_CURRENT: 28, MISSION_REQUEST_LIST: 132, MISSION_COUNT: 221,
     MISSION_CLEAR_ALL: 232, MISSION_ITEM_REACHED: 11, MISSION_ACK: 153,
     MISSION_REQUEST_INT: 196, MISSION_ITEM_INT: 38, MANUAL_CONTROL: 243,
+    LOG_REQUEST_LIST: 128, LOG_ENTRY: 56, LOG_REQUEST_DATA: 116,
+    LOG_DATA: 134, LOG_REQUEST_END: 203,
 }
 
 # Decoded-field order. Index i here is index i in Decoded.f[] from the C++ core.
@@ -99,6 +112,11 @@ FIELDS = {
     MISSION_REQUEST_INT: ["seq", "target_system", "target_component", "mission_type"],
     MISSION_ITEM_INT: ["seq", "frame", "command", "current", "autocontinue",
                        "param1", "param2", "param3", "param4", "x", "y", "z", "mission_type"],
+    LOG_REQUEST_LIST: ["start", "end", "target_system", "target_component"],
+    LOG_ENTRY: ["time_utc", "size", "id", "num_logs", "last_log_num"],
+    LOG_REQUEST_DATA: ["ofs", "count", "id", "target_system", "target_component"],
+    LOG_DATA: ["ofs", "id", "count"],        # `data` (90 bytes) attached separately
+    LOG_REQUEST_END: ["target_system", "target_component"],
 }
 
 # --- selected enums ---------------------------------------------------------
@@ -264,6 +282,31 @@ def enc_manual_control(target, x, y, z, r, buttons=0):
     clamp = lambda v: max(-1000, min(1000, int(v)))
     return struct.pack("<hhhhHB", clamp(x), clamp(y), clamp(z), clamp(r),
                        buttons & 0xFFFF, target & 0xFF)
+
+
+def enc_log_request_list(start=0, end=0xFFFF, target_system=1, target_component=1):
+    return struct.pack("<HHBB", start & 0xFFFF, end & 0xFFFF, target_system, target_component)
+
+
+def enc_log_entry(log_id, num_logs, last_log_num, size, time_utc=0):
+    return struct.pack("<IIHHH", int(time_utc) & 0xFFFFFFFF, int(size) & 0xFFFFFFFF,
+                       log_id & 0xFFFF, num_logs & 0xFFFF, last_log_num & 0xFFFF)
+
+
+def enc_log_request_data(log_id, ofs=0, count=0xFFFFFFFF, target_system=1, target_component=1):
+    return struct.pack("<IIHBB", int(ofs) & 0xFFFFFFFF, int(count) & 0xFFFFFFFF,
+                       log_id & 0xFFFF, target_system, target_component)
+
+
+def enc_log_data(log_id, ofs, data):
+    data = bytes(data[:90])
+    count = len(data)
+    data = data + b"\x00" * (90 - count)
+    return struct.pack("<IHB90s", int(ofs) & 0xFFFFFFFF, log_id & 0xFFFF, count, data)
+
+
+def enc_log_request_end(target_system=1, target_component=1):
+    return struct.pack("<BB", target_system, target_component)
 
 
 def enc_command_long(command, params7, target_system=1, target_component=1, confirmation=0):
@@ -469,6 +512,11 @@ _WIRE = {
                        ["param1", "param2", "param3", "param4", "x", "y", "z",
                         "seq", "command", "target_system", "target_component",
                         "frame", "current", "autocontinue", "mission_type"], 38),
+    LOG_REQUEST_LIST: ("<HHBB", ["start", "end", "target_system", "target_component"], 6),
+    LOG_ENTRY: ("<IIHHH", ["time_utc", "size", "id", "num_logs", "last_log_num"], 14),
+    LOG_REQUEST_DATA: ("<IIHBB", ["ofs", "count", "id", "target_system", "target_component"], 12),
+    LOG_DATA: ("<IHB90s", ["ofs", "id", "count", "data"], 97),
+    LOG_REQUEST_END: ("<BB", ["target_system", "target_component"], 2),
 }
 
 

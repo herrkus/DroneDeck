@@ -46,6 +46,14 @@ M_PER_DEG = 111320.0
 LOITER, AUTO, GUIDED, RTL, LAND = 5, 3, 4, 6, 9
 ALT_HOLD = 2          # manual stick control with altitude hold (MANUAL_CONTROL)
 
+# fake dataflash logs served over the LOG_* protocol: (id, size_bytes, time_utc)
+SIM_LOGS = [(1, 4096, 1719000000), (2, 12345, 1719600000), (3, 800, 1719700000)]
+
+
+def _logbyte(log_id, k):
+    """Deterministic fake log content byte at absolute offset k."""
+    return (k * 31 + log_id * 7) & 0xFF
+
 
 def step_toward(clat, clon, tlat, tlon, max_m, cos_lat):
     """Move (clat,clon) toward (tlat,tlon) by up to max_m metres.
@@ -336,6 +344,24 @@ def main():
                                     mode = ALT_HOLD
                                     send(mavlink.STATUSTEXT,
                                          mavlink.enc_statustext(6, "Manual control (ALT_HOLD)"))
+                            elif m.msgid == mavlink.LOG_REQUEST_LIST:
+                                last = SIM_LOGS[-1][0]
+                                for lid, sz, utc in SIM_LOGS:
+                                    send(mavlink.LOG_ENTRY,
+                                         mavlink.enc_log_entry(lid, len(SIM_LOGS), last, sz, utc))
+                            elif m.msgid == mavlink.LOG_REQUEST_DATA:
+                                lid = int(m.fields.get("id", 0))
+                                match = [s for s in SIM_LOGS if s[0] == lid]
+                                if match:
+                                    size = match[0][1]
+                                    ofs = int(m.fields.get("ofs", 0))
+                                    while ofs < size:
+                                        n = min(90, size - ofs)
+                                        chunk = bytes(_logbyte(lid, ofs + i) for i in range(n))
+                                        send(mavlink.LOG_DATA, mavlink.enc_log_data(lid, ofs, chunk))
+                                        ofs += n
+                            elif m.msgid == mavlink.LOG_REQUEST_END:
+                                pass
                             # ---- mission protocol (vehicle side, per mission_type) ----
                             elif m.msgid == mavlink.MISSION_COUNT:
                                 up_mtype = int(m.fields.get("mission_type", 0))
