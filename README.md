@@ -43,10 +43,18 @@ the native core.
   graticule), with the vehicle marker, flight trail, home point and the planned
   mission path. Wheel to zoom, drag to pan, double-click to re-center, "Follow"
   to track.
-- **Attitude indicator** -- artificial horizon with pitch ladder and bank scale.
-- **Compass** -- heading card with digital readout.
+- **Primary flight display** -- artificial horizon with pitch ladder and bank
+  scale, flanked by airspeed and altitude tapes, a vertical-speed bar and a
+  heading strip (QGC-style PFD), with a heading-card compass beside it.
+- **Status bar** -- QGC-style top strip of colour-coded chips: armed/mode, GPS
+  fix+sats, battery, flight time, link rate, message count.
+- **System health** -- a sensor grid driven by the `SYS_STATUS` health bitmasks
+  (gyro/accel/mag/baro/GPS/RC/AHRS/battery...): green/amber/grey.
 - **Telemetry** -- link health + message rate, arm state, flight mode, battery,
-  GPS fix/sats, position, altitude, speeds, throttle, heading.
+  GPS fix/sats, position, altitude, speeds, throttle, heading, plus distance to
+  home, flight time and home ETA.
+- **Live charts** -- scrolling altitude / ground speed / battery / climb plots
+  over a 60 s window ("Charts" tab).
 - **Links** -- connect over **UDP**, **TCP** or **serial** (USB / SiK radio),
   chosen from the toolbar; a 1 Hz GCS heartbeat goes back on all of them.
 - **Safety feedback** -- live flight mode, a colour-coded `STATUSTEXT` console,
@@ -54,10 +62,14 @@ the native core.
 - **Flying controls** -- set flight mode (Loiter/Auto/Guided/RTL/...), plus
   Takeoff, Land, Return-to-Launch, Pause, and **click-on-map to fly there**
   (guided goto).
+- **Flying controls** also include **manual control** -- a Joystick toggle opens
+  two on-screen thumbsticks (and binds WASD + arrow keys) that stream
+  `MANUAL_CONTROL` at 25 Hz.
 - **Mission planning** -- plan-mode map clicks drop numbered waypoints; **edit**
   them (drag on the map, delete, reorder, edit altitude); upload / download over
   the standard MAVLink mission protocol; one-click **survey** grid; plus
   **geofence** polygons and **rally points** (`MAV_MISSION_TYPE_FENCE/RALLY`).
+  A live statistics line shows waypoint count, distance, time and max altitude.
 - **MAVLink inspector** -- a live table of every message type, its rate (Hz) and
   current field values (bottom "Inspector" tab).
 - **Parameter editor** -- "Params" downloads the autopilot's parameters into a
@@ -66,8 +78,9 @@ the native core.
   the "Replay" link type (or just opening a `.tlog`) plays it back through the
   GCS at its original cadence.
 
-Supported messages: `HEARTBEAT`, `SYS_STATUS`, `GPS_RAW_INT`, `ATTITUDE`,
-`GLOBAL_POSITION_INT`, `VFR_HUD`, `COMMAND_LONG`, `COMMAND_ACK`, `STATUSTEXT`,
+Supported messages: `HEARTBEAT`, `SYS_STATUS` (incl. sensor-health bitmasks),
+`GPS_RAW_INT`, `ATTITUDE`, `GLOBAL_POSITION_INT`, `VFR_HUD`, `MANUAL_CONTROL`,
+`COMMAND_LONG`, `COMMAND_ACK`, `STATUSTEXT`, the parameter set (`PARAM_*`),
 `SET_POSITION_TARGET_GLOBAL_INT`, and the mission set (`MISSION_COUNT`,
 `MISSION_ITEM_INT`, `MISSION_REQUEST_INT`, `MISSION_REQUEST_LIST`,
 `MISSION_ACK`, `MISSION_CLEAR_ALL`, `MISSION_CURRENT`, `MISSION_ITEM_REACHED`).
@@ -154,6 +167,12 @@ all.
 ## Tests
 
 ```bash
+./tests/run_all.sh              # build the core + run the WHOLE suite (both backends)
+```
+
+or individually:
+
+```bash
 ./build.sh                      # native self-test: known CRC vector, asm==C, parser, benchmark
 python3 tests/crc_extra_calc.py # derive + validate every CRC_EXTRA seed
 python3 tests/test_parity.py    # cross-language: Python-encode -> C++/asm-decode parity
@@ -164,6 +183,8 @@ python3 tests/test_mission_edit.py  # waypoint move/delete/reorder editing
 python3 tests/test_fence_rally.py   # geofence + rally upload/download
 python3 tests/test_params.py    # parameter download + set echo
 python3 tests/test_tlog.py      # record a session, read it back, replay it
+python3 tests/test_manual.py    # MANUAL_CONTROL -> simulated vehicle motion
+python3 tests/test_settings.py  # QSettings persistence round-trip
 python3 tests/smoke_gui.py      # headless end-to-end with the simulator + screenshot
 DRONEDECK_FORCE_PYTHON=1 python3 tests/smoke_gui.py   # same, exercising the fallback
 ```
