@@ -23,7 +23,7 @@ from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QHBoxLayout,
 import core
 import mavlink
 from vehicle import Vehicle
-from link import UdpLink
+from link import UdpLink, TcpLink, SerialLink
 from instruments import AttitudeIndicator, Compass
 from mapview import MapView
 from panels import TelemetryPanel, MessageConsole
@@ -53,7 +53,7 @@ class DroneDeck(QMainWindow):
         self.setMinimumSize(1060, 660)
 
         self.vehicle = Vehicle()
-        self.link = UdpLink()
+        self.link = None
         self.default_port = port
 
         self._build_ui()
@@ -75,10 +75,15 @@ class DroneDeck(QMainWindow):
         tb.setMovable(False)
         self.addToolBar(tb)
 
-        tb.addWidget(QLabel(" UDP port "))
-        self.port_edit = QLineEdit(str(self.default_port))
-        self.port_edit.setFixedWidth(70)
-        tb.addWidget(self.port_edit)
+        tb.addWidget(QLabel(" Link "))
+        self.transport_combo = QComboBox()
+        self.transport_combo.addItems(["UDP", "TCP", "Serial"])
+        tb.addWidget(self.transport_combo)
+        self.link_edit = QLineEdit(str(self.default_port))
+        self.link_edit.setFixedWidth(150)
+        self.link_edit.setPlaceholderText("port")
+        tb.addWidget(self.link_edit)
+        self.transport_combo.currentIndexChanged.connect(self._on_transport)
         self.btn_conn = QPushButton("Disconnect")
         self.btn_conn.clicked.connect(self._toggle_conn)
         tb.addWidget(self.btn_conn)
@@ -182,12 +187,30 @@ class DroneDeck(QMainWindow):
                  176: "SET MODE", 192: "REPOSITION", 193: "PAUSE/CONTINUE"}
 
     def _wire(self):
-        self.link.messages.connect(self.vehicle.consume)
-        self.link.info.connect(self._on_info)
-        self.link.state.connect(self._on_state)
         self.vehicle.status_text.connect(self.console.add_message)
         self.vehicle.command_ack.connect(self._on_command_ack)
         self.map.clicked.connect(self._on_map_click)
+
+    def _make_link(self):
+        cls = {"TCP": TcpLink, "Serial": SerialLink}.get(self.transport_combo.currentText(), UdpLink)
+        link = cls()
+        link.messages.connect(self.vehicle.consume)
+        link.info.connect(self._on_info)
+        link.state.connect(self._on_state)
+        return link
+
+    def _on_transport(self):
+        t = self.transport_combo.currentText()
+        if t == "UDP":
+            self.link_edit.setText("14550")
+            self.link_edit.setPlaceholderText("port")
+        elif t == "TCP":
+            self.link_edit.setText("127.0.0.1:5760")
+            self.link_edit.setPlaceholderText("host:port")
+        else:
+            ports = SerialLink.available_ports()
+            self.link_edit.setText(f"{ports[0] if ports else '/dev/ttyACM0'}:57600")
+            self.link_edit.setPlaceholderText("port:baud")
 
     def _on_command_ack(self, command, result):
         name = self.CMD_NAMES.get(command, f"CMD {command}")
@@ -199,14 +222,26 @@ class DroneDeck(QMainWindow):
 
     # -- actions --------------------------------------------------------------
     def _connect(self):
+        if self.link is not None:
+            self.link.close()
+            self.link.deleteLater()
+        self.link = self._make_link()
+        t = self.transport_combo.currentText()
+        p = self.link_edit.text().strip()
         try:
-            port = int(self.port_edit.text())
+            if t == "TCP":
+                host, _, port = p.partition(":")
+                self.link.open(host=host or "127.0.0.1", port=int(port or 5760))
+            elif t == "Serial":
+                port, _, baud = p.partition(":")
+                self.link.open(port=port, baud=int(baud or 57600))
+            else:
+                self.link.open(port=int(p or self.default_port))
         except ValueError:
-            port = self.default_port
-        self.link.open(port)
+            self._on_info(f"invalid {t} parameters: {p!r}")
 
     def _toggle_conn(self):
-        if self.link.is_open:
+        if self.link is not None and self.link.is_open:
             self.link.close()
         else:
             self._connect()
@@ -218,7 +253,7 @@ class DroneDeck(QMainWindow):
         self.sb_info.setText(msg)
 
     def _has_vehicle(self):
-        return self.link.is_open and self.link.remote is not None
+        return self.link is not None and self.link.is_open and self.link.remote is not None
 
     def _sysid(self):
         return self.vehicle.sysid or 1
@@ -293,13 +328,15 @@ class DroneDeck(QMainWindow):
             self._last_count = ve.msg_count
             self._last_t = now
 
-        ok, drop = self.link.parser.stats if self.link.parser else (0, 0)
-        state = "connected" if self.link.is_open else "disconnected"
-        if self.link.is_open and not ve.link_alive and self.link.remote is None:
+        link = self.link
+        ok, drop = (link.parser.stats if (link and link.parser) else (0, 0))
+        is_open = bool(link and link.is_open)
+        state = "connected" if is_open else "disconnected"
+        if is_open and not ve.link_alive and link.remote is None:
             state = "listening"
         self.panel.update_all(ve, state, self._rate, ok, drop)
 
-        connected = self.link.is_open and self.link.remote is not None
+        connected = self._has_vehicle()
         self.btn_arm.setEnabled(connected)
         self.btn_disarm.setEnabled(connected)
         self.mode_combo.setEnabled(connected)
@@ -307,8 +344,9 @@ class DroneDeck(QMainWindow):
             b.setEnabled(connected)
 
     def closeEvent(self, e):
-        self.link.close()
-        super().accept() if False else super().closeEvent(e)
+        if self.link is not None:
+            self.link.close()
+        super().closeEvent(e)
 
 
 def main():
