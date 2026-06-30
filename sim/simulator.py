@@ -131,8 +131,10 @@ def main():
 
     send(mavlink.STATUSTEXT, mavlink.enc_statustext(6, "DroneDeck SITL: ready"))
 
-    next_t = {"hb": 0.0, "att": 0.0, "pos": 0.0, "hud": 0.0, "sys": 0.0, "gps": 0.0, "txt": 3.0}
-    period = {"hb": 0.25, "att": 0.04, "pos": 0.2, "hud": 0.2, "sys": 1.0, "gps": 1.0, "txt": 9.0}
+    next_t = {"hb": 0.0, "att": 0.0, "pos": 0.0, "hud": 0.0, "sys": 0.0, "gps": 0.0,
+              "txt": 3.0, "adsb": 0.5}
+    period = {"hb": 0.25, "att": 0.04, "pos": 0.2, "hud": 0.2, "sys": 1.0, "gps": 1.0,
+              "txt": 9.0, "adsb": 1.0}
 
     t0 = time.monotonic()
     last = t0
@@ -271,6 +273,18 @@ def main():
                 next_t["txt"] += period["txt"]
                 send(mavlink.STATUSTEXT, mavlink.enc_statustext(
                     6, f"{mavlink.ARDUCOPTER_MODES.get(mode, mode)}  alt {alt:.0f}m  batt {batt_pct}%"))
+            if sysid == 1 and t >= next_t["adsb"]:
+                next_t["adsb"] += period["adsb"]
+                for idx, (icao, cs, radius, rate) in enumerate(
+                        [(0xA00001, "DRN001", 300.0, 0.020), (0xA00002, "HEL022", 550.0, -0.013)]):
+                    ang = t * rate + idx * 2.0
+                    tlat = HOME_LAT + (radius * math.cos(ang)) / M_PER_DEG
+                    tlon = HOME_LON + (radius * math.sin(ang)) / (M_PER_DEG * cos_lat)
+                    hdg = (math.degrees(ang) + 90.0) % 360.0
+                    send(mavlink.ADSB_VEHICLE, mavlink.enc_adsb_vehicle(
+                        icao, int(tlat * 1e7), int(tlon * 1e7), 120000 + idx * 20000,
+                        int(hdg * 100), cs, emitter_type=(2 if idx == 0 else 7),
+                        hor_velocity=1500))
 
             # --- inbound GCS commands -------------------------------------
             if PARSER is not None:

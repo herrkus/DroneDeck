@@ -98,6 +98,7 @@ constexpr MsgInfo MSGS[] = {
     {119, 116, 12},  // LOG_REQUEST_DATA
     {120, 134, 97},  // LOG_DATA
     {122, 203,  2},  // LOG_REQUEST_END
+    {246, 184, 38},  // ADSB_VEHICLE
 };
 
 const MsgInfo* find_info(uint32_t id) {
@@ -228,6 +229,13 @@ void decode(uint32_t msgid, const uint8_t* pl, Decoded& d) {
         break;
     case 122: // LOG_REQUEST_END: target_system, target_component
         push(pl[0]); push(pl[1]);
+        break;
+    case 246: // ADSB_VEHICLE: ICAO, lat, lon, altitude, heading, hor_vel, ver_vel,
+              //               flags, squawk, altitude_type, emitter_type, tslc (+callsign)
+        push(rd_u32(pl + 0)); push(rd_i32(pl + 4)); push(rd_i32(pl + 8)); push(rd_i32(pl + 12));
+        push(rd_u16(pl + 16)); push(rd_u16(pl + 18)); push(rd_i16(pl + 20)); push(rd_u16(pl + 22));
+        push(rd_u16(pl + 24)); push(pl[26]); push(pl[36]); push(pl[37]);
+        std::memcpy(d.text, pl + 27, 9); d.text[9] = '\0';
         break;
     default: break;
     }

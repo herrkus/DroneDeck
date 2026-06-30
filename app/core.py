@@ -112,6 +112,8 @@ class Parser:
                 fields["param_id"] = bytes(d.text).split(b"\x00")[0].decode("utf-8", "replace")
             elif d.msgid == mavlink.LOG_DATA:
                 fields["data"] = bytes(d.text)[:int(fields.get("count", 0))]
+            elif d.msgid == mavlink.ADSB_VEHICLE:
+                fields["callsign"] = bytes(d.text).split(b"\x00")[0].decode("utf-8", "replace")
             out.append(Message(d.msgid, d.sysid, d.compid, d.seq, fields))
         return out
 

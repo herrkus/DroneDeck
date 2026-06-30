@@ -109,6 +109,13 @@ NEW = {
     "LOG_DATA": (120, [("uint32_t", "ofs", 0), ("uint16_t", "id", 0),
                        ("uint8_t", "count", 0), ("uint8_t", "data", 90)]),
     "LOG_REQUEST_END": (122, [("uint8_t", "target_system", 0), ("uint8_t", "target_component", 0)]),
+    "ADSB_VEHICLE": (246, [("uint32_t", "ICAO_address", 0), ("int32_t", "lat", 0),
+                           ("int32_t", "lon", 0), ("int32_t", "altitude", 0),
+                           ("uint16_t", "heading", 0), ("uint16_t", "hor_velocity", 0),
+                           ("int16_t", "ver_velocity", 0), ("uint16_t", "flags", 0),
+                           ("uint16_t", "squawk", 0), ("uint8_t", "altitude_type", 0),
+                           ("char", "callsign", 9), ("uint8_t", "emitter_type", 0),
+                           ("uint8_t", "tslc", 0)]),
     "SET_POSITION_TARGET_GLOBAL_INT": (86, [
         ("uint32_t", "time_boot_ms", 0), ("int32_t", "lat_int", 0), ("int32_t", "lon_int", 0),
         ("float", "alt", 0), ("float", "vx", 0), ("float", "vy", 0), ("float", "vz", 0),

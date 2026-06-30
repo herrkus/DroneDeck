@@ -120,6 +120,15 @@ def main():
             check(int(m.fields["count"]) == 90, "log_data count")
             check(bytes(m.fields["data"])[:90] == blob, "log_data blob round-trip")
 
+        m = roundtrip(mavlink.ADSB_VEHICLE,
+                      mavlink.enc_adsb_vehicle(0xABCDEF, int(54.70e7), int(25.30e7),
+                                               120000, 9000, "TEST123", emitter_type=3), crc_fn)
+        if m:
+            check(int(m.fields["ICAO_address"]) == 0xABCDEF, "adsb icao")
+            check(int(m.fields["lat"]) == int(54.70e7), "adsb lat")
+            check(int(m.fields["heading"]) == 9000, "adsb heading")
+            check(m.fields.get("callsign") == "TEST123", f"adsb callsign {m.fields.get('callsign')!r}")
+
         m = roundtrip(mavlink.COMMAND_ACK, mavlink.enc_command_ack(400, 0), crc_fn)
         if m:
             check(m.fields["command"] == 400, f"ack command {m.fields.get('command')}")

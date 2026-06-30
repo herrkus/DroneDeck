@@ -87,6 +87,8 @@ class DroneDeck(QMainWindow):
         self.setMinimumSize(1060, 660)
 
         self.vehicle = Vehicle()
+        self.vehicles = {}                 # sysid -> Vehicle (multi-vehicle)
+        self.traffic = {}                  # ADSB: ICAO -> {lat, lon, heading, callsign, t}
         self.link = None
         self.default_port = port
 
@@ -163,6 +165,12 @@ class DroneDeck(QMainWindow):
         self.btn_links = QPushButton("Links…")
         self.btn_links.clicked.connect(self._open_links)
         tb.addWidget(self.btn_links)
+        tb.addSeparator()
+        tb.addWidget(QLabel(" Vehicle "))
+        self.vehicle_combo = QComboBox()
+        self.vehicle_combo.setMinimumWidth(80)
+        self.vehicle_combo.currentIndexChanged.connect(self._select_vehicle)
+        tb.addWidget(self.vehicle_combo)
         tb.addSeparator()
 
         self.btn_arm = QPushButton("Arm")
@@ -432,7 +440,7 @@ class DroneDeck(QMainWindow):
         cls = {"TCP": TcpLink, "Serial": SerialLink, "Replay": ReplayLink}.get(
             self.transport_combo.currentText(), UdpLink)
         link = cls()
-        link.messages.connect(self.vehicle.consume)
+        link.messages.connect(self._route)
         link.messages.connect(self.mission.handle_messages)
         link.messages.connect(self.params.handle_messages)
         link.messages.connect(self.logs.handle_messages)
@@ -509,6 +517,60 @@ class DroneDeck(QMainWindow):
         self.link_edit.setText(cfg.get("target", ""))
         self._connect()
         self._on_info(f"connecting to '{cfg.get('name', '')}'")
+
+    # -- multi-vehicle routing + ADSB traffic ---------------------------------
+    def _route(self, batch):
+        adsb = [m for m in batch if m.msgid == mavlink.ADSB_VEHICLE]
+        if adsb:
+            self._update_traffic(adsb)
+        bysys = {}
+        for m in batch:
+            if m.msgid == mavlink.ADSB_VEHICLE or m.sysid == 0:
+                continue
+            bysys.setdefault(m.sysid, []).append(m)
+        for sysid, msgs in bysys.items():
+            self._ensure_vehicle(sysid).consume(msgs)
+
+    def _ensure_vehicle(self, sysid):
+        veh = self.vehicles.get(sysid)
+        if veh is not None:
+            return veh
+        if not self.vehicles:
+            veh = self.vehicle                  # reuse the pre-wired primary vehicle
+        else:
+            veh = Vehicle()
+            veh.status_text.connect(self.console.add_message)
+            veh.command_ack.connect(self._on_command_ack)
+        self.vehicles[sysid] = veh
+        active_sid = next((s for s, v in self.vehicles.items() if v is self.vehicle), sysid)
+        self.vehicle_combo.blockSignals(True)
+        self.vehicle_combo.clear()
+        for sid in sorted(self.vehicles):
+            self.vehicle_combo.addItem(f"#{sid}", sid)
+        idx = self.vehicle_combo.findData(active_sid)
+        if idx >= 0:
+            self.vehicle_combo.setCurrentIndex(idx)
+        self.vehicle_combo.blockSignals(False)
+        if len(self.vehicles) == 2:
+            self._on_info("multiple vehicles detected -- use the Vehicle selector")
+        return veh
+
+    def _select_vehicle(self, idx):
+        sid = self.vehicle_combo.itemData(idx)
+        if sid in self.vehicles:
+            self.vehicle = self.vehicles[sid]
+            self._arm_t0 = None
+            self._on_info(f"active vehicle: #{sid}")
+
+    def _update_traffic(self, msgs):
+        now = time.monotonic()
+        for m in msgs:
+            f = m.fields
+            icao = int(f.get("ICAO_address", 0))
+            self.traffic[icao] = {
+                "lat": f.get("lat", 0) / 1e7, "lon": f.get("lon", 0) / 1e7,
+                "heading": f.get("heading", 0) / 100.0,
+                "callsign": (f.get("callsign", "") or "").strip(), "t": now}
 
     def _on_state(self, up):
         self.btn_conn.setText("Disconnect" if up else "Connect")
@@ -968,6 +1030,14 @@ class DroneDeck(QMainWindow):
         self.health.set_health(ve.sensors_present, ve.sensors_enabled, ve.sensors_health)
         if ve.have_position:
             self.map.update_vehicle(ve.lat, ve.lon, ve.heading, ve.home, ve.trail)
+
+        # other vehicles + ADSB traffic on the map (traffic expires after 10 s)
+        now_t = time.monotonic()
+        self.traffic = {k: v for k, v in self.traffic.items() if now_t - v["t"] < 10.0}
+        self.map.set_traffic([{"lat": v["lat"], "lon": v["lon"], "heading": v["heading"],
+                               "callsign": v["callsign"]} for v in self.traffic.values()])
+        self.map.set_others([(v.lat, v.lon, v.heading) for s, v in self.vehicles.items()
+                             if v is not ve and v.have_position])
 
         now = time.monotonic()
         if now - self._last_t >= 1.0:

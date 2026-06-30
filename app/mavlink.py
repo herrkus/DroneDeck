@@ -40,6 +40,7 @@ LOG_ENTRY = 118
 LOG_REQUEST_DATA = 119
 LOG_DATA = 120
 LOG_REQUEST_END = 122
+ADSB_VEHICLE = 246
 
 MSG_NAME = {
     HEARTBEAT: "HEARTBEAT",
@@ -70,6 +71,7 @@ MSG_NAME = {
     LOG_REQUEST_DATA: "LOG_REQUEST_DATA",
     LOG_DATA: "LOG_DATA",
     LOG_REQUEST_END: "LOG_REQUEST_END",
+    ADSB_VEHICLE: "ADSB_VEHICLE",
 }
 
 # Per-message CRC_EXTRA seed bytes (derived + validated in tests/crc_extra_calc.py).
@@ -82,7 +84,7 @@ CRC_EXTRA = {
     MISSION_CLEAR_ALL: 232, MISSION_ITEM_REACHED: 11, MISSION_ACK: 153,
     MISSION_REQUEST_INT: 196, MISSION_ITEM_INT: 38, MANUAL_CONTROL: 243,
     LOG_REQUEST_LIST: 128, LOG_ENTRY: 56, LOG_REQUEST_DATA: 116,
-    LOG_DATA: 134, LOG_REQUEST_END: 203,
+    LOG_DATA: 134, LOG_REQUEST_END: 203, ADSB_VEHICLE: 184,
 }
 
 # Decoded-field order. Index i here is index i in Decoded.f[] from the C++ core.
@@ -117,6 +119,9 @@ FIELDS = {
     LOG_REQUEST_DATA: ["ofs", "count", "id", "target_system", "target_component"],
     LOG_DATA: ["ofs", "id", "count"],        # `data` (90 bytes) attached separately
     LOG_REQUEST_END: ["target_system", "target_component"],
+    ADSB_VEHICLE: ["ICAO_address", "lat", "lon", "altitude", "heading", "hor_velocity",
+                   "ver_velocity", "flags", "squawk", "altitude_type", "emitter_type",
+                   "tslc"],                  # `callsign` attached separately
 }
 
 # --- selected enums ---------------------------------------------------------
@@ -310,6 +315,17 @@ def enc_log_data(log_id, ofs, data):
 
 def enc_log_request_end(target_system=1, target_component=1):
     return struct.pack("<BB", target_system, target_component)
+
+
+def enc_adsb_vehicle(icao, lat, lon, alt_mm, heading_cdeg, callsign="", emitter_type=0,
+                     hor_velocity=0, ver_velocity=0, flags=0, squawk=0,
+                     altitude_type=0, tslc=0):
+    cs = callsign.encode("ascii", "replace")[:9]
+    cs = cs + b"\x00" * (9 - len(cs))
+    return struct.pack("<IiiiHHhHHB9sBB", icao & 0xFFFFFFFF, int(lat), int(lon), int(alt_mm),
+                       int(heading_cdeg) & 0xFFFF, hor_velocity & 0xFFFF, int(ver_velocity),
+                       flags & 0xFFFF, squawk & 0xFFFF, altitude_type & 0xFF, cs,
+                       emitter_type & 0xFF, tslc & 0xFF)
 
 
 def enc_command_long(command, params7, target_system=1, target_component=1, confirmation=0):
@@ -520,6 +536,10 @@ _WIRE = {
     LOG_REQUEST_DATA: ("<IIHBB", ["ofs", "count", "id", "target_system", "target_component"], 12),
     LOG_DATA: ("<IHB90s", ["ofs", "id", "count", "data"], 97),
     LOG_REQUEST_END: ("<BB", ["target_system", "target_component"], 2),
+    ADSB_VEHICLE: ("<IiiiHHhHHB9sBB",
+                   ["ICAO_address", "lat", "lon", "altitude", "heading", "hor_velocity",
+                    "ver_velocity", "flags", "squawk", "altitude_type", "callsign",
+                    "emitter_type", "tslc"], 38),
 }
 
 
@@ -594,7 +614,7 @@ class PyParser:
             pl = bytes(self.buf[pos + hdr: pos + hdr + payload])
             pl = pl[:full] if len(pl) >= full else pl + b"\x00" * (full - len(pl))
             fields = dict(zip(names, struct.unpack(fmt, pl)))
-            for sk in ("text", "param_id"):           # char[] fields -> str
+            for sk in ("text", "param_id", "callsign"):   # char[] fields -> str
                 if isinstance(fields.get(sk), bytes):
                     fields[sk] = fields[sk].split(b"\x00")[0].decode("utf-8", "replace")
             out.append(Message(msgid, sysid, compid, seq, fields))

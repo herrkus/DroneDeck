@@ -44,6 +44,8 @@ check "manual"              ""                        tests/test_manual.py
 check "camera"              ""                        tests/test_camera.py
 check "logs"                ""                        tests/test_logs.py
 check "video"               ""                        tests/test_video.py
+check "adsb"                ""                        tests/test_adsb.py
+check "multivehicle"        ""                        tests/test_multivehicle.py
 check "settings"            ""                        tests/test_settings.py
 check "links_manager"       ""                        tests/test_links_manager.py
 check "smoke (native)"      ""                        tests/smoke_gui.py

@@ -59,6 +59,8 @@ class MapView(QWidget):
         self.fence_exc = []                   # exclusion polygon vertices
         self.fence_circles = []               # [{"lat","lon","radius","incl"}]
         self.rally = []                       # list of (lat, lon) rally points
+        self.traffic = []                     # ADSB: [{"lat","lon","heading","callsign"}]
+        self.others = []                      # other vehicles: [(lat, lon, heading)]
         self.selected_wp = -1
         self._wp_drag = None
         self._pending = set()
@@ -102,6 +104,14 @@ class MapView(QWidget):
 
     def set_rally(self, pts):
         self.rally = list(pts)
+        self.update()
+
+    def set_traffic(self, traffic):
+        self.traffic = list(traffic)
+        self.update()
+
+    def set_others(self, others):
+        self.others = list(others)
         self.update()
 
     def set_selected(self, idx):
@@ -281,6 +291,34 @@ class MapView(QWidget):
                 p.setPen(QColor(20, 20, 20))
                 p.setFont(wpf)
                 p.drawText(QRectF(pt.x() - 9, pt.y() - 8, 18, 16), Qt.AlignCenter, str(i))
+
+        # ADSB traffic (amber chevrons + callsign)
+        for tr in self.traffic:
+            tp = self._ll_to_px(tr["lat"], tr["lon"], cfx, cfy)
+            p.save()
+            p.translate(tp)
+            p.rotate(tr.get("heading", 0))
+            p.setPen(QPen(QColor(20, 20, 20), 1.2))
+            p.setBrush(QBrush(QColor(255, 190, 40)))
+            p.drawPolygon(QPolygonF([QPointF(0, -9), QPointF(6, 8), QPointF(-6, 8)]))
+            p.restore()
+            cs = tr.get("callsign", "")
+            if cs:
+                p.setPen(QColor(255, 210, 90))
+                p.setFont(QFont("DejaVu Sans Mono", 7))
+                p.drawText(QRectF(tp.x() + 8, tp.y() - 8, 80, 14), Qt.AlignVCenter, cs)
+
+        # other vehicles (dimmed cyan triangles)
+        for la, lo, hdg in self.others:
+            op = self._ll_to_px(la, lo, cfx, cfy)
+            p.save()
+            p.translate(op)
+            p.rotate(hdg)
+            p.setPen(QPen(QColor(0, 0, 0), 1.2))
+            p.setBrush(QBrush(QColor(90, 200, 230)))
+            p.drawPolygon(QPolygonF([QPointF(0, -10), QPointF(7, 9),
+                                     QPointF(0, 4), QPointF(-7, 9)]))
+            p.restore()
 
         # vehicle marker (heading-rotated triangle, no 3D model)
         if self.veh:
