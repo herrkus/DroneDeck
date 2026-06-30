@@ -67,8 +67,8 @@ def finish():
 
 
 QTimer.singleShot(2000, do_arm)
-QTimer.singleShot(2600, do_goto)
-QTimer.singleShot(4000, finish)
+QTimer.singleShot(2800, do_goto)
+QTimer.singleShot(5200, finish)
 app.exec()
 sim.terminate()
 try:

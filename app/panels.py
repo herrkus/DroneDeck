@@ -4,7 +4,7 @@ from __future__ import annotations
 import time
 
 from PySide6.QtCore import Qt, QRectF, QPointF
-from PySide6.QtGui import QFont, QColor, QPainter
+from PySide6.QtGui import QFont, QColor, QPainter, QPen
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QFormLayout, QGroupBox, QLabel,
                                QListWidget, QListWidgetItem, QTableWidget,
                                QTableWidgetItem, QHeaderView)
@@ -102,6 +102,46 @@ class TelemetryPanel(QWidget):
         self._set("flight_time", nav.get("flight_time", "--"))
         self._set("home_eta", nav.get("home_eta", "--"))
         self._set("wp_dist", nav.get("wp_dist", "--"))
+
+
+class StatusStrip(QWidget):
+    """QGroundControl-style top indicator bar: a row of colour-coded chips
+    (armed/mode, GPS, battery, link, flight time, messages)."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setFixedHeight(30)
+        self.chips = []                  # list of (label, dot_color, text_color)
+
+    def set_chips(self, chips):
+        self.chips = chips
+        self.update()
+
+    def paintEvent(self, _):
+        p = QPainter(self)
+        p.setRenderHint(QPainter.Antialiasing)
+        p.fillRect(self.rect(), QColor(18, 20, 26))
+        p.setPen(QColor(40, 44, 52))
+        p.drawLine(0, self.height() - 1, self.width(), self.height() - 1)
+        font = QFont("DejaVu Sans", 9, QFont.Bold)
+        p.setFont(font)
+        fm = p.fontMetrics()
+        x = 8.0
+        for label, dot, txt in self.chips:
+            tw = fm.horizontalAdvance(label)
+            w = tw + 28
+            rect = QRectF(x, 4, w, self.height() - 8)
+            p.setBrush(QColor(30, 33, 40))
+            p.setPen(QPen(QColor(48, 52, 62), 1))
+            p.drawRoundedRect(rect, 5, 5)
+            p.setPen(Qt.NoPen)
+            p.setBrush(QColor(dot))
+            p.drawEllipse(QPointF(x + 13, self.height() / 2.0), 4.5, 4.5)
+            p.setPen(QColor(txt))
+            p.drawText(QRectF(x + 22, 4, tw + 4, self.height() - 8),
+                       Qt.AlignVCenter | Qt.AlignLeft, label)
+            x += w + 7
+        p.end()
 
 
 class HealthPanel(QWidget):

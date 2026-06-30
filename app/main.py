@@ -35,7 +35,7 @@ from instruments import AttitudeIndicator, Compass
 
 LOG_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "logs")
 from mapview import MapView
-from panels import TelemetryPanel, MessageConsole, MavInspector, HealthPanel
+from panels import TelemetryPanel, MessageConsole, MavInspector, HealthPanel, StatusStrip
 
 
 def haversine(lat1, lon1, lat2, lon2):
@@ -274,7 +274,16 @@ class DroneDeck(QMainWindow):
         split.setSizes([820, 420])
         split.setChildrenCollapsible(False)   # neither pane can be crushed to zero
         split.setHandleWidth(4)
-        self.setCentralWidget(split)
+
+        # QGC-style status strip above the split view
+        self.status_strip = StatusStrip()
+        central = QWidget()
+        cv = QVBoxLayout(central)
+        cv.setContentsMargins(0, 0, 0, 0)
+        cv.setSpacing(0)
+        cv.addWidget(self.status_strip)
+        cv.addWidget(split, 1)
+        self.setCentralWidget(central)
 
         # bottom message console (STATUSTEXT + command results)
         self.console = MessageConsole()
@@ -748,6 +757,29 @@ class DroneDeck(QMainWindow):
             self.mission_items = list(items)
             self._refresh_mission_view()
 
+    def _update_status_strip(self, ve, is_open, drop):
+        GREEN, AMBER, RED = "#37d67a", "#e0a030", "#e05050"
+        TEAL, GREY, LIGHT = "#39c0d0", "#9aa0ac", "#d6d9df"
+        chips = []
+        if ve.link_alive:
+            armed = ve.armed
+            chips.append((f"{'ARMED' if armed else 'DISARMED'}  {ve.mode}",
+                          RED if armed else GREEN, RED if armed else LIGHT))
+            chips.append((f"GPS {ve.fix_text} · {ve.satellites}",
+                          GREEN if ve.fix_type >= 3 else AMBER, LIGHT))
+            rem = ve.battery_remaining
+            bcol = GREEN if (rem < 0 or rem >= 40) else (AMBER if rem >= 20 else RED)
+            blabel = f"{ve.voltage:.1f}V" + (f" · {rem}%" if rem >= 0 else "")
+            chips.append((blabel, bcol, bcol if (0 <= rem < 20) else LIGHT))
+            chips.append((f"FLT {_fmt_mmss(self._flight_time)}", GREY, LIGHT))
+        else:
+            chips.append(("NO TELEMETRY", AMBER if is_open else GREY, AMBER if is_open else GREY))
+        link_col = RED if drop else (TEAL if is_open else GREY)
+        chips.append((f"{self._rate:.0f} Hz" + (f" · {drop} drop" if drop else ""),
+                      link_col, RED if drop else LIGHT))
+        chips.append((f"MSG {len(ve.messages)}", GREY, LIGHT))
+        self.status_strip.set_chips(chips)
+
     def _set_follow(self, on):
         self.map.follow = on
         if on and self.vehicle.have_position:
@@ -795,6 +827,7 @@ class DroneDeck(QMainWindow):
                 nav["wp_dist"] = _fmt_dist(min(haversine(ve.lat, ve.lon, it.lat, it.lon)
                                                for it in wps))
         self.panel.update_all(ve, state, self._rate, ok, drop, nav)
+        self._update_status_strip(ve, is_open, drop)
 
         connected = self._has_vehicle()
         self.btn_arm.setEnabled(connected)
