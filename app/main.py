@@ -27,6 +27,7 @@ from link import UdpLink, TcpLink, SerialLink, ReplayLink
 from mission import MissionProtocol, MissionItem, survey_grid
 from params import ParamManager, ParamDialog
 from tlog import TlogWriter
+from charts import ChartPanel
 from instruments import AttitudeIndicator, Compass
 
 LOG_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "logs")
@@ -268,8 +269,18 @@ class DroneDeck(QMainWindow):
         idock.setWidget(self.inspector)
         idock.setFeatures(QDockWidget.DockWidgetMovable | QDockWidget.DockWidgetFloatable)
         self.addDockWidget(Qt.BottomDockWidgetArea, idock)
+
+        # live telemetry charts, also tabbed at the bottom
+        self.charts = ChartPanel()
+        cdock = QDockWidget("Charts", self)
+        cdock.setObjectName("charts_dock")
+        cdock.setWidget(self.charts)
+        cdock.setFeatures(QDockWidget.DockWidgetMovable | QDockWidget.DockWidgetFloatable)
+        self.addDockWidget(Qt.BottomDockWidgetArea, cdock)
+
         self.tabifyDockWidget(dock, mdock)
         self.tabifyDockWidget(mdock, idock)
+        self.tabifyDockWidget(idock, cdock)
         dock.raise_()
 
         self.sb_info = QLabel("starting...")
@@ -667,6 +678,7 @@ class DroneDeck(QMainWindow):
             b.setEnabled(connected if label in ("Upload", "Download") else True)
 
         self.inspector.refresh()
+        self.charts.sample(ve)
 
     def closeEvent(self, e):
         if self.link is not None:

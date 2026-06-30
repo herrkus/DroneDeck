@@ -57,7 +57,8 @@ def finish():
                  trail=len(ve.trail), mode=ve.mode, statustexts=len(ve.messages),
                  ack=ve.last_ack, armed=ve.armed,
                  goto_seen=any("Goto" in t for _, t in ve.messages),
-                 inspector_types=len(win.inspector.stats))
+                 inspector_types=len(win.inspector.stats),
+                 chart_points=len(win.charts.data["alt_rel"]))
     try:
         win.grab().save(OUT)
     except Exception as e:
@@ -100,6 +101,8 @@ if not state.get("goto_seen"):
     fail.append("no Goto acknowledgement from vehicle")
 if state.get("inspector_types", 0) < 5:
     fail.append(f"inspector saw only {state.get('inspector_types')} message types")
+if state.get("chart_points", 0) < 10:
+    fail.append(f"charts accumulated only {state.get('chart_points')} points")
 
 print(f"screenshot: {OUT}")
 print("SMOKE FAILED: " + "; ".join(fail) if fail else "SMOKE PASSED")
