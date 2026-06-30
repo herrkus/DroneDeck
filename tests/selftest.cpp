@@ -21,7 +21,7 @@ extern "C" {
                                      uint16_t, const float*, uint8_t*, int);
 }
 
-struct Decoded { uint32_t msgid; uint8_t sysid, compid, seq, nfields; double f[24]; };
+struct Decoded { uint32_t msgid; uint8_t sysid, compid, seq, nfields; double f[24]; char text[51]; };
 extern "C" int mav_pop(void*, Decoded*);
 
 static int failures = 0;

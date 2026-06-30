@@ -16,6 +16,8 @@ ATTITUDE = 30
 GLOBAL_POSITION_INT = 33
 VFR_HUD = 74
 COMMAND_LONG = 76
+COMMAND_ACK = 77
+STATUSTEXT = 253
 
 MSG_NAME = {
     HEARTBEAT: "HEARTBEAT",
@@ -25,12 +27,15 @@ MSG_NAME = {
     GLOBAL_POSITION_INT: "GLOBAL_POSITION_INT",
     VFR_HUD: "VFR_HUD",
     COMMAND_LONG: "COMMAND_LONG",
+    COMMAND_ACK: "COMMAND_ACK",
+    STATUSTEXT: "STATUSTEXT",
 }
 
-# Per-message CRC_EXTRA seed bytes (from the MAVLink common dialect).
+# Per-message CRC_EXTRA seed bytes (derived + validated in tests/crc_extra_calc.py).
 CRC_EXTRA = {
     HEARTBEAT: 50, SYS_STATUS: 124, GPS_RAW_INT: 24, ATTITUDE: 39,
     GLOBAL_POSITION_INT: 104, VFR_HUD: 20, COMMAND_LONG: 152,
+    COMMAND_ACK: 143, STATUSTEXT: 83,
 }
 
 # Decoded-field order. Index i here is index i in Decoded.f[] from the C++ core.
@@ -42,6 +47,8 @@ FIELDS = {
     GLOBAL_POSITION_INT: ["lat", "lon", "alt", "relative_alt", "vx", "vy", "vz", "hdg", "time_boot_ms"],
     VFR_HUD: ["airspeed", "groundspeed", "alt", "climb", "heading", "throttle"],
     COMMAND_LONG: ["command", "param1", "param2", "param3", "param4", "param5", "param6", "param7"],
+    COMMAND_ACK: ["command", "result"],
+    STATUSTEXT: ["severity"],   # `text` is attached separately (string, not in f[])
 }
 
 # --- selected enums ---------------------------------------------------------
@@ -52,6 +59,58 @@ MAV_MODE_FLAG_CUSTOM_MODE_ENABLED = 0x01
 MAV_STATE_ACTIVE = 4
 GPS_FIX_TYPE_3D_FIX = 3
 MAV_CMD_COMPONENT_ARM_DISARM = 400
+
+MAV_SEVERITY = {0: "EMERGENCY", 1: "ALERT", 2: "CRITICAL", 3: "ERROR",
+                4: "WARNING", 5: "NOTICE", 6: "INFO", 7: "DEBUG"}
+MAV_RESULT = {0: "ACCEPTED", 1: "TEMP REJECTED", 2: "DENIED", 3: "UNSUPPORTED",
+              4: "FAILED", 5: "IN PROGRESS", 6: "CANCELLED"}
+
+MAV_AUTOPILOT_PX4 = 12
+
+# --- flight mode tables (custom_mode -> name) -------------------------------
+ARDUCOPTER_MODES = {
+    0: "STABILIZE", 1: "ACRO", 2: "ALT_HOLD", 3: "AUTO", 4: "GUIDED", 5: "LOITER",
+    6: "RTL", 7: "CIRCLE", 9: "LAND", 11: "DRIFT", 13: "SPORT", 14: "FLIP",
+    15: "AUTOTUNE", 16: "POSHOLD", 17: "BRAKE", 18: "THROW", 19: "AVOID_ADSB",
+    20: "GUIDED_NOGPS", 21: "SMART_RTL", 22: "FLOWHOLD", 23: "FOLLOW", 24: "ZIGZAG",
+    25: "SYSTEMID", 26: "AUTOROTATE", 27: "AUTO_RTL",
+}
+ARDUPLANE_MODES = {
+    0: "MANUAL", 1: "CIRCLE", 2: "STABILIZE", 3: "TRAINING", 4: "ACRO", 5: "FBWA",
+    6: "FBWB", 7: "CRUISE", 8: "AUTOTUNE", 10: "AUTO", 11: "RTL", 12: "LOITER",
+    13: "TAKEOFF", 14: "AVOID_ADSB", 15: "GUIDED", 17: "QSTABILIZE", 18: "QHOVER",
+    19: "QLOITER", 20: "QLAND", 21: "QRTL", 22: "QAUTOTUNE", 23: "QACRO", 24: "THERMAL",
+}
+ARDUROVER_MODES = {
+    0: "MANUAL", 1: "ACRO", 3: "STEERING", 4: "HOLD", 5: "LOITER", 6: "FOLLOW",
+    7: "SIMPLE", 10: "AUTO", 11: "RTL", 12: "SMART_RTL", 15: "GUIDED", 16: "INITIALISING",
+}
+_PX4_MAIN = {1: "MANUAL", 2: "ALTCTL", 3: "POSCTL", 5: "ACRO", 6: "OFFBOARD",
+             7: "STABILIZED", 8: "RATTITUDE", 4: "AUTO"}
+_PX4_AUTO_SUB = {1: "READY", 2: "TAKEOFF", 3: "LOITER", 4: "MISSION", 5: "RTL",
+                 6: "LAND", 7: "RTGS", 8: "FOLLOW", 10: "PRECLAND"}
+
+
+def mode_table(autopilot, mav_type):
+    """The custom_mode -> name table appropriate for this vehicle."""
+    if mav_type == 1:                       # FIXED_WING
+        return ARDUPLANE_MODES
+    if mav_type in (10, 11):                # GROUND_ROVER / SURFACE_BOAT
+        return ARDUROVER_MODES
+    return ARDUCOPTER_MODES                  # copters + default
+
+
+def flight_mode_name(autopilot, mav_type, base_mode, custom_mode):
+    custom_mode = int(custom_mode)
+    if int(autopilot) == MAV_AUTOPILOT_PX4:
+        main = (custom_mode >> 16) & 0xFF
+        sub = (custom_mode >> 24) & 0xFF
+        if main == 4:
+            return "AUTO." + _PX4_AUTO_SUB.get(sub, str(sub))
+        return _PX4_MAIN.get(main, f"MODE {main}")
+    if not (int(base_mode) & MAV_MODE_FLAG_CUSTOM_MODE_ENABLED):
+        return f"MODE {custom_mode}"
+    return mode_table(autopilot, mav_type).get(custom_mode, f"MODE {custom_mode}")
 
 
 def crc16_mcrf4xx(data: bytes, extra: int) -> int:
@@ -118,6 +177,14 @@ def enc_command_long(command, params7, target_system=1, target_component=1, conf
                        target_system & 0xFF, target_component & 0xFF, confirmation & 0xFF)
 
 
+def enc_statustext(severity, text):
+    return struct.pack("<B50s", int(severity) & 0xFF, text.encode("utf-8")[:50])
+
+
+def enc_command_ack(command, result):
+    return struct.pack("<HB", int(command) & 0xFFFF, int(result) & 0xFF)
+
+
 def crc16(data: bytes) -> int:
     """CRC-16/MCRF4XX over data only (no extra seed)."""
     crc = 0xFFFF
@@ -171,6 +238,8 @@ _WIRE = {
     COMMAND_LONG: ("<fffffffHBBB",
                    ["param1", "param2", "param3", "param4", "param5", "param6", "param7",
                     "command", "target_system", "target_component", "confirmation"], 33),
+    COMMAND_ACK: ("<HB", ["command", "result"], 3),
+    STATUSTEXT: ("<B50s", ["severity", "text"], 51),
 }
 
 
@@ -237,6 +306,8 @@ class PyParser:
             pl = bytes(self.buf[pos + hdr: pos + hdr + payload])
             pl = pl[:full] if len(pl) >= full else pl + b"\x00" * (full - len(pl))
             fields = dict(zip(names, struct.unpack(fmt, pl)))
+            if msgid == STATUSTEXT:
+                fields["text"] = fields["text"].split(b"\x00")[0].decode("utf-8", "replace")
             out.append(Message(msgid, sysid, compid, seq, fields))
             self.ok += 1
             pos += total

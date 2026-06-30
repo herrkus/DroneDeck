@@ -17,14 +17,16 @@ from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QAction, QFont
 from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QHBoxLayout,
                                QVBoxLayout, QSplitter, QToolBar, QLineEdit,
-                               QPushButton, QLabel, QCheckBox, QMessageBox, QScrollArea)
+                               QPushButton, QLabel, QCheckBox, QMessageBox, QScrollArea,
+                               QDockWidget)
 
 import core
+import mavlink
 from vehicle import Vehicle
 from link import UdpLink
 from instruments import AttitudeIndicator, Compass
 from mapview import MapView
-from panels import TelemetryPanel
+from panels import TelemetryPanel, MessageConsole
 
 DARK_QSS = """
 QMainWindow, QWidget { background:#15171c; color:#d6d9df; }
@@ -135,16 +137,39 @@ class DroneDeck(QMainWindow):
         split.setHandleWidth(4)
         self.setCentralWidget(split)
 
+        # bottom message console (STATUSTEXT + command results)
+        self.console = MessageConsole()
+        self.console.setMinimumHeight(90)
+        self.console.setMaximumHeight(170)
+        dock = QDockWidget("Messages", self)
+        dock.setObjectName("messages_dock")
+        dock.setWidget(self.console)
+        dock.setFeatures(QDockWidget.DockWidgetMovable | QDockWidget.DockWidgetFloatable)
+        self.addDockWidget(Qt.BottomDockWidgetArea, dock)
+
         self.sb_info = QLabel("starting...")
         self.statusBar().addWidget(self.sb_info, 1)
         core_lbl = QLabel(f"core: {core.BACKEND} ")
         core_lbl.setFont(QFont("DejaVu Sans Mono", 8))
         self.statusBar().addPermanentWidget(core_lbl)
 
+    CMD_NAMES = {400: "ARM/DISARM", 22: "TAKEOFF", 21: "LAND", 20: "RTL",
+                 176: "SET MODE", 192: "REPOSITION", 193: "PAUSE/CONTINUE"}
+
     def _wire(self):
         self.link.messages.connect(self.vehicle.consume)
         self.link.info.connect(self._on_info)
         self.link.state.connect(self._on_state)
+        self.vehicle.status_text.connect(self.console.add_message)
+        self.vehicle.command_ack.connect(self._on_command_ack)
+
+    def _on_command_ack(self, command, result):
+        name = self.CMD_NAMES.get(command, f"CMD {command}")
+        res = mavlink.MAV_RESULT.get(result, str(result))
+        ok = (result == 0)
+        line = f"{name}: {res}"
+        self._on_info(line)
+        self.console.add_note(line, "#37d67a" if ok else "#e05050")
 
     # -- actions --------------------------------------------------------------
     def _connect(self):

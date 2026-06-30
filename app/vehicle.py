@@ -15,6 +15,8 @@ import mavlink
 class Vehicle(QObject):
     updated = Signal()              # emitted after a batch of messages is applied
     text_status = Signal(str)       # human-readable connection notes
+    status_text = Signal(int, str)  # STATUSTEXT: severity, text
+    command_ack = Signal(int, int)  # COMMAND_ACK: command, result
 
     TRAIL_MAX = 4000
 
@@ -42,10 +44,14 @@ class Vehicle(QObject):
         # status
         self.sysid = 0
         self.mav_type = 0
+        self.autopilot = 0
         self.base_mode = 0
         self.custom_mode = 0
         self.system_status = 0
         self.armed = False
+        self.mode = "--"
+        self.messages = []          # [(severity, text), ...] STATUSTEXT log
+        self.last_ack = None        # (command, result)
         # bookkeeping
         self.have_position = False
         self.home = None            # (lat, lon)
@@ -69,9 +75,26 @@ class Vehicle(QObject):
         self.base_mode = int(f.get("base_mode", 0))
         self.custom_mode = int(f.get("custom_mode", 0))
         self.mav_type = int(f.get("type", 0))
+        self.autopilot = int(f.get("autopilot", 0))
         self.system_status = int(f.get("system_status", 0))
         self.armed = bool(self.base_mode & mavlink.MAV_MODE_FLAG_SAFETY_ARMED)
+        self.mode = mavlink.flight_mode_name(self.autopilot, self.mav_type,
+                                             self.base_mode, self.custom_mode)
         self.last_heartbeat = time.monotonic()
+
+    def _on_statustext(self, f):
+        sev = int(f.get("severity", 6))
+        text = str(f.get("text", ""))
+        self.messages.append((sev, text))
+        if len(self.messages) > 200:
+            self.messages.pop(0)
+        self.status_text.emit(sev, text)
+
+    def _on_command_ack(self, f):
+        cmd = int(f.get("command", 0))
+        res = int(f.get("result", 0))
+        self.last_ack = (cmd, res)
+        self.command_ack.emit(cmd, res)
 
     def _on_attitude(self, f):
         self.roll = f.get("roll", 0.0)
@@ -122,6 +145,8 @@ class Vehicle(QObject):
         mavlink.SYS_STATUS: _on_sys_status,
         mavlink.GPS_RAW_INT: _on_gps_raw,
         mavlink.VFR_HUD: _on_vfr_hud,
+        mavlink.STATUSTEXT: _on_statustext,
+        mavlink.COMMAND_ACK: _on_command_ack,
     }
 
     # -- derived --------------------------------------------------------------

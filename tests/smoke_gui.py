@@ -37,13 +37,19 @@ sim = subprocess.Popen([sys.executable, SIM, "--target", "127.0.0.1:14550"],
 state = {}
 
 
+def do_arm():
+    if win.link.remote is not None:
+        win.link.arm(win.vehicle.sysid or 1, True)
+
+
 def finish():
     ve = win.vehicle
     ok, drop = (win.link.parser.stats if win.link.parser else (0, 0))
     state.update(msgs=ve.msg_count, have_pos=ve.have_position,
                  lat=ve.lat, lon=ve.lon, roll=ve.roll, hdg=ve.heading,
                  volt=ve.voltage, sats=ve.satellites, ok=ok, drop=drop,
-                 trail=len(ve.trail))
+                 trail=len(ve.trail), mode=ve.mode, statustexts=len(ve.messages),
+                 ack=ve.last_ack, armed=ve.armed)
     try:
         win.grab().save(OUT)
     except Exception as e:
@@ -51,6 +57,7 @@ def finish():
     app.quit()
 
 
+QTimer.singleShot(2000, do_arm)
 QTimer.singleShot(3500, finish)
 app.exec()
 sim.terminate()
@@ -72,6 +79,14 @@ if state.get("drop", 1) != 0:
     fail.append(f"{state.get('drop')} dropped frames")
 if not os.path.exists(OUT):
     fail.append("no screenshot")
+if state.get("mode") in (None, "--", ""):
+    fail.append("no flight mode")
+if state.get("statustexts", 0) < 1:
+    fail.append("no STATUSTEXT received")
+if state.get("ack") is None:
+    fail.append("no COMMAND_ACK for arm")
+elif state["ack"] != (400, 0):
+    fail.append(f"unexpected ack {state['ack']}")
 
 print(f"screenshot: {OUT}")
 print("SMOKE FAILED: " + "; ".join(fail) if fail else "SMOKE PASSED")

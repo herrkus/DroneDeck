@@ -77,6 +77,8 @@ constexpr MsgInfo MSGS[] = {
     {33, 104, 28},   // GLOBAL_POSITION_INT
     {74,  20, 20},   // VFR_HUD
     {76, 152, 33},   // COMMAND_LONG
+    {77, 143,  3},   // COMMAND_ACK
+    {253, 83, 51},   // STATUSTEXT
 };
 
 const MsgInfo* find_info(uint32_t id) {
@@ -96,6 +98,7 @@ struct Decoded {
     uint8_t  seq;       // 6
     uint8_t  nfields;   // 7
     double   f[24];     // 8
+    char     text[51];  // 200: STATUSTEXT payload, NUL-terminated; empty otherwise
 };
 
 namespace {
@@ -130,6 +133,14 @@ void decode(uint32_t msgid, const uint8_t* pl, Decoded& d) {
     case 76: // COMMAND_LONG: command, param1..7
         push(rd_u16(pl + 28)); push(rd_f32(pl + 0)); push(rd_f32(pl + 4)); push(rd_f32(pl + 8));
         push(rd_f32(pl + 12)); push(rd_f32(pl + 16)); push(rd_f32(pl + 20)); push(rd_f32(pl + 24));
+        break;
+    case 77: // COMMAND_ACK: command, result
+        push(rd_u16(pl + 0)); push(pl[2]);
+        break;
+    case 253: // STATUSTEXT: severity + text[50]
+        push(pl[0]);
+        std::memcpy(d.text, pl + 1, 50);
+        d.text[50] = '\0';
         break;
     default: break;
     }

@@ -70,11 +70,13 @@ def main():
             pass
 
     armed = False
+    mode = 5                                   # LOITER (ArduCopter custom_mode)
+    send(mavlink.STATUSTEXT, mavlink.enc_statustext(6, "DroneDeck SITL: ready"))
     w = SPEED / RADIUS_M                       # angular rate (rad/s)
     cos_lat = math.cos(math.radians(HOME_LAT))
     t0 = time.monotonic()
-    next_t = {"hb": 0.0, "att": 0.0, "pos": 0.0, "hud": 0.0, "sys": 0.0, "gps": 0.0}
-    period = {"hb": 0.25, "att": 0.04, "pos": 0.2, "hud": 0.2, "sys": 1.0, "gps": 1.0}
+    next_t = {"hb": 0.0, "att": 0.0, "pos": 0.0, "hud": 0.0, "sys": 0.0, "gps": 0.0, "txt": 3.0}
+    period = {"hb": 0.25, "att": 0.04, "pos": 0.2, "hud": 0.2, "sys": 1.0, "gps": 1.0, "txt": 9.0}
 
     try:
         while True:
@@ -108,7 +110,7 @@ def main():
             if t >= next_t["hb"]:
                 next_t["hb"] += period["hb"]
                 send(mavlink.HEARTBEAT, mavlink.enc_heartbeat(
-                    mav_type=mavlink.MAV_TYPE_QUADROTOR, base_mode=base_mode, custom_mode=0))
+                    mav_type=mavlink.MAV_TYPE_QUADROTOR, base_mode=base_mode, custom_mode=mode))
             if t >= next_t["att"]:
                 next_t["att"] += period["att"]
                 send(mavlink.ATTITUDE, mavlink.enc_attitude(roll, pitch, yaw, int(t * 1000)))
@@ -131,16 +133,25 @@ def main():
                 send(mavlink.GPS_RAW_INT, mavlink.enc_gps_raw_int(
                     int(lat * 1e7), int(lon * 1e7), int(alt * 1000), fix=3, sats=14,
                     vel_cms=int(SPEED * 100), cog_cdeg=int(heading * 100)))
+            if t >= next_t["txt"]:
+                next_t["txt"] += period["txt"]
+                send(mavlink.STATUSTEXT, mavlink.enc_statustext(
+                    6, f"alt {alt:.0f}m  spd {SPEED:.0f}m/s  batt {batt_pct}%"))
 
-            # handle inbound GCS commands (arm/disarm), if the native parser is available
+            # handle inbound GCS commands, if the native parser is available
             if PARSER is not None:
                 try:
                     while True:
                         data, _addr = sock.recvfrom(2048)
                         for m in PARSER.feed(data):
-                            if m.msgid == mavlink.COMMAND_LONG and \
-                               int(m.fields.get("command", 0)) == mavlink.MAV_CMD_COMPONENT_ARM_DISARM:
+                            if m.msgid != mavlink.COMMAND_LONG:
+                                continue
+                            cmd = int(m.fields.get("command", 0))
+                            send(mavlink.COMMAND_ACK, mavlink.enc_command_ack(cmd, 0))  # ACCEPTED
+                            if cmd == mavlink.MAV_CMD_COMPONENT_ARM_DISARM:
                                 armed = m.fields.get("param1", 0) >= 0.5
+                                send(mavlink.STATUSTEXT, mavlink.enc_statustext(
+                                    5, "Armed" if armed else "Disarmed"))
                                 print(f"[sim] {'ARMED' if armed else 'DISARMED'} by GCS")
                 except BlockingIOError:
                     pass

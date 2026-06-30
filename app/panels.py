@@ -2,8 +2,11 @@
 from __future__ import annotations
 
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QFont
-from PySide6.QtWidgets import (QWidget, QVBoxLayout, QFormLayout, QGroupBox, QLabel)
+from PySide6.QtGui import QFont, QColor
+from PySide6.QtWidgets import (QWidget, QVBoxLayout, QFormLayout, QGroupBox, QLabel,
+                               QListWidget, QListWidgetItem)
+
+import mavlink
 
 _MONO = QFont("DejaVu Sans Mono", 10)
 
@@ -18,7 +21,7 @@ class TelemetryPanel(QWidget):
         lay.addWidget(self._group("LINK", [
             ("link", "Status"), ("rate", "Msg rate"), ("counts", "OK / drop")]))
         lay.addWidget(self._group("FLIGHT", [
-            ("armed", "State"), ("status", "System"), ("type", "Airframe")]))
+            ("mode", "Mode"), ("armed", "State"), ("status", "System"), ("type", "Airframe")]))
         lay.addWidget(self._group("BATTERY", [
             ("voltage", "Voltage"), ("current", "Current"), ("remaining", "Remaining")]))
         lay.addWidget(self._group("POSITION", [
@@ -55,6 +58,7 @@ class TelemetryPanel(QWidget):
         self._set("rate", f"{rate:5.1f} Hz")
         self._set("counts", f"{ok} / {drop}", "#e05050" if drop else None)
 
+        self._set("mode", ve.mode, "#8fd0ff")
         self._set("armed", "ARMED" if ve.armed else "DISARMED",
                   "#e05050" if ve.armed else "#37d67a")
         self._set("status", {0: "Uninit", 1: "Boot", 2: "Calibrating", 3: "Standby",
@@ -86,3 +90,33 @@ class TelemetryPanel(QWidget):
 
         self._set("fix", ve.fix_text, "#37d67a" if ve.fix_type >= 3 else "#e0a030")
         self._set("sats", str(ve.satellites))
+
+
+class MessageConsole(QListWidget):
+    """Scrolling, severity-colored log of STATUSTEXT (and local notes)."""
+
+    SEV_COLOR = {0: "#ff5050", 1: "#ff5050", 2: "#ff6a3d", 3: "#ff6a3d",
+                 4: "#e0a030", 5: "#39c0d0", 6: "#c4c8d0", 7: "#7a8090"}
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setFont(QFont("DejaVu Sans Mono", 9))
+        self.setUniformItemSizes(True)
+        self.setSelectionMode(QListWidget.NoSelection)
+
+    def add_message(self, severity, text):
+        sev = mavlink.MAV_SEVERITY.get(severity, str(severity))
+        item = QListWidgetItem(f"[{sev}] {text}")
+        item.setForeground(QColor(self.SEV_COLOR.get(severity, "#c4c8d0")))
+        self.addItem(item)
+        while self.count() > 300:
+            self.takeItem(0)
+        self.scrollToBottom()
+
+    def add_note(self, text, color="#8fd0ff"):
+        item = QListWidgetItem(text)
+        item.setForeground(QColor(color))
+        self.addItem(item)
+        while self.count() > 300:
+            self.takeItem(0)
+        self.scrollToBottom()

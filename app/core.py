@@ -28,6 +28,7 @@ class Decoded(ctypes.Structure):
         ("seq", ctypes.c_uint8),
         ("nfields", ctypes.c_uint8),
         ("f", ctypes.c_double * 24),
+        ("text", ctypes.c_char * 51),
     ]
 
 
@@ -105,6 +106,8 @@ class Parser:
                 break
             names = mavlink.FIELDS.get(d.msgid, [])
             fields = {names[i]: d.f[i] for i in range(min(d.nfields, len(names)))}
+            if d.msgid == mavlink.STATUSTEXT:
+                fields["text"] = d.text.decode("utf-8", "replace")
             out.append(Message(d.msgid, d.sysid, d.compid, d.seq, fields))
         return out
 

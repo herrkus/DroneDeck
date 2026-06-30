@@ -93,6 +93,17 @@ def main():
             check(m.fields["heading"] == 270, "vfr heading")
             check(m.fields["throttle"] == 65, "vfr throttle")
 
+        m = roundtrip(mavlink.COMMAND_ACK, mavlink.enc_command_ack(400, 0), crc_fn)
+        if m:
+            check(m.fields["command"] == 400, f"ack command {m.fields.get('command')}")
+            check(m.fields["result"] == 0, f"ack result {m.fields.get('result')}")
+
+        m = roundtrip(mavlink.STATUSTEXT, mavlink.enc_statustext(6, "DroneDeck online"), crc_fn)
+        if m:
+            check(m.fields["severity"] == 6, f"statustext severity {m.fields.get('severity')}")
+            check(m.fields.get("text") == "DroneDeck online",
+                  f"statustext text {m.fields.get('text')!r}")
+
     # Assembly CRC must equal the independent Python CRC, byte-for-byte.
     sample = mavlink.enc_attitude(0.3, 0.4, 0.5, 7)
     head = bytes((len(sample), 0, 3, 1, mavlink.ATTITUDE))
