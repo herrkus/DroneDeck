@@ -67,9 +67,18 @@ the native core.
   `MANUAL_CONTROL` at 25 Hz.
 - **Mission planning** -- plan-mode map clicks drop numbered waypoints; **edit**
   them (drag on the map, delete, reorder, edit altitude); upload / download over
-  the standard MAVLink mission protocol; one-click **survey** grid; plus
-  **geofence** polygons and **rally points** (`MAV_MISSION_TYPE_FENCE/RALLY`).
-  A live statistics line shows waypoint count, distance, time and max altitude.
+  the standard MAVLink mission protocol; one-click **survey** grid; a live
+  statistics line (waypoint count, distance, time, max altitude); plus a full
+  **geofence** editor -- inclusion/exclusion polygons and inclusion/exclusion
+  circles -- and **rally points** (`MAV_MISSION_TYPE_FENCE/RALLY`).
+- **Camera & gimbal** -- trigger photos, start/stop video, set trigger distance,
+  and aim a gimbal (pitch/yaw) via `COMMAND_LONG`.
+- **Video / FPV** -- a Map|Video tab plays an RTSP/UDP/file stream (QtMultimedia,
+  optional -- a placeholder shows when the backend is absent).
+- **Onboard log download** -- list the vehicle's dataflash logs and download one
+  to a file with a progress bar (`LOG_REQUEST_LIST`/`LOG_ENTRY`/`LOG_DATA`...).
+- **Multi-vehicle + ADSB** -- track several system IDs with a Vehicle selector;
+  other vehicles and `ADSB_VEHICLE` traffic are drawn on the map.
 - **MAVLink inspector** -- a live table of every message type, its rate (Hz) and
   current field values (bottom "Inspector" tab).
 - **Parameter editor** -- "Params" downloads the autopilot's parameters into a
@@ -77,13 +86,17 @@ the native core.
 - **Telemetry log + replay** -- "Record" writes a MAVProxy-compatible `.tlog`;
   the "Replay" link type (or just opening a `.tlog`) plays it back through the
   GCS at its original cadence.
+- **Comm links manager** + **settings persistence** -- save named link configs
+  and quick-connect; window layout, last link and map view are remembered.
 
 Supported messages: `HEARTBEAT`, `SYS_STATUS` (incl. sensor-health bitmasks),
 `GPS_RAW_INT`, `ATTITUDE`, `GLOBAL_POSITION_INT`, `VFR_HUD`, `MANUAL_CONTROL`,
-`COMMAND_LONG`, `COMMAND_ACK`, `STATUSTEXT`, the parameter set (`PARAM_*`),
-`SET_POSITION_TARGET_GLOBAL_INT`, and the mission set (`MISSION_COUNT`,
-`MISSION_ITEM_INT`, `MISSION_REQUEST_INT`, `MISSION_REQUEST_LIST`,
-`MISSION_ACK`, `MISSION_CLEAR_ALL`, `MISSION_CURRENT`, `MISSION_ITEM_REACHED`).
+`COMMAND_LONG`, `COMMAND_ACK`, `STATUSTEXT`, `ADSB_VEHICLE`, the parameter set
+(`PARAM_*`), the log set (`LOG_REQUEST_LIST`/`LOG_ENTRY`/`LOG_REQUEST_DATA`/
+`LOG_DATA`/`LOG_REQUEST_END`), `SET_POSITION_TARGET_GLOBAL_INT`, and the mission
+set (`MISSION_COUNT`, `MISSION_ITEM_INT`, `MISSION_REQUEST_INT`,
+`MISSION_REQUEST_LIST`, `MISSION_ACK`, `MISSION_CLEAR_ALL`, `MISSION_CURRENT`,
+`MISSION_ITEM_REACHED`).
 
 ---
 
@@ -184,7 +197,14 @@ python3 tests/test_fence_rally.py   # geofence + rally upload/download
 python3 tests/test_params.py    # parameter download + set echo
 python3 tests/test_tlog.py      # record a session, read it back, replay it
 python3 tests/test_manual.py    # MANUAL_CONTROL -> simulated vehicle motion
+python3 tests/test_camera.py    # camera + gimbal COMMAND_LONG feedback
+python3 tests/test_logs.py      # onboard log list + download (bytes verified)
+python3 tests/test_video.py     # video pane builds + degrades gracefully
+python3 tests/test_fence_shapes.py   # exclusion polygon + inc/exc circles
+python3 tests/test_adsb.py      # ADSB_VEHICLE traffic tracked on the map
+python3 tests/test_multivehicle.py   # two sysids tracked + selector switch
 python3 tests/test_settings.py  # QSettings persistence round-trip
+python3 tests/test_links_manager.py  # saved link configs + connect signal
 python3 tests/smoke_gui.py      # headless end-to-end with the simulator + screenshot
 DRONEDECK_FORCE_PYTHON=1 python3 tests/smoke_gui.py   # same, exercising the fallback
 ```
