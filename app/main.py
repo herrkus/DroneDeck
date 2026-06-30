@@ -315,6 +315,10 @@ class DroneDeck(QMainWindow):
         mrow.addStretch(1)
         mv.addLayout(mrow)
         mv.addWidget(self.mission_list)
+        self.mission_stats = QLabel("no mission")
+        self.mission_stats.setStyleSheet("color:#8fa3bf; padding:2px 4px;")
+        self.mission_stats.setFont(QFont("DejaVu Sans Mono", 9))
+        mv.addWidget(self.mission_stats)
         mdock = QDockWidget("Mission", self)
         mdock.setObjectName("mission_dock")
         mdock.setWidget(mwrap)
@@ -616,6 +620,19 @@ class DroneDeck(QMainWindow):
         self.map.set_mission([(it.lat, it.lon) for it in self.mission_items])
         n = len(self.mission_items)
         self.mission_status.setText(f"{n} waypoint{'' if n == 1 else 's'}" if n else "no mission")
+        self.mission_stats.setText(self._mission_stats_text())
+
+    def _mission_stats_text(self):
+        wps = [it for it in self.mission_items
+               if not (abs(it.lat) < 1e-6 and abs(it.lon) < 1e-6)]
+        if not wps:
+            return "no mission"
+        pts = ([self.vehicle.home] if self.vehicle.home else []) + [(it.lat, it.lon) for it in wps]
+        dist = sum(haversine(a[0], a[1], b[0], b[1]) for a, b in zip(pts, pts[1:]))
+        CRUISE = 10.0       # m/s assumed cruise speed for the estimate
+        max_alt = max(it.alt for it in wps)
+        dtxt = f"{dist:.0f} m" if dist < 1000 else f"{dist / 1000:.2f} km"
+        return f"{len(wps)} WP · {dtxt} · ~{_fmt_mmss(dist / CRUISE)} · max {max_alt:.0f} m"
 
     def _renumber(self):
         for i, it in enumerate(self.mission_items):
@@ -626,6 +643,7 @@ class DroneDeck(QMainWindow):
         item = self.mission_list.item(idx)
         if item:
             item.setText(f"{it.seq:2d}  {it.cmd_name:9s} {it.lat:10.6f} {it.lon:11.6f}  {it.alt:5.0f} m")
+        self.mission_stats.setText(self._mission_stats_text())
 
     def _wp_selected(self, idx):
         self._selecting = True
