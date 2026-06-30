@@ -7,6 +7,8 @@ batches on the Qt main loop.
 """
 from __future__ import annotations
 
+import time
+
 from PySide6.QtCore import QObject, Signal, QTimer, QIODeviceBase
 from PySide6.QtNetwork import QUdpSocket, QTcpSocket, QHostAddress
 
@@ -34,6 +36,7 @@ class Link(QObject):
         self.seq = 0
         self.rx_bytes = 0
         self._open = False
+        self.recorder = None       # TlogWriter while recording, else None
         self.hb = QTimer(self)
         self.hb.setInterval(1000)
         self.hb.timeout.connect(self._send_heartbeat)
@@ -66,10 +69,16 @@ class Link(QObject):
         self._open = False
         self.state.emit(False)
 
+    def _record(self, data: bytes):
+        r = self.recorder
+        if r is not None:
+            r.write(data, int(time.time() * 1e6))
+
     def _ingest(self, data: bytes):
         if not data:
             return
         self.rx_bytes += len(data)
+        self._record(data)
         batch = self.parser.feed(data)
         if batch:
             self.messages.emit(batch)
@@ -181,6 +190,7 @@ class UdpLink(Link):
             dg = self.sock.receiveDatagram()
             data = bytes(dg.data())
             self.rx_bytes += len(data)
+            self._record(data)
             if self.remote is None:
                 self.remote = (dg.senderAddress(), dg.senderPort())
                 self.info.emit(f"telemetry from {dg.senderAddress().toString()}:{dg.senderPort()}")
@@ -270,3 +280,59 @@ class SerialLink(Link):
         if not HAVE_SERIAL:
             return []
         return [p.portName() for p in QSerialPortInfo.availablePorts()]
+
+
+class ReplayLink(Link):
+    """Play a recorded .tlog back through the GCS at its original cadence.
+
+    Read-only (remote stays None, so commands are disabled); frames are fed to the
+    parser on a timer scaled by `speed`."""
+
+    def open(self, path="", speed=1.0, **kw) -> bool:
+        self.close()
+        from tlog import read_tlog
+        try:
+            self._records = read_tlog(str(path))
+        except OSError as e:
+            self.info.emit(f"replay open failed: {e}")
+            self.state.emit(False)
+            return False
+        if not self._records:
+            self.info.emit(f"replay: no frames in {path}")
+            self.state.emit(False)
+            return False
+        self.parser = core.Parser()
+        self.rx_bytes = 0
+        self._open = True
+        self._speed = max(0.1, float(speed))
+        self._i = 0
+        self._t0 = self._records[0][0]
+        self._wall0 = time.monotonic()
+        self._tick = QTimer(self)
+        self._tick.setInterval(20)
+        self._tick.timeout.connect(self._pump)
+        self._tick.start()
+        self.info.emit(f"replaying {len(self._records)} frames from {path} @ {self._speed:g}x")
+        self.state.emit(True)
+        return True
+
+    def _pump(self):
+        elapsed_us = (time.monotonic() - self._wall0) * 1e6 * self._speed
+        batch = []
+        while self._i < len(self._records):
+            t_us, fr = self._records[self._i]
+            if (t_us - self._t0) > elapsed_us:
+                break
+            self.rx_bytes += len(fr)
+            batch.extend(self.parser.feed(fr))
+            self._i += 1
+        if batch:
+            self.messages.emit(batch)
+        if self._i >= len(self._records):
+            self._tick.stop()
+            self.info.emit("replay complete")
+
+    def _teardown(self):
+        t = getattr(self, "_tick", None)
+        if t is not None:
+            t.stop()

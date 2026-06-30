@@ -321,6 +321,46 @@ def crc16(data: bytes) -> int:
     return crc
 
 
+def frame_total(buf, i):
+    """Total on-wire length of the v1/v2 frame starting at buf[i], or None if the
+    buffer doesn't yet hold all of it. Framing only -- no CRC check."""
+    n = len(buf)
+    b = buf[i]
+    if b != 0xFE and b != 0xFD:
+        return None
+    v2 = (b == 0xFD)
+    hdr = 10 if v2 else 6
+    if i + 1 >= n:
+        return None
+    payload = buf[i + 1]
+    sig = 0
+    if v2:
+        if i + 2 >= n:
+            return None
+        if buf[i + 2] & 0x01:
+            sig = 13
+    total = hdr + payload + 2 + sig
+    return total if i + total <= n else None
+
+
+def split_frames(buf):
+    """Split a byte buffer into complete MAVLink frames. Returns (frames, leftover)
+    where leftover is the trailing incomplete frame (inter-frame junk is dropped)."""
+    frames = []
+    n = len(buf)
+    i = 0
+    while i < n:
+        if buf[i] != 0xFE and buf[i] != 0xFD:
+            i += 1
+            continue
+        total = frame_total(buf, i)
+        if total is None:
+            return frames, bytes(buf[i:])      # incomplete frame -> keep tail
+        frames.append(bytes(buf[i:i + total]))
+        i += total
+    return frames, b""
+
+
 # ===========================================================================
 #  Pure-Python decode path -- the portable fallback used when the native
 #  C++/assembly core is unavailable (non-x86-64, Windows without a rebuild,

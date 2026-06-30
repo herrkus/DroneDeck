@@ -23,10 +23,13 @@ from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QHBoxLayout,
 import core
 import mavlink
 from vehicle import Vehicle
-from link import UdpLink, TcpLink, SerialLink
+from link import UdpLink, TcpLink, SerialLink, ReplayLink
 from mission import MissionProtocol, MissionItem, survey_grid
 from params import ParamManager, ParamDialog
+from tlog import TlogWriter
 from instruments import AttitudeIndicator, Compass
+
+LOG_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "logs")
 from mapview import MapView
 from panels import TelemetryPanel, MessageConsole, MavInspector
 
@@ -67,6 +70,10 @@ class DroneDeck(QMainWindow):
         self.params = ParamManager(lambda: self.link, self._sysid)
         self._param_dialog = None
 
+        # telemetry recording
+        self._recorder = None
+        self._last_log = ""
+
         self._build_ui()
         self._wire()
 
@@ -88,7 +95,7 @@ class DroneDeck(QMainWindow):
 
         tb.addWidget(QLabel(" Link "))
         self.transport_combo = QComboBox()
-        self.transport_combo.addItems(["UDP", "TCP", "Serial"])
+        self.transport_combo.addItems(["UDP", "TCP", "Serial", "Replay"])
         tb.addWidget(self.transport_combo)
         self.link_edit = QLineEdit(str(self.default_port))
         self.link_edit.setFixedWidth(150)
@@ -109,6 +116,10 @@ class DroneDeck(QMainWindow):
         self.btn_params = QPushButton("Params")
         self.btn_params.clicked.connect(self._open_params)
         tb.addWidget(self.btn_params)
+        self.btn_record = QPushButton("Record")
+        self.btn_record.setCheckable(True)
+        self.btn_record.toggled.connect(self._toggle_record)
+        tb.addWidget(self.btn_record)
         tb.addSeparator()
 
         self.chk_follow = QCheckBox("Follow")
@@ -253,7 +264,8 @@ class DroneDeck(QMainWindow):
         self.mission.downloaded.connect(self._on_mission_downloaded)
 
     def _make_link(self):
-        cls = {"TCP": TcpLink, "Serial": SerialLink}.get(self.transport_combo.currentText(), UdpLink)
+        cls = {"TCP": TcpLink, "Serial": SerialLink, "Replay": ReplayLink}.get(
+            self.transport_combo.currentText(), UdpLink)
         link = cls()
         link.messages.connect(self.vehicle.consume)
         link.messages.connect(self.mission.handle_messages)
@@ -261,6 +273,7 @@ class DroneDeck(QMainWindow):
         link.messages.connect(self.inspector.consume)
         link.info.connect(self._on_info)
         link.state.connect(self._on_state)
+        link.recorder = self._recorder        # keep recording across reconnects
         return link
 
     def _on_transport(self):
@@ -271,6 +284,9 @@ class DroneDeck(QMainWindow):
         elif t == "TCP":
             self.link_edit.setText("127.0.0.1:5760")
             self.link_edit.setPlaceholderText("host:port")
+        elif t == "Replay":
+            self.link_edit.setText(self._last_log)
+            self.link_edit.setPlaceholderText("path/to/file.tlog[@speed]")
         else:
             ports = SerialLink.available_ports()
             self.link_edit.setText(f"{ports[0] if ports else '/dev/ttyACM0'}:57600")
@@ -299,6 +315,9 @@ class DroneDeck(QMainWindow):
             elif t == "Serial":
                 port, _, baud = p.partition(":")
                 self.link.open(port=port, baud=int(baud or 57600))
+            elif t == "Replay":
+                path, _, sp = p.partition("@")
+                self.link.open(path=path.strip(), speed=float(sp or 1.0))
             else:
                 self.link.open(port=int(p or self.default_port))
         except ValueError:
@@ -328,6 +347,31 @@ class DroneDeck(QMainWindow):
             return
         self.link.arm(self._sysid(), arm)
         self._on_info(f"sent {'ARM' if arm else 'DISARM'} to system {self._sysid()}")
+
+    def _toggle_record(self, on):
+        if on:
+            try:
+                os.makedirs(LOG_DIR, exist_ok=True)
+                path = os.path.join(LOG_DIR, time.strftime("dronedeck-%Y%m%d-%H%M%S.tlog"))
+                self._recorder = TlogWriter(path)
+            except OSError as e:
+                self._on_info(f"record failed: {e}")
+                self.btn_record.setChecked(False)
+                return
+            self._last_log = path
+            if self.link is not None:
+                self.link.recorder = self._recorder
+            self.btn_record.setText("Recording")
+            self._on_info(f"recording to {os.path.basename(path)}")
+        else:
+            if self.link is not None:
+                self.link.recorder = None
+            n = self._recorder.count if self._recorder else 0
+            if self._recorder:
+                self._recorder.close()
+            self._recorder = None
+            self.btn_record.setText("Record")
+            self._on_info(f"recording stopped ({n} frames) -> {os.path.basename(self._last_log)}")
 
     def _open_params(self):
         if self._param_dialog is None:
