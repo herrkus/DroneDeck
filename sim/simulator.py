@@ -100,6 +100,11 @@ def main():
     theta = 0.0
     # centre so that at theta=0 the vehicle sits exactly at (lat,lon): no jump.
     loiter_center = [lat - RADIUS_M / M_PER_DEG, lon]
+    mission = []          # list of dicts: seq, lat, lon, alt, command, frame
+    auto_idx = 0          # current waypoint index in AUTO
+    up_expected = 0       # >0 while receiving an upload
+    up_items = []
+    up_next = 0
 
     def enter_loiter():
         nonlocal theta, loiter_center
@@ -127,14 +132,27 @@ def main():
             climb_rate = 3.0
             target_alt = CRUISE_ALT
 
+            do_orbit = False
             if not armed:
                 target_alt = alt
-            elif mode in (LOITER, AUTO):
-                theta += (SPEED / RADIUS_M) * dt
-                lat = loiter_center[0] + RADIUS_M * math.cos(theta) / M_PER_DEG
-                lon = loiter_center[1] + RADIUS_M * math.sin(theta) / (M_PER_DEG * cos_lat)
-                heading = math.degrees(math.atan2(math.cos(theta), -math.sin(theta))) % 360.0
-                target_alt = CRUISE_ALT
+            elif mode == LOITER:
+                do_orbit = True
+            elif mode == AUTO:
+                nav = [it for it in mission if it["command"] in (16, 22)
+                       and not (abs(it["lat"]) < 1e-6 and abs(it["lon"]) < 1e-6)]
+                if nav:
+                    if auto_idx >= len(nav):
+                        auto_idx = len(nav) - 1
+                    tgt = nav[auto_idx]
+                    lat, lon, rem, hdg = step_toward(lat, lon, tgt["lat"], tgt["lon"],
+                                                     SPEED * dt, cos_lat)
+                    if hdg is not None:
+                        heading = hdg
+                    target_alt = tgt["alt"] if tgt["alt"] > 0 else CRUISE_ALT
+                    if rem < 5.0 and auto_idx < len(nav) - 1:
+                        auto_idx += 1
+                else:
+                    do_orbit = True
             elif mode == GUIDED:
                 if guided_target:
                     lat, lon, _rem, hdg = step_toward(lat, lon, guided_target[0],
@@ -152,6 +170,13 @@ def main():
             elif mode == LAND:
                 target_alt = 0.0
 
+            if do_orbit:
+                theta += (SPEED / RADIUS_M) * dt
+                lat = loiter_center[0] + RADIUS_M * math.cos(theta) / M_PER_DEG
+                lon = loiter_center[1] + RADIUS_M * math.sin(theta) / (M_PER_DEG * cos_lat)
+                heading = math.degrees(math.atan2(math.cos(theta), -math.sin(theta))) % 360.0
+                target_alt = CRUISE_ALT
+
             if armed:
                 alt += max(-climb_rate * dt, min(climb_rate * dt, target_alt - alt))
                 if mode in (RTL, LAND) and target_alt == 0.0 and alt <= 0.5:
@@ -164,7 +189,7 @@ def main():
             climb = (alt - palt) / dt
 
             # bank into the turn while orbiting; near-level otherwise
-            bank = math.atan2(SPEED * SPEED, RADIUS_M * 9.81) if mode in (LOITER, AUTO) and armed else 0.0
+            bank = math.atan2(SPEED * SPEED, RADIUS_M * 9.81) if do_orbit else 0.0
             roll = bank + 0.03 * math.sin(t * 1.7)
             pitch = 0.03 * math.sin(t * 0.9)
             yaw = math.radians(heading)
@@ -253,6 +278,52 @@ def main():
                                                  float(m.fields.get("alt", CRUISE_ALT)))
                                 mode = GUIDED
                                 send(mavlink.STATUSTEXT, mavlink.enc_statustext(6, "Goto target set"))
+                            # ---- mission protocol (vehicle side) ----
+                            elif m.msgid == mavlink.MISSION_COUNT:
+                                up_expected = int(m.fields.get("count", 0))
+                                up_items = []
+                                up_next = 0
+                                if up_expected == 0:
+                                    mission = []
+                                    auto_idx = 0
+                                    send(mavlink.MISSION_ACK, mavlink.enc_mission_ack(0))
+                                else:
+                                    send(mavlink.MISSION_REQUEST_INT, mavlink.enc_mission_request_int(0))
+                            elif m.msgid == mavlink.MISSION_ITEM_INT:
+                                seq = int(m.fields.get("seq", -1))
+                                if up_expected and seq == up_next:
+                                    up_items.append({"seq": seq,
+                                                     "lat": m.fields["x"] / 1e7,
+                                                     "lon": m.fields["y"] / 1e7,
+                                                     "alt": float(m.fields["z"]),
+                                                     "command": int(m.fields["command"]),
+                                                     "frame": int(m.fields["frame"])})
+                                    up_next += 1
+                                    if up_next >= up_expected:
+                                        mission = up_items
+                                        up_expected = 0
+                                        auto_idx = 0
+                                        send(mavlink.MISSION_ACK, mavlink.enc_mission_ack(0))
+                                        send(mavlink.STATUSTEXT, mavlink.enc_statustext(
+                                            6, f"Mission received: {len(mission)} items"))
+                                    else:
+                                        send(mavlink.MISSION_REQUEST_INT,
+                                             mavlink.enc_mission_request_int(up_next))
+                            elif m.msgid == mavlink.MISSION_REQUEST_LIST:
+                                send(mavlink.MISSION_COUNT, mavlink.enc_mission_count(len(mission)))
+                            elif m.msgid == mavlink.MISSION_REQUEST_INT:
+                                seq = int(m.fields.get("seq", 0))
+                                if 0 <= seq < len(mission):
+                                    it = mission[seq]
+                                    send(mavlink.MISSION_ITEM_INT, mavlink.enc_mission_item_int(
+                                        it["seq"], it["lat"], it["lon"], it["alt"],
+                                        command=it["command"], frame=it.get("frame", 6),
+                                        current=1 if seq == 0 else 0))
+                            elif m.msgid == mavlink.MISSION_CLEAR_ALL:
+                                mission = []
+                                auto_idx = 0
+                                send(mavlink.MISSION_ACK, mavlink.enc_mission_ack(0))
+                                send(mavlink.STATUSTEXT, mavlink.enc_statustext(6, "Mission cleared"))
                 except BlockingIOError:
                     pass
                 except OSError:

@@ -52,6 +52,7 @@ class MapView(QWidget):
         self.veh = None                       # (lat, lon, heading) or None
         self.home = None
         self.trail = []
+        self.mission = []                     # list of (lat, lon) planned waypoints
         self._pending = set()
         self._drag = None
         self._press = None
@@ -73,6 +74,10 @@ class MapView(QWidget):
 
     def set_zoom(self, z):
         self.zoom = max(3, min(19, int(z)))
+        self.update()
+
+    def set_mission(self, pts):
+        self.mission = list(pts)
         self.update()
 
     # -- tile cache -----------------------------------------------------------
@@ -181,6 +186,22 @@ class MapView(QWidget):
             p.setBrush(QBrush(QColor(0, 160, 0)))
             p.drawEllipse(hp, 5, 5)
             p.drawText(QRectF(hp.x() + 8, hp.y() - 8, 50, 16), Qt.AlignVCenter, "H")
+
+        # planned mission: path + numbered waypoints
+        if self.mission:
+            pts = [self._ll_to_px(la, lo, cfx, cfy) for la, lo in self.mission]
+            if len(pts) > 1:
+                p.setPen(QPen(QColor(255, 205, 0, 230), 2))
+                p.drawPolyline(QPolygonF(pts))
+            wpf = QFont("DejaVu Sans Mono", 8)
+            wpf.setBold(True)
+            for i, pt in enumerate(pts):
+                p.setPen(QPen(QColor(40, 30, 0), 1.5))
+                p.setBrush(QBrush(QColor(255, 190, 0)))
+                p.drawEllipse(pt, 9, 9)
+                p.setPen(QColor(20, 20, 20))
+                p.setFont(wpf)
+                p.drawText(QRectF(pt.x() - 9, pt.y() - 8, 18, 16), Qt.AlignCenter, str(i))
 
         # vehicle marker (heading-rotated triangle, no 3D model)
         if self.veh:

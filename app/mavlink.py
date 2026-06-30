@@ -19,6 +19,15 @@ COMMAND_LONG = 76
 COMMAND_ACK = 77
 SET_POSITION_TARGET_GLOBAL_INT = 86
 STATUSTEXT = 253
+# mission protocol
+MISSION_CURRENT = 42
+MISSION_REQUEST_LIST = 43
+MISSION_COUNT = 44
+MISSION_CLEAR_ALL = 45
+MISSION_ITEM_REACHED = 46
+MISSION_ACK = 47
+MISSION_REQUEST_INT = 51
+MISSION_ITEM_INT = 73
 
 MSG_NAME = {
     HEARTBEAT: "HEARTBEAT",
@@ -31,6 +40,14 @@ MSG_NAME = {
     COMMAND_ACK: "COMMAND_ACK",
     SET_POSITION_TARGET_GLOBAL_INT: "SET_POSITION_TARGET_GLOBAL_INT",
     STATUSTEXT: "STATUSTEXT",
+    MISSION_CURRENT: "MISSION_CURRENT",
+    MISSION_REQUEST_LIST: "MISSION_REQUEST_LIST",
+    MISSION_COUNT: "MISSION_COUNT",
+    MISSION_CLEAR_ALL: "MISSION_CLEAR_ALL",
+    MISSION_ITEM_REACHED: "MISSION_ITEM_REACHED",
+    MISSION_ACK: "MISSION_ACK",
+    MISSION_REQUEST_INT: "MISSION_REQUEST_INT",
+    MISSION_ITEM_INT: "MISSION_ITEM_INT",
 }
 
 # Per-message CRC_EXTRA seed bytes (derived + validated in tests/crc_extra_calc.py).
@@ -38,6 +55,9 @@ CRC_EXTRA = {
     HEARTBEAT: 50, SYS_STATUS: 124, GPS_RAW_INT: 24, ATTITUDE: 39,
     GLOBAL_POSITION_INT: 104, VFR_HUD: 20, COMMAND_LONG: 152,
     COMMAND_ACK: 143, STATUSTEXT: 83, SET_POSITION_TARGET_GLOBAL_INT: 5,
+    MISSION_CURRENT: 28, MISSION_REQUEST_LIST: 132, MISSION_COUNT: 221,
+    MISSION_CLEAR_ALL: 232, MISSION_ITEM_REACHED: 11, MISSION_ACK: 153,
+    MISSION_REQUEST_INT: 196, MISSION_ITEM_INT: 38,
 }
 
 # Decoded-field order. Index i here is index i in Decoded.f[] from the C++ core.
@@ -52,6 +72,15 @@ FIELDS = {
     COMMAND_ACK: ["command", "result"],
     SET_POSITION_TARGET_GLOBAL_INT: ["lat_int", "lon_int", "alt", "type_mask"],
     STATUSTEXT: ["severity"],   # `text` is attached separately (string, not in f[])
+    MISSION_CURRENT: ["seq"],
+    MISSION_REQUEST_LIST: ["target_system", "target_component"],
+    MISSION_COUNT: ["count", "target_system", "target_component"],
+    MISSION_CLEAR_ALL: ["target_system", "target_component"],
+    MISSION_ITEM_REACHED: ["seq"],
+    MISSION_ACK: ["target_system", "target_component", "type"],
+    MISSION_REQUEST_INT: ["seq", "target_system", "target_component"],
+    MISSION_ITEM_INT: ["seq", "frame", "command", "current", "autocontinue",
+                       "param1", "param2", "param3", "param4", "x", "y", "z"],
 }
 
 # --- selected enums ---------------------------------------------------------
@@ -211,6 +240,38 @@ def enc_set_position_target_global_int(lat_deg, lon_deg, alt_rel,
                        frame & 0xFF)
 
 
+def enc_mission_count(count, target_system=1, target_component=1):
+    return struct.pack("<HBB", int(count) & 0xFFFF, target_system & 0xFF, target_component & 0xFF)
+
+
+def enc_mission_request_list(target_system=1, target_component=1):
+    return struct.pack("<BB", target_system & 0xFF, target_component & 0xFF)
+
+
+def enc_mission_request_int(seq, target_system=1, target_component=1):
+    return struct.pack("<HBB", int(seq) & 0xFFFF, target_system & 0xFF, target_component & 0xFF)
+
+
+def enc_mission_ack(result=0, target_system=1, target_component=1):
+    return struct.pack("<BBB", target_system & 0xFF, target_component & 0xFF, int(result) & 0xFF)
+
+
+def enc_mission_clear_all(target_system=1, target_component=1):
+    return struct.pack("<BB", target_system & 0xFF, target_component & 0xFF)
+
+
+def enc_mission_item_int(seq, lat_deg, lon_deg, alt, command=MAV_CMD_NAV_WAYPOINT,
+                         frame=MAV_FRAME_GLOBAL_RELATIVE_ALT_INT, current=0, autocontinue=1,
+                         param1=0.0, param2=0.0, param3=0.0, param4=0.0,
+                         target_system=1, target_component=1):
+    return struct.pack("<ffffiifHHBBBBB",
+                       float(param1), float(param2), float(param3), float(param4),
+                       int(lat_deg * 1e7), int(lon_deg * 1e7), float(alt),
+                       int(seq) & 0xFFFF, int(command) & 0xFFFF,
+                       target_system & 0xFF, target_component & 0xFF,
+                       frame & 0xFF, current & 0xFF, autocontinue & 0xFF)
+
+
 def crc16(data: bytes) -> int:
     """CRC-16/MCRF4XX over data only (no extra seed)."""
     crc = 0xFFFF
@@ -271,6 +332,17 @@ _WIRE = {
         ["time_boot_ms", "lat_int", "lon_int", "alt", "vx", "vy", "vz",
          "afx", "afy", "afz", "yaw", "yaw_rate", "type_mask",
          "target_system", "target_component", "coordinate_frame"], 53),
+    MISSION_CURRENT: ("<H", ["seq"], 2),
+    MISSION_REQUEST_LIST: ("<BB", ["target_system", "target_component"], 2),
+    MISSION_COUNT: ("<HBB", ["count", "target_system", "target_component"], 4),
+    MISSION_CLEAR_ALL: ("<BB", ["target_system", "target_component"], 2),
+    MISSION_ITEM_REACHED: ("<H", ["seq"], 2),
+    MISSION_ACK: ("<BBB", ["target_system", "target_component", "type"], 3),
+    MISSION_REQUEST_INT: ("<HBB", ["seq", "target_system", "target_component"], 4),
+    MISSION_ITEM_INT: ("<ffffiifHHBBBBB",
+                       ["param1", "param2", "param3", "param4", "x", "y", "z",
+                        "seq", "command", "target_system", "target_component",
+                        "frame", "current", "autocontinue"], 37),
 }
 
 

@@ -80,6 +80,14 @@ constexpr MsgInfo MSGS[] = {
     {77, 143,  3},   // COMMAND_ACK
     {86,   5, 53},   // SET_POSITION_TARGET_GLOBAL_INT
     {253, 83, 51},   // STATUSTEXT
+    {42,  28,  2},   // MISSION_CURRENT
+    {43, 132,  2},   // MISSION_REQUEST_LIST
+    {44, 221,  4},   // MISSION_COUNT
+    {45, 232,  2},   // MISSION_CLEAR_ALL
+    {46,  11,  2},   // MISSION_ITEM_REACHED
+    {47, 153,  3},   // MISSION_ACK
+    {51, 196,  4},   // MISSION_REQUEST_INT
+    {73,  38, 37},   // MISSION_ITEM_INT
 };
 
 const MsgInfo* find_info(uint32_t id) {
@@ -145,6 +153,32 @@ void decode(uint32_t msgid, const uint8_t* pl, Decoded& d) {
         push(pl[0]);
         std::memcpy(d.text, pl + 1, 50);
         d.text[50] = '\0';
+        break;
+    case 42: // MISSION_CURRENT: seq
+        push(rd_u16(pl + 0));
+        break;
+    case 43: // MISSION_REQUEST_LIST: target_system, target_component
+        push(pl[0]); push(pl[1]);
+        break;
+    case 44: // MISSION_COUNT: count, target_system, target_component
+        push(rd_u16(pl + 0)); push(pl[2]); push(pl[3]);
+        break;
+    case 45: // MISSION_CLEAR_ALL: target_system, target_component
+        push(pl[0]); push(pl[1]);
+        break;
+    case 46: // MISSION_ITEM_REACHED: seq
+        push(rd_u16(pl + 0));
+        break;
+    case 47: // MISSION_ACK: target_system, target_component, type
+        push(pl[0]); push(pl[1]); push(pl[2]);
+        break;
+    case 51: // MISSION_REQUEST_INT: seq, target_system, target_component
+        push(rd_u16(pl + 0)); push(pl[2]); push(pl[3]);
+        break;
+    case 73: // MISSION_ITEM_INT: seq, frame, command, current, autocontinue, param1..4, x, y, z
+        push(rd_u16(pl + 28)); push(pl[34]); push(rd_u16(pl + 30)); push(pl[35]); push(pl[36]);
+        push(rd_f32(pl + 0)); push(rd_f32(pl + 4)); push(rd_f32(pl + 8)); push(rd_f32(pl + 12));
+        push(rd_i32(pl + 16)); push(rd_i32(pl + 20)); push(rd_f32(pl + 24));
         break;
     default: break;
     }

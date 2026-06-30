@@ -111,6 +111,31 @@ def main():
             check(m.fields["lon_int"] == int(25.2797 * 1e7), f"spt lon {m.fields.get('lon_int')}")
             check(approx(m.fields["alt"], 50.0), f"spt alt {m.fields.get('alt')}")
 
+        # --- mission protocol messages ---
+        m = roundtrip(mavlink.MISSION_COUNT, mavlink.enc_mission_count(7), crc_fn)
+        if m:
+            check(m.fields["count"] == 7, f"mission_count {m.fields.get('count')}")
+
+        m = roundtrip(mavlink.MISSION_REQUEST_INT, mavlink.enc_mission_request_int(3), crc_fn)
+        if m:
+            check(m.fields["seq"] == 3, f"mission_request seq {m.fields.get('seq')}")
+
+        m = roundtrip(mavlink.MISSION_ACK, mavlink.enc_mission_ack(0), crc_fn)
+        if m:
+            check(m.fields["type"] == 0, f"mission_ack type {m.fields.get('type')}")
+
+        m = roundtrip(mavlink.MISSION_ITEM_INT,
+                      mavlink.enc_mission_item_int(2, 54.6872, 25.2797, 50.0,
+                                                   command=16, current=1, param1=5.0), crc_fn)
+        if m:
+            check(m.fields["seq"] == 2, f"item seq {m.fields.get('seq')}")
+            check(m.fields["command"] == 16, f"item command {m.fields.get('command')}")
+            check(m.fields["current"] == 1, f"item current {m.fields.get('current')}")
+            check(m.fields["x"] == int(54.6872 * 1e7), f"item x {m.fields.get('x')}")
+            check(m.fields["y"] == int(25.2797 * 1e7), f"item y {m.fields.get('y')}")
+            check(approx(m.fields["z"], 50.0), f"item z {m.fields.get('z')}")
+            check(approx(m.fields["param1"], 5.0), f"item param1 {m.fields.get('param1')}")
+
     # Assembly CRC must equal the independent Python CRC, byte-for-byte.
     sample = mavlink.enc_attitude(0.3, 0.4, 0.5, 7)
     head = bytes((len(sample), 0, 3, 1, mavlink.ATTITUDE))

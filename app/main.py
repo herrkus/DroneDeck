@@ -18,12 +18,13 @@ from PySide6.QtGui import QAction, QFont
 from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QHBoxLayout,
                                QVBoxLayout, QSplitter, QToolBar, QLineEdit,
                                QPushButton, QLabel, QCheckBox, QMessageBox, QScrollArea,
-                               QDockWidget, QComboBox, QInputDialog)
+                               QDockWidget, QComboBox, QInputDialog, QListWidget)
 
 import core
 import mavlink
 from vehicle import Vehicle
 from link import UdpLink, TcpLink, SerialLink
+from mission import MissionProtocol, MissionItem, survey_grid
 from instruments import AttitudeIndicator, Compass
 from mapview import MapView
 from panels import TelemetryPanel, MessageConsole
@@ -55,6 +56,11 @@ class DroneDeck(QMainWindow):
         self.vehicle = Vehicle()
         self.link = None
         self.default_port = port
+
+        # mission planning state
+        self.plan_mode = False
+        self.mission_items = []                         # list[MissionItem]
+        self.mission = MissionProtocol(lambda: self.link, self._sysid)
 
         self._build_ui()
         self._wire()
@@ -128,9 +134,31 @@ class DroneDeck(QMainWindow):
             tb2.addWidget(b)
             self._flight_btns.append(b)
         tb2.addSeparator()
-        hint = QLabel(" click map = Goto ")
-        hint.setStyleSheet("color:#8a90a0;")
-        tb2.addWidget(hint)
+        self.map_hint = QLabel(" click map = Goto ")
+        self.map_hint.setStyleSheet("color:#8a90a0;")
+        tb2.addWidget(self.map_hint)
+
+        # third toolbar row: mission planning
+        self.addToolBarBreak()
+        tb3 = QToolBar("Mission")
+        tb3.setMovable(False)
+        self.addToolBar(tb3)
+        tb3.addWidget(QLabel(" Plan "))
+        self.btn_plan = QPushButton("Plan mode")
+        self.btn_plan.setCheckable(True)
+        self.btn_plan.toggled.connect(self._toggle_plan)
+        tb3.addWidget(self.btn_plan)
+        self._mission_btns = []
+        for label, slot in (("Survey", self._survey), ("Clear", self._clear_mission),
+                            ("Upload", self._upload_mission), ("Download", self._download_mission)):
+            b = QPushButton(label)
+            b.clicked.connect(slot)
+            tb3.addWidget(b)
+            self._mission_btns.append((label, b))
+        tb3.addSeparator()
+        self.mission_status = QLabel("no mission")
+        self.mission_status.setStyleSheet("color:#8a90a0;")
+        tb3.addWidget(self.mission_status)
 
         # central layout: map | (instruments over telemetry)
         self.map = MapView()
@@ -177,6 +205,19 @@ class DroneDeck(QMainWindow):
         dock.setFeatures(QDockWidget.DockWidgetMovable | QDockWidget.DockWidgetFloatable)
         self.addDockWidget(Qt.BottomDockWidgetArea, dock)
 
+        # mission waypoint list, tabbed with Messages at the bottom
+        self.mission_list = QListWidget()
+        self.mission_list.setFont(QFont("DejaVu Sans Mono", 9))
+        self.mission_list.setMinimumHeight(90)
+        self.mission_list.setMaximumHeight(170)
+        mdock = QDockWidget("Mission", self)
+        mdock.setObjectName("mission_dock")
+        mdock.setWidget(self.mission_list)
+        mdock.setFeatures(QDockWidget.DockWidgetMovable | QDockWidget.DockWidgetFloatable)
+        self.addDockWidget(Qt.BottomDockWidgetArea, mdock)
+        self.tabifyDockWidget(dock, mdock)
+        dock.raise_()
+
         self.sb_info = QLabel("starting...")
         self.statusBar().addWidget(self.sb_info, 1)
         core_lbl = QLabel(f"core: {core.BACKEND} ")
@@ -190,11 +231,15 @@ class DroneDeck(QMainWindow):
         self.vehicle.status_text.connect(self.console.add_message)
         self.vehicle.command_ack.connect(self._on_command_ack)
         self.map.clicked.connect(self._on_map_click)
+        self.mission.progress.connect(self._on_mission_progress)
+        self.mission.finished.connect(self._on_mission_finished)
+        self.mission.downloaded.connect(self._on_mission_downloaded)
 
     def _make_link(self):
         cls = {"TCP": TcpLink, "Serial": SerialLink}.get(self.transport_combo.currentText(), UdpLink)
         link = cls()
         link.messages.connect(self.vehicle.consume)
+        link.messages.connect(self.mission.handle_messages)
         link.info.connect(self._on_info)
         link.state.connect(self._on_state)
         return link
@@ -300,6 +345,9 @@ class DroneDeck(QMainWindow):
             self._on_info("pause / hold position")
 
     def _on_map_click(self, lat, lon):
+        if self.plan_mode:
+            self._add_waypoint(lat, lon)
+            return
         if not self._has_vehicle():
             return
         alt = max(self.vehicle.alt_rel, 30.0)
@@ -308,6 +356,76 @@ class DroneDeck(QMainWindow):
                                 ) == QMessageBox.StandardButton.Yes:
             self.link.goto(self._sysid(), lat, lon, alt)
             self._on_info(f"goto {lat:.5f}, {lon:.5f} @ {alt:.0f} m")
+
+    # -- mission planning -----------------------------------------------------
+    def _toggle_plan(self, on):
+        self.plan_mode = on
+        self.map_hint.setText(" click map = add waypoint " if on else " click map = Goto ")
+        self.btn_plan.setText("Plan mode ON" if on else "Plan mode")
+
+    def _add_waypoint(self, lat, lon):
+        alt = self.mission_items[-1].alt if self.mission_items else 50.0
+        seq = len(self.mission_items)
+        self.mission_items.append(MissionItem(seq, lat, lon, alt))
+        self._refresh_mission_view()
+
+    def _refresh_mission_view(self):
+        self.mission_list.clear()
+        for it in self.mission_items:
+            self.mission_list.addItem(
+                f"{it.seq:2d}  {it.cmd_name:9s} {it.lat:10.6f} {it.lon:11.6f}  {it.alt:5.0f} m")
+        self.map.set_mission([(it.lat, it.lon) for it in self.mission_items])
+        n = len(self.mission_items)
+        self.mission_status.setText(f"{n} waypoint{'' if n == 1 else 's'}" if n else "no mission")
+
+    def _renumber(self):
+        for i, it in enumerate(self.mission_items):
+            it.seq = i
+
+    def _survey(self):
+        if len(self.mission_items) < 2:
+            QMessageBox.information(self, "Survey",
+                                    "Place at least 2 waypoints to outline the area, then Survey.")
+            return
+        alt = self.mission_items[0].alt or 50.0
+        grid = survey_grid([(it.lat, it.lon) for it in self.mission_items], spacing_m=35.0, alt=alt)
+        if grid:
+            self.mission_items = grid
+            self._refresh_mission_view()
+            self._on_info(f"survey grid: {len(grid)} waypoints")
+
+    def _clear_mission(self):
+        self.mission_items = []
+        self._refresh_mission_view()
+        if self._has_vehicle():
+            self.mission.clear()
+
+    def _upload_mission(self):
+        if not self._has_vehicle():
+            QMessageBox.information(self, "Upload", "No vehicle connected.")
+            return
+        if not self.mission_items:
+            QMessageBox.information(self, "Upload", "No waypoints to upload.")
+            return
+        self._renumber()
+        self.mission.upload(self.mission_items)
+
+    def _download_mission(self):
+        if not self._has_vehicle():
+            QMessageBox.information(self, "Download", "No vehicle connected.")
+            return
+        self.mission.download()
+
+    def _on_mission_progress(self, msg):
+        self.mission_status.setText(msg)
+
+    def _on_mission_finished(self, ok, msg):
+        self.mission_status.setText(msg)
+        self.console.add_note(f"mission: {msg}", "#4caf50" if ok else "#ff6b6b")
+
+    def _on_mission_downloaded(self, items):
+        self.mission_items = list(items)
+        self._refresh_mission_view()
 
     def _set_follow(self, on):
         self.map.follow = on
@@ -342,6 +460,8 @@ class DroneDeck(QMainWindow):
         self.mode_combo.setEnabled(connected)
         for b in self._flight_btns:
             b.setEnabled(connected)
+        for label, b in self._mission_btns:
+            b.setEnabled(connected if label in ("Upload", "Download") else True)
 
     def closeEvent(self, e):
         if self.link is not None:
