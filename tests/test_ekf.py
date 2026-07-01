@@ -42,4 +42,15 @@ v2._on_estimator_status(est)
 assert v2.have_ekf and abs(v2.ekf_vel_var - 0.12) < 1e-4 and abs(v2.ekf_compass_var - 0.42) < 1e-4
 assert abs(v2.ekf_variance_max() - 0.42) < 1e-4 and v2.ekf_ok()
 
+# ESTIMATOR_STATUS flags -> named badges (panels helpers are pure functions, no Qt app)
+import panels
+states = dict((label, (on, risk)) for label, on, risk in panels.ekf_flag_states(831))
+for cap in ("att", "vel-h", "vel-v", "pos-h-rel", "pos-h-abs", "pos-v-abs", "pred-h-rel", "pred-h-abs"):
+    assert states[cap][0], cap                    # capability bits set in 831
+for clear in ("pos-v-agl", "const-pos", "gps-glitch", "accel-err"):
+    assert not states[clear][0], clear            # clear in 831
+assert states["gps-glitch"][1] and states["accel-err"][1] and states["const-pos"][1]   # risk-marked
+assert '#e05050">gps-glitch' in panels.ekf_flags_html(mavlink.ESTIMATOR_GPS_GLITCH)     # risk set -> red
+assert '#37d67a">att' in panels.ekf_flags_html(mavlink.ESTIMATOR_ATTITUDE)              # capability set -> green
+
 print("EKF PASSED")

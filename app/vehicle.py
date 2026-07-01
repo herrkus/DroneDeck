@@ -259,7 +259,8 @@ class Vehicle(QObject):
     def ekf_ok(self):
         """Healthy when attitude + horizontal velocity + a horizontal position solution
         are all flagged and no core variance is in the red (>= 1.0)."""
-        need = 1 | 2 | 16          # ATTITUDE | VELOCITY_HORIZ | POS_HORIZ_ABS
+        need = (mavlink.ESTIMATOR_ATTITUDE | mavlink.ESTIMATOR_VELOCITY_HORIZ
+                | mavlink.ESTIMATOR_POS_HORIZ_ABS)
         return (self.ekf_flags & need) == need and self.ekf_variance_max() < 1.0
 
     def _on_sys_status(self, f):

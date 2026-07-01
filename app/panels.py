@@ -15,6 +15,37 @@ import mavlink
 
 _MONO = QFont("DejaVu Sans Mono", 10)
 
+# ESTIMATOR_STATUS flag bits -> (short label, is_risk). Risk bits are alarming when SET;
+# capability bits are reassuring when set. Order matches the MAVLink bit order.
+EKF_FLAG_BITS = [
+    (mavlink.ESTIMATOR_ATTITUDE, "att", False),
+    (mavlink.ESTIMATOR_VELOCITY_HORIZ, "vel-h", False),
+    (mavlink.ESTIMATOR_VELOCITY_VERT, "vel-v", False),
+    (mavlink.ESTIMATOR_POS_HORIZ_REL, "pos-h-rel", False),
+    (mavlink.ESTIMATOR_POS_HORIZ_ABS, "pos-h-abs", False),
+    (mavlink.ESTIMATOR_POS_VERT_ABS, "pos-v-abs", False),
+    (mavlink.ESTIMATOR_POS_VERT_AGL, "pos-v-agl", False),
+    (mavlink.ESTIMATOR_CONST_POS_MODE, "const-pos", True),
+    (mavlink.ESTIMATOR_PRED_POS_HORIZ_REL, "pred-h-rel", False),
+    (mavlink.ESTIMATOR_PRED_POS_HORIZ_ABS, "pred-h-abs", False),
+    (mavlink.ESTIMATOR_GPS_GLITCH, "gps-glitch", True),
+    (mavlink.ESTIMATOR_ACCEL_ERROR, "accel-err", True),
+]
+
+
+def ekf_flag_states(flags):
+    """[(label, is_set, is_risk), ...] for the estimator status flag bits."""
+    return [(label, bool(flags & bit), risk) for bit, label, risk in EKF_FLAG_BITS]
+
+
+def ekf_flags_html(flags):
+    """Render the flag set as coloured chips: risk-set red, capability-set green, unset dim."""
+    out = []
+    for label, on, risk in ekf_flag_states(flags):
+        color = "#e05050" if (on and risk) else "#37d67a" if on else "#55607a"
+        out.append(f'<span style="color:{color}">{label}</span>')
+    return " ".join(out)
+
 
 class TelemetryPanel(QWidget):
     groupsChanged = Signal()               # user toggled which groups are shown
@@ -631,6 +662,10 @@ class SystemsPanel(QWidget):
         ef.addRow("Pos horiz var", self.e_ph)
         ef.addRow("Pos vert var", self.e_pv)
         ef.addRow("Compass var", self.e_comp)
+        self.e_flags = QLabel("--")
+        self.e_flags.setWordWrap(True)
+        self.e_flags.setTextFormat(Qt.RichText)
+        ef.addRow("Flags", self.e_flags)
         lay.addWidget(ekf)
 
         alt = QGroupBox("Altitude")
@@ -676,10 +711,12 @@ class SystemsPanel(QWidget):
             ok = ve.ekf_ok()
             self.e_status.setText("OK" if ok else "CHECK")
             self.e_status.setStyleSheet("color:#37d67a;" if ok else "color:#e05050;")
+            self.e_flags.setText(ekf_flags_html(ve.ekf_flags))
         else:
             for lbl in (self.e_vel, self.e_ph, self.e_pv, self.e_comp):
                 lbl.setText("--"); lbl.setStyleSheet("")
             self.e_status.setText("--"); self.e_status.setStyleSheet("")
+            self.e_flags.setText("--")
         self.b_cells.setText("  ".join(f"{c:.2f}" for c in ve.cells) if ve.cells else "--")
         self.vib_bars.set_values(ve.vibration)
         self.vib_clip.setText("clip {} / {} / {}".format(*ve.clipping))
