@@ -347,6 +347,9 @@ class DroneDeck(QMainWindow):
         tb.addWidget(self.btn_record)
         tb.addSeparator()
 
+        self.btn_center = QPushButton("Center")
+        self.btn_center.clicked.connect(self._center_on_vehicle)
+        tb.addWidget(self.btn_center)
         self.chk_follow = QCheckBox("Follow")
         self.chk_follow.setChecked(True)
         self.chk_follow.toggled.connect(self._set_follow)
@@ -470,6 +473,7 @@ class DroneDeck(QMainWindow):
 
         # central layout: map | (instruments over telemetry)
         self.map = MapView()
+        self.map.followChanged.connect(self._on_map_follow_changed)
         right = QWidget()
         right.setMinimumWidth(360)
         rlay = QVBoxLayout(right)
@@ -1769,6 +1773,19 @@ class DroneDeck(QMainWindow):
         if on and self.vehicle.have_position:
             self.map.center = (self.vehicle.lat, self.vehicle.lon)
 
+    def _center_on_vehicle(self):
+        """One-shot recenter on the vehicle (QGC 'center on vehicle'); no follow change."""
+        if not self.map.center_on_vehicle():
+            self.statusBar().showMessage("No position fix yet", 2000)
+
+    def _on_map_follow_changed(self, on):
+        """Keep the Follow checkbox in sync when the map auto-detaches on pan / re-attaches on
+        double-click. Block signals so this doesn't re-enter _set_follow."""
+        if self.chk_follow.isChecked() != on:
+            self.chk_follow.blockSignals(True)
+            self.chk_follow.setChecked(on)
+            self.chk_follow.blockSignals(False)
+
     # -- refresh --------------------------------------------------------------
     def _refresh_traffic(self, ve):
         """Rebuild the ADSB traffic table from self.traffic, with distance + bearing from
@@ -1922,6 +1939,7 @@ class DroneDeck(QMainWindow):
         self.btn_record.setToolTip("Record telemetry to a .tlog file for replay")
         self.btn_help.setToolTip("Keyboard shortcuts & quick help  (F1)")
         self.chk_follow.setToolTip("Keep the map centred on the vehicle  (F)")
+        self.btn_center.setToolTip("Recentre the map on the vehicle once  (C)")
         self.transport_combo.setToolTip("Link type: UDP / TCP / Serial / Replay a .tlog")
         self.link_edit.setToolTip("UDP port, TCP host:port, serial port:baud, or .tlog path")
         self.vehicle_combo.setToolTip("Select which vehicle to control")
@@ -1942,6 +1960,7 @@ class DroneDeck(QMainWindow):
         sc("Ctrl+Space", self._pause)
         sc("Ctrl+P", self._open_params)
         sc("F", self.chk_follow.toggle)
+        sc("C", self._center_on_vehicle)
         sc("J", self.btn_joystick.toggle)
         sc("+", lambda: self.map.set_zoom(self.map.zoom + 1))
         sc("=", lambda: self.map.set_zoom(self.map.zoom + 1))
@@ -1990,6 +2009,7 @@ class DroneDeck(QMainWindow):
             "<tr><td><b>Ctrl+R</b></td><td>return to launch</td>"
             "<td><b>Ctrl+Space</b></td><td>pause / hold</td></tr>"
             "<tr><td><b>F</b></td><td>follow vehicle</td><td><b>J</b></td><td>joystick</td></tr>"
+            "<tr><td><b>C</b></td><td>centre on vehicle</td><td></td><td></td></tr>"
             "<tr><td><b>+ / &minus;</b></td><td>zoom map</td>"
             "<td><b>Ctrl+P</b></td><td>parameters</td></tr>"
             "<tr><td><b>F1</b></td><td>this help</td><td></td><td></td></tr>"

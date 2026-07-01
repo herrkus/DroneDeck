@@ -52,6 +52,7 @@ class MapView(QWidget):
     wpAction = Signal(str, int)               # right-click a waypoint -> (action, wp_index)
     waypoint_selected = Signal(int)           # a planned waypoint was clicked
     waypoint_moved = Signal(int, float, float)  # waypoint dragged -> (index, lat, lon)
+    followChanged = Signal(bool)              # follow-vehicle flag flipped (pan detaches it)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -91,6 +92,23 @@ class MapView(QWidget):
         if self.follow:
             self.center = (lat, lon)
         self.update()
+
+    def set_follow(self, on):
+        """Set the follow-vehicle flag, emitting followChanged only on an actual change so the
+        toolbar checkbox can track auto-detach on pan / re-attach on double-click without loops."""
+        on = bool(on)
+        if on != self.follow:
+            self.follow = on
+            self.followChanged.emit(on)
+
+    def center_on_vehicle(self):
+        """One-shot recenter on the vehicle's last known position (no follow change).
+        Returns True if a position was known."""
+        if self.veh:
+            self.center = (self.veh[0], self.veh[1])
+            self.update()
+            return True
+        return False
 
     def set_zoom(self, z):
         self.zoom = max(3, min(19, int(z)))
@@ -419,7 +437,7 @@ class MapView(QWidget):
         d = e.position() - self._drag
         if abs(d.x()) + abs(d.y()) > 2:
             self._dragged = True
-            self.follow = False        # panning detaches from the vehicle
+            self.set_follow(False)     # panning detaches from the vehicle (syncs the toolbar)
         self._drag = e.position()
         cfx, cfy = deg2num(self.center[0], self.center[1], self.zoom)
         self.center = num2deg(cfx - d.x() / TILE, cfy - d.y() / TILE, self.zoom)
@@ -454,7 +472,7 @@ class MapView(QWidget):
         menu.exec(e.globalPos())
 
     def mouseDoubleClickEvent(self, _):
-        self.follow = True
+        self.set_follow(True)          # re-attach to the vehicle (syncs the toolbar)
         if self.veh:
             self.center = (self.veh[0], self.veh[1])
         self.update()
