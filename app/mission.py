@@ -271,6 +271,7 @@ def validate_mission(items):
 
 class MissionProtocol(QObject):
     progress = Signal(str)          # human-readable step
+    progress_n = Signal(int, int)   # (done, total) -- drives a progress bar
     finished = Signal(bool, str)    # ok, message
     downloaded = Signal(list)       # list[MissionItem]
 
@@ -321,6 +322,7 @@ class MissionProtocol(QObject):
         self.state = "upload"
         self.retries = 0
         self.progress.emit(f"uploading {len(self.items)} items")
+        self.progress_n.emit(0, len(self.items))
         self._link().send_mission_count(self._target(), len(self.items), self.mtype)
         self._arm()
 
@@ -366,6 +368,7 @@ class MissionProtocol(QObject):
                 self.retries = 0
                 self._link().send_mission_item(self._target(), self.items[seq], self.mtype)
                 self.progress.emit(f"sent item {seq + 1}/{len(self.items)}")
+                self.progress_n.emit(seq + 1, len(self.items))
                 self._arm()
         elif self.state == "upload" and mid == mavlink.MISSION_ACK:
             res = int(m.fields.get("type", 0))
@@ -381,6 +384,7 @@ class MissionProtocol(QObject):
                 self._done(True, "no mission on vehicle")
                 return
             self.state = "dl_item"
+            self.progress_n.emit(0, self.expected)
             self._link().send_mission_request_int(self._target(), 0, self.mtype)
             self._arm()
         elif self.state == "dl_item" and mid == mavlink.MISSION_ITEM_INT:
@@ -403,6 +407,7 @@ class MissionProtocol(QObject):
                 self._done(True, f"downloaded {len(self.items)} items")
             else:
                 self.progress.emit(f"item {self.next_seq}/{self.expected}")
+                self.progress_n.emit(self.next_seq, self.expected)
                 self._link().send_mission_request_int(self._target(), self.next_seq, self.mtype)
                 self._arm()
         elif self.state == "clear" and mid == mavlink.MISSION_ACK:

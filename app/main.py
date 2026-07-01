@@ -22,7 +22,8 @@ from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QHBoxLayout,
                                QPushButton, QLabel, QCheckBox, QMessageBox, QScrollArea,
                                QDockWidget, QComboBox, QInputDialog, QListWidget,
                                QGroupBox, QTabWidget, QSpinBox, QDialog, QFormLayout,
-                               QDoubleSpinBox, QDialogButtonBox, QFileDialog, QMenu)
+                               QDoubleSpinBox, QDialogButtonBox, QFileDialog, QMenu,
+                               QProgressBar)
 
 import core
 import mavlink
@@ -458,6 +459,12 @@ class DroneDeck(QMainWindow):
         self.mission_status = QLabel("no mission")
         self.mission_status.setStyleSheet("color:#8a90a0;")
         tb3.addWidget(self.mission_status)
+        self.mission_progress = QProgressBar()
+        self.mission_progress.setMaximumWidth(130)
+        self.mission_progress.setMaximumHeight(14)
+        self.mission_progress.setTextVisible(True)
+        self.mission_progress.hide()          # shown only during a transfer
+        tb3.addWidget(self.mission_progress)
 
         self._setup_usability()   # tooltips + keyboard shortcuts (all toolbar widgets exist now)
 
@@ -816,6 +823,7 @@ class DroneDeck(QMainWindow):
         self.map.waypoint_selected.connect(self._wp_selected)
         self.map.waypoint_moved.connect(self._wp_moved)
         self.mission.progress.connect(self._on_mission_progress)
+        self.mission.progress_n.connect(self._on_mission_progress_n)
         self.mission.finished.connect(self._on_mission_finished)
         self.mission.downloaded.connect(self._on_mission_downloaded)
 
@@ -1666,9 +1674,17 @@ class DroneDeck(QMainWindow):
     def _on_mission_progress(self, msg):
         self.mission_status.setText(msg)
 
+    def _on_mission_progress_n(self, done, total):
+        if total > 0:
+            self.mission_progress.setRange(0, total)
+            self.mission_progress.setValue(done)
+            self.mission_progress.setFormat(f"%v/{total}")
+            self.mission_progress.show()
+
     def _on_mission_finished(self, ok, msg):
         self.mission_status.setText(msg)
         self.console.add_note(f"mission: {msg}", "#4caf50" if ok else "#ff6b6b")
+        self.mission_progress.hide()          # transfer over -- status label carries the result
 
     def _on_mission_downloaded(self, items):
         mt = self.mission.mtype
