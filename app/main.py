@@ -637,7 +637,7 @@ class DroneDeck(QMainWindow):
 
     # -- calibration (radio + sensors) ----------------------------------------
     def _open_calibration(self):
-        dlg = CalibrationDialog(lambda: self.link, self)
+        dlg = CalibrationDialog(lambda: self.link, self.params, self)
         dlg.radio.saveRequested.connect(self._cal_write_params)
         dlg.sensor.calRequested.connect(self._cal_sensor)
         dlg.exec()

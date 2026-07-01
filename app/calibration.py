@@ -13,7 +13,8 @@ from __future__ import annotations
 from PySide6.QtCore import Qt, Signal, QRectF
 from PySide6.QtGui import QPainter, QColor, QPen, QFont
 from PySide6.QtWidgets import (QDialog, QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
-                               QLabel, QTabWidget, QListWidget, QListWidgetItem)
+                               QLabel, QTabWidget, QListWidget, QListWidgetItem,
+                               QLineEdit, QFormLayout)
 
 import mavlink
 
@@ -177,19 +178,112 @@ class SensorCalibrationWidget(QWidget):
         self.log.scrollToBottom()
 
 
+class SafetyWidget(QWidget):
+    """Vehicle-setup Safety page: reads + writes the autopilot's safety parameters
+    through the read-back-confirmed ParamManager. Autopilot-agnostic -- only the
+    parameters the vehicle actually reports are shown (PX4 and ArduPilot names)."""
+
+    SAFETY_PARAMS = [
+        ("COM_DL_LOSS_T",   "PX4: datalink-loss timeout (s)"),
+        ("NAV_RCL_ACT",     "PX4: RC-loss action"),
+        ("NAV_DLL_ACT",     "PX4: datalink-loss action"),
+        ("COM_LOW_BAT_ACT", "PX4: low-battery action"),
+        ("GF_ACTION",       "PX4: geofence breach action"),
+        ("GF_MAX_HOR_DIST", "PX4: geofence max distance (m)"),
+        ("RTL_RETURN_ALT",  "PX4: RTL return altitude (m)"),
+        ("RTL_DESCEND_ALT", "PX4: RTL descend altitude (m)"),
+        ("COM_DISARM_LAND", "PX4: auto-disarm after land (s)"),
+        ("FS_THR_ENABLE",   "APM: throttle failsafe"),
+        ("FS_BATT_ENABLE",  "APM: battery failsafe"),
+        ("BATT_LOW_VOLT",   "APM: battery low voltage (V)"),
+        ("FENCE_ENABLE",    "APM: geofence enable"),
+        ("RTL_ALT",         "APM: RTL altitude (cm)"),
+    ]
+
+    def __init__(self, mgr, parent=None):
+        super().__init__(parent)
+        self.mgr = mgr
+        self.rows = {}                    # name -> (QLabel, QLineEdit)
+        lay = QVBoxLayout(self)
+        info = QLabel("Safety parameters the vehicle reports. Edit a value and Write; "
+                      "each write is confirmed by read-back (green = confirmed, red = failed).")
+        info.setWordWrap(True)
+        info.setStyleSheet("color:#8a90a0;")
+        lay.addWidget(info)
+        self.form = QFormLayout()
+        for name, label in self.SAFETY_PARAMS:
+            lbl, edit = QLabel(label), QLineEdit()
+            edit.setPlaceholderText("—")
+            self.form.addRow(lbl, edit)
+            lbl.hide(); edit.hide()
+            self.rows[name] = (lbl, edit)
+        lay.addLayout(self.form)
+        lay.addStretch(1)
+        row = QHBoxLayout()
+        self.status = QLabel("press Refresh to load")
+        self.status.setStyleSheet("color:#8a90a0;")
+        btn_refresh = QPushButton("Refresh")
+        btn_refresh.clicked.connect(self.refresh)
+        btn_write = QPushButton("Write changed")
+        btn_write.clicked.connect(self._write)
+        row.addWidget(self.status, 1)
+        row.addWidget(btn_refresh)
+        row.addWidget(btn_write)
+        lay.addLayout(row)
+        self.mgr.updated.connect(self._on_value)
+        self.mgr.set_result.connect(self._on_set_result)
+
+    def refresh(self):
+        self.status.setText("requesting safety parameters...")
+        self.mgr.request([n for n, _ in self.SAFETY_PARAMS])
+
+    def _on_value(self, name, val):
+        if name in self.rows:
+            lbl, edit = self.rows[name]
+            lbl.show(); edit.show()
+            if not edit.hasFocus():          # don't overwrite what the user is typing
+                edit.setText(f"{val:g}")
+                edit.setStyleSheet("")
+
+    def _write(self):
+        n = 0
+        for name, (lbl, edit) in self.rows.items():
+            if edit.isHidden() or not edit.text().strip():   # isHidden = explicit flag
+                continue
+            try:
+                val = float(edit.text())
+            except ValueError:
+                edit.setStyleSheet("color:#ff6b6b;")
+                continue
+            cur = self.mgr.values.get(name)
+            if cur is None or abs(val - cur) > 1e-9:
+                self.mgr.set(name, val)
+                n += 1
+        self.status.setText(f"writing {n} parameter(s)..." if n else "no changes to write")
+
+    def _on_set_result(self, name, ok, msg):
+        if name in self.rows:
+            self.status.setText(msg)
+            self.rows[name][1].setStyleSheet("color:#37d67a;" if ok else "color:#ff6b6b;")
+
+
 class CalibrationDialog(QDialog):
     """Setup view: Radio + Sensors tabs, fed live from the link while open."""
 
-    def __init__(self, link_getter, parent=None):
+    def __init__(self, link_getter, param_mgr=None, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Vehicle Setup — Calibration")
-        self.resize(560, 420)
+        self.resize(560, 460)
         self._link = link_getter
         self.radio = RcCalibrationWidget()
         self.sensor = SensorCalibrationWidget()
         tabs = QTabWidget()
         tabs.addTab(self.radio, "Radio")
         tabs.addTab(self.sensor, "Sensors")
+        if param_mgr is not None:
+            self.safety = SafetyWidget(param_mgr)
+            tabs.addTab(self.safety, "Safety")
+            self.safety.refresh()          # auto-request the safety params on open
         lay = QVBoxLayout(self)
         lay.addWidget(tabs)
         link = self._link()

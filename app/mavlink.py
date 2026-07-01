@@ -494,9 +494,32 @@ def enc_param_value(param_id, value, param_type=MAV_PARAM_TYPE_REAL32, count=1, 
                        _pid(param_id), param_type & 0xFF)
 
 
+_PARAM_INT_FMT = {1: ("<B", 1), 2: ("<b", 1), 3: ("<H", 2), 4: ("<h", 2),
+                  5: ("<I", 4), 6: ("<i", 4), 7: ("<q", 8), 8: ("<q", 8)}
+
+
+def param_decode(raw_float, ptype):
+    """PX4 'bytewise' params: for integer types the param_value field carries the
+    raw integer bits packed into the float32 slot -- reinterpret them. ArduPilot
+    reports everything as REAL32, so this is a no-op there."""
+    if ptype in _PARAM_INT_FMT:
+        fmt, size = _PARAM_INT_FMT[ptype]
+        return float(struct.unpack(fmt, (struct.pack("<f", raw_float) + b"\x00" * 8)[:size])[0])
+    return raw_float
+
+
+def param_encode(value, ptype):
+    """Inverse of param_decode: pack an integer value's bits into the float32
+    PARAM_SET slot (PX4). Floats pass straight through."""
+    if ptype in _PARAM_INT_FMT:
+        fmt, size = _PARAM_INT_FMT[ptype]
+        return struct.unpack("<f", (struct.pack(fmt, int(round(value))) + b"\x00" * 8)[:4])[0]
+    return float(value)
+
+
 def enc_param_set(param_id, value, param_type=MAV_PARAM_TYPE_REAL32,
                   target_system=1, target_component=1):
-    return struct.pack("<fBB16sB", float(value), target_system & 0xFF,
+    return struct.pack("<fBB16sB", param_encode(value, param_type), target_system & 0xFF,
                        target_component & 0xFF, _pid(param_id), param_type & 0xFF)
 
 

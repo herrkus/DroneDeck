@@ -65,6 +65,16 @@ class ParamManager(QObject):
         self._link().request_params(self._target())
         self.timer.start(TIMEOUT_MS)
 
+    def request(self, names):
+        """Request specific parameters by name (PARAM_REQUEST_READ) -- for setup
+        pages that need a handful of params, not the whole 1000+ list. Values arrive
+        via the `updated` signal and are stored in self.values / self.type_of."""
+        if not self._ready():
+            return
+        link, tgt = self._link(), self._target()
+        for name in names:
+            link.request_param_read(tgt, param_id=name)
+
     def set(self, name, value):
         if not self._ready():
             self.finished.emit(False, "no vehicle connected")
@@ -117,12 +127,13 @@ class ParamManager(QObject):
         name = m.fields.get("param_id", "")
         if not name:
             return
-        val = float(m.fields.get("param_value", 0.0))
+        ptype = int(m.fields.get("param_type", mavlink.MAV_PARAM_TYPE_REAL32))
+        val = mavlink.param_decode(float(m.fields.get("param_value", 0.0)), ptype)
         idx = int(m.fields.get("param_index", 0))
         cnt = int(m.fields.get("param_count", 0))
         self.values[name] = val
         self.index_of[name] = idx
-        self.type_of[name] = int(m.fields.get("param_type", mavlink.MAV_PARAM_TYPE_REAL32))
+        self.type_of[name] = ptype
         self.updated.emit(name, val)
         # confirm a pending PARAM_SET once the vehicle echoes our value back
         if name in self.pending:
