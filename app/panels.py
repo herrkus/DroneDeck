@@ -656,6 +656,51 @@ class _VibBars(QWidget):
         p.end()
 
 
+class _CellBars(QWidget):
+    """One vertical bar per battery cell, filled by voltage over the LiPo 3.2-4.2 V range
+    and coloured green (>=3.7) / amber (>=3.5) / red, with the reading beneath each bar."""
+    LO, HI = 3.2, 4.2
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setMinimumHeight(48)
+        self.cells = []
+
+    def set_cells(self, cells):
+        self.cells = list(cells or [])
+        self.update()
+
+    def paintEvent(self, _):
+        p = QPainter(self)
+        p.setRenderHint(QPainter.Antialiasing)
+        p.fillRect(self.rect(), QColor(22, 24, 29))
+        if not self.cells:
+            p.setPen(QColor(120, 126, 136))
+            p.drawText(self.rect(), Qt.AlignCenter, "no cell data")
+            p.end()
+            return
+        n = len(self.cells)
+        gap = 4.0
+        bw = max(6.0, (self.width() - (n + 1) * gap) / n)
+        top, bot = 4.0, self.height() - 14.0
+        H = max(1.0, bot - top)
+        for i, v in enumerate(self.cells):
+            x = gap + i * (bw + gap)
+            frac = max(0.0, min(1.0, (v - self.LO) / (self.HI - self.LO)))
+            col = (QColor(120, 210, 120) if v >= 3.7 else
+                   QColor(230, 180, 60) if v >= 3.5 else QColor(230, 90, 70))
+            p.setPen(Qt.NoPen)
+            p.setBrush(QColor(38, 42, 50))
+            p.drawRoundedRect(QRectF(x, top, bw, H), 2, 2)
+            fh = H * frac
+            p.setBrush(col)
+            p.drawRoundedRect(QRectF(x, bot - fh, bw, fh), 2, 2)
+            p.setPen(QColor(210, 214, 220))
+            p.setFont(QFont("DejaVu Sans", 7))
+            p.drawText(QRectF(x - 2, bot + 1, bw + 4, 12), Qt.AlignCenter, f"{v:.2f}")
+        p.end()
+
+
 class SystemsPanel(QWidget):
     """Detailed battery, vibration and altitude readouts, fed from BATTERY_STATUS,
     VIBRATION and ALTITUDE -- the QGC-style 'systems' instrument view."""
@@ -676,6 +721,8 @@ class SystemsPanel(QWidget):
         bf.addRow("Time left", self.b_time)
         bf.addRow("Temperature", self.b_temp)
         bf.addRow("Cells (V)", self.b_cells)
+        self.cell_bars = _CellBars()
+        bf.addRow(self.cell_bars)
         lay.addWidget(bat)
 
         vib = QGroupBox("Vibration")
@@ -768,6 +815,7 @@ class SystemsPanel(QWidget):
             for lbl in (self.g_roll, self.g_pitch, self.g_yaw):
                 lbl.setText("--")
         self.b_cells.setText("  ".join(f"{c:.2f}" for c in ve.cells) if ve.cells else "--")
+        self.cell_bars.set_cells(ve.cells)
         self.vib_bars.set_values(ve.vibration)
         self.vib_clip.setText("clip {} / {} / {}".format(*ve.clipping))
         self.a_amsl.setText(f"{ve.alt_msl:.1f} m")
