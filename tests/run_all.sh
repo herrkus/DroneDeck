@@ -116,6 +116,7 @@ check "geofence"            ""                        tests/test_geofence.py
 check "guided"              ""                        tests/test_guided.py
 check "settings"            ""                        tests/test_settings.py
 check "links_manager"       ""                        tests/test_links_manager.py
+check "reconnect"           ""                        tests/test_reconnect.py
 check "smoke (native)"      ""                        tests/smoke_gui.py
 check "smoke (python)"      "DRONEDECK_FORCE_PYTHON=1" tests/smoke_gui.py
 
