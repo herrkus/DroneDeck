@@ -337,10 +337,17 @@ class DroneDeck(QMainWindow):
 
         # QGC-style status strip above the split view
         self.status_strip = StatusStrip()
+        # prominent link-loss banner (hidden until heartbeats go stale mid-session)
+        self.link_banner = QLabel("")
+        self.link_banner.setAlignment(Qt.AlignCenter)
+        self.link_banner.setStyleSheet(
+            "background:#c02020; color:white; font-weight:bold; padding:6px; font-size:13px;")
+        self.link_banner.hide()
         central = QWidget()
         cv = QVBoxLayout(central)
         cv.setContentsMargins(0, 0, 0, 0)
         cv.setSpacing(0)
+        cv.addWidget(self.link_banner)
         cv.addWidget(self.status_strip)
         cv.addWidget(split, 1)
         self.setCentralWidget(central)
@@ -1134,6 +1141,16 @@ class DroneDeck(QMainWindow):
         chips.append((f"MSG {len(ve.messages)}", GREY, LIGHT))
         self.status_strip.set_chips(chips)
 
+    def _update_link_banner(self, ve, is_open):
+        # Prominent alert only when we HAD telemetry and it went stale (mid-session link
+        # loss) -- the most safety-critical case. Startup "no telemetry yet" stays quiet.
+        if is_open and ve.last_heartbeat and not ve.link_alive:
+            secs = int(time.monotonic() - ve.last_heartbeat)
+            self.link_banner.setText(f"COMMUNICATION LOST  --  no heartbeat for {secs} s")
+            self.link_banner.show()
+        else:
+            self.link_banner.hide()
+
     def _set_follow(self, on):
         self.map.follow = on
         if on and self.vehicle.have_position:
@@ -1191,6 +1208,7 @@ class DroneDeck(QMainWindow):
                                                for it in wps))
         self.panel.update_all(ve, state, self._rate, ok, drop, nav)
         self._update_status_strip(ve, is_open, drop)
+        self._update_link_banner(ve, is_open)
 
         connected = self._has_vehicle()
         self.btn_arm.setEnabled(connected)
