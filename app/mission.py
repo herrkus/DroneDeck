@@ -138,6 +138,39 @@ def corridor_scan(path, width_m=60.0, spacing_m=30.0, alt=50.0):
     return items
 
 
+def structure_scan(points, radius_m=30.0, layers=3, layer_height_m=8.0,
+                   base_alt=15.0, n_points=16):
+    """Orbit waypoints around the centroid of `points`, `radius_m` beyond the
+    structure's own extent, repeated across `layers` altitude levels (base_alt, then
+    +layer_height each). Each waypoint yaws to face the centre (param4), so a nose- or
+    gimbal-mounted camera captures the facade -- for towers, masts, buildings, wind
+    turbines. Alternate layers reverse direction so the path spirals up without a long
+    reposition. A single point gives a plain radius_m orbit."""
+    if not points:
+        return []
+    lat0, lon0 = points[0]
+    pm = [_ll_to_m(la, lo, lat0, lon0) for la, lo in points]
+    cx = sum(x for x, _ in pm) / len(pm)
+    cy = sum(y for _, y in pm) / len(pm)
+    struct_r = max((math.hypot(x - cx, y - cy) for x, y in pm), default=0.0)
+    orbit_r = radius_m + struct_r                            # standoff from the extent
+    n_points = max(3, int(n_points))
+    items = []
+    seq = 0
+    for L in range(max(1, int(layers))):
+        alt = base_alt + L * layer_height_m
+        order = range(n_points) if L % 2 == 0 else range(n_points - 1, -1, -1)
+        for i in order:
+            th = 2.0 * math.pi * i / n_points
+            x = cx + orbit_r * math.cos(th)
+            y = cy + orbit_r * math.sin(th)
+            yaw = math.degrees(math.atan2(cx - x, cy - y)) % 360.0   # face centre (bearing from N)
+            la, lo = _m_to_ll(x, y, lat0, lon0)
+            items.append(MissionItem(seq, la, lo, alt, param4=yaw))
+            seq += 1
+    return items
+
+
 class MissionProtocol(QObject):
     progress = Signal(str)          # human-readable step
     finished = Signal(bool, str)    # ok, message

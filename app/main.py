@@ -27,7 +27,7 @@ import core
 import mavlink
 from vehicle import Vehicle
 from link import UdpLink, TcpLink, SerialLink, ReplayLink
-from mission import MissionProtocol, MissionItem, survey_grid, corridor_scan
+from mission import MissionProtocol, MissionItem, survey_grid, corridor_scan, structure_scan
 from params import ParamManager, ParamDialog
 from tlog import TlogWriter
 from logdownload import LogManager
@@ -290,7 +290,7 @@ class DroneDeck(QMainWindow):
         tb3.addWidget(self.radius_spin)
         self._mission_btns = []
         for label, slot in (("Survey", self._survey), ("Corridor", self._corridor),
-                            ("Clear", self._clear_mission),
+                            ("Structure", self._structure), ("Clear", self._clear_mission),
                             ("Upload", self._upload_mission), ("Download", self._download_mission)):
             b = QPushButton(label)
             b.clicked.connect(slot)
@@ -1184,6 +1184,51 @@ class DroneDeck(QMainWindow):
             self._refresh_mission_view()
             self._on_info(f"corridor scan: {len(items)} waypoints "
                           f"({w_spin.value()}m wide, {s_spin.value()}m spacing)")
+
+    def _structure(self):
+        if not self.mission_items:
+            QMessageBox.information(self, "Structure Scan",
+                                    "Place a waypoint at the structure (or a polygon "
+                                    "around it), then Structure.")
+            return
+        from PySide6.QtWidgets import QDialog, QFormLayout, QDialogButtonBox
+        dlg = QDialog(self)
+        dlg.setWindowTitle("Structure Scan")
+        form = QFormLayout(dlg)
+
+        def spin(lo, hi, val, suf=" m"):
+            s = QSpinBox()
+            s.setRange(lo, hi)
+            s.setValue(val)
+            s.setSuffix(suf)
+            return s
+
+        r_spin = spin(2, 1000, 30)
+        n_spin = spin(1, 30, 4, "")
+        h_spin = spin(1, 100, 8)
+        a_spin = spin(2, 500, int(self.mission_items[0].alt or 15))
+        p_spin = spin(3, 72, 16, "")
+        form.addRow("Standoff radius", r_spin)
+        form.addRow("Layers", n_spin)
+        form.addRow("Layer height", h_spin)
+        form.addRow("Base altitude", a_spin)
+        form.addRow("Points / layer", p_spin)
+        bb = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        bb.accepted.connect(dlg.accept)
+        bb.rejected.connect(dlg.reject)
+        form.addRow(bb)
+        if dlg.exec() != QDialog.Accepted:
+            return
+        items = structure_scan([(it.lat, it.lon) for it in self.mission_items],
+                               radius_m=float(r_spin.value()), layers=n_spin.value(),
+                               layer_height_m=float(h_spin.value()), base_alt=float(a_spin.value()),
+                               n_points=p_spin.value())
+        if items:
+            self.mission_items = items
+            self._refresh_mission_view()
+            self._on_info(f"structure scan: {len(items)} waypoints "
+                          f"({n_spin.value()} layers x {p_spin.value()} pts, "
+                          f"{r_spin.value()}m standoff)")
 
     def _build_fence_items(self):
         """Whole geofence (inclusion/exclusion polygons + circles) as MISSION_ITEM_INTs."""
