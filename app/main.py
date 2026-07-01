@@ -1103,6 +1103,9 @@ class DroneDeck(QMainWindow):
             self._arm_t0 = None
             self._on_info(f"active vehicle: #{sid}")
 
+    TRAFFIC_TTL = 60.0        # seconds an ADSB target lingers after its last report
+    TRAFFIC_MAX = 2000        # hard ceiling on tracked targets (far above any real airspace)
+
     def _update_traffic(self, msgs):
         now = time.monotonic()
         for m in msgs:
@@ -1113,6 +1116,16 @@ class DroneDeck(QMainWindow):
                 "heading": f.get("heading", 0) / 100.0,
                 "alt": f.get("altitude", 0) / 1000.0,      # mm ASL -> m
                 "callsign": (f.get("callsign", "") or "").strip(), "t": now}
+        # Expire stale targets + hard-cap. ADSB aircraft fly out of range, and a busy sky (or a
+        # noisy/buggy/hostile source) can present unbounded distinct ICAOs; without this both the
+        # dict and the per-refresh sorted table rebuild grow without bound over a long flight.
+        stale = [k for k, v in self.traffic.items() if now - v["t"] > self.TRAFFIC_TTL]
+        for k in stale:
+            del self.traffic[k]
+        if len(self.traffic) > self.TRAFFIC_MAX:
+            excess = len(self.traffic) - self.TRAFFIC_MAX
+            for k, _v in sorted(self.traffic.items(), key=lambda kv: kv[1]["t"])[:excess]:
+                del self.traffic[k]
 
     def _on_state(self, up):
         self.btn_conn.setText("Disconnect" if up else "Connect")
