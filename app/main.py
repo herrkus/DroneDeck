@@ -76,6 +76,12 @@ QPushButton:disabled { color:#666; }
 QLineEdit { background:#0f1115; border:1px solid #353b47; border-radius:5px; padding:4px; }
 QStatusBar { background:#1b1e25; color:#8a90a0; }
 QLabel { color:#c4c8d0; }
+/* draggable divider between the map and the bottom panels -- grab it to make the
+   map smaller / the message board bigger; highlights blue on hover */
+QMainWindow::separator { background:#2a2d36; height:6px; width:6px; }
+QMainWindow::separator:hover { background:#3d7fb5; }
+QSplitter::handle:horizontal { width:4px; }
+QSplitter::handle:hover { background:#3d7fb5; }
 """
 
 
@@ -327,8 +333,8 @@ class DroneDeck(QMainWindow):
 
         # bottom message console (STATUSTEXT + command results)
         self.console = MessageConsole()
-        self.console.setMinimumHeight(90)
-        self.console.setMaximumHeight(170)
+        self.console.setMinimumHeight(70)
+        # no maximum height -- drag the map/messages divider to grow the board freely
         self.msg_dock = dock = QDockWidget("Messages", self)
         dock.setObjectName("messages_dock")
         dock.setWidget(self.console)
@@ -1180,9 +1186,11 @@ class DroneDeck(QMainWindow):
         st = s.value("win/state")
         if st is not None:
             self.restoreState(st)
-        # keep the bottom message/systems row compact so the map + instruments get the
-        # height; deferred so it runs after the window is shown (not undone by restore).
-        QTimer.singleShot(0, self._size_bottom_docks)
+        # First launch only (no saved layout): default to a compact bottom row so the
+        # map + PFD get the height. Once the user has dragged the dividers to their own
+        # taste, that layout is saved on close and restored above -- we leave it as set.
+        if st is None:
+            QTimer.singleShot(0, self._size_bottom_docks)
         tr = s.value("link/transport")
         if tr in ("UDP", "TCP", "Serial", "Replay"):
             self.transport_combo.setCurrentText(tr)
