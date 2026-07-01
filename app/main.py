@@ -69,6 +69,18 @@ def bearing(lat1, lon1, lat2, lon2):
     return math.degrees(math.atan2(y, x)) % 360.0
 
 
+def trail_to_gpx(points, name="DroneDeck flight track"):
+    """Serialize a flown track [(lat, lon), ...] to a GPX 1.1 document (string) -- the standard
+    GPS-track format any mapping tool (Google Earth, QGIS, ...) can open."""
+    from xml.sax.saxutils import escape
+    head = ('<?xml version="1.0" encoding="UTF-8"?>\n'
+            '<gpx version="1.1" creator="DroneDeck" '
+            'xmlns="http://www.topografix.com/GPX/1/1">\n'
+            f'  <trk><name>{escape(str(name))}</name><trkseg>\n')
+    body = "".join(f'    <trkpt lat="{la:.7f}" lon="{lo:.7f}"></trkpt>\n' for la, lo in points)
+    return head + body + '  </trkseg></trk>\n</gpx>\n'
+
+
 def _point_in_poly(pt, poly):
     """Ray-casting point-in-polygon. pt=(lat, lon), poly=[(lat, lon), ...]. Treats lat/lon
     as planar, which is fine over geofence-sized areas."""
@@ -751,6 +763,7 @@ class DroneDeck(QMainWindow):
         act_fence.triggered.connect(self._fence_from_mission)
         act_vinfo = tools.addAction("Vehicle Info...")
         act_vinfo.triggered.connect(self._show_vehicle_info)
+        tools.addAction("Export Track (GPX)...").triggered.connect(self._export_track)
         self._help_menu = helpm = self.menuBar().addMenu("&Help")
         helpm.addAction("Quick Help").triggered.connect(self._show_help)
         helpm.addAction("About DroneDeck...").triggered.connect(self._show_about)
@@ -758,6 +771,23 @@ class DroneDeck(QMainWindow):
     def _open_analyze(self):
         from analyze import AnalyzeDialog
         AnalyzeDialog(self, LOG_DIR).exec()
+
+    def _export_track(self):
+        trail = list(self.vehicle.trail) if self.vehicle else []
+        if len(trail) < 2:
+            QMessageBox.information(self, "Export Track", "No flight track yet -- the track is "
+                                    "recorded from the vehicle's position as it flies.")
+            return
+        path, _ = QFileDialog.getSaveFileName(self, "Export track",
+                                              os.path.join(LOG_DIR, "track.gpx"),
+                                              "GPX track (*.gpx)")
+        if not path:
+            return
+        if not path.endswith(".gpx"):
+            path += ".gpx"
+        with open(path, "w") as f:
+            f.write(trail_to_gpx(trail))
+        self._on_info(f"exported {len(trail)}-point track to {os.path.basename(path)}")
 
     def _save_telem_groups(self):
         if self._persist:
