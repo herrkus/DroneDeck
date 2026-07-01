@@ -205,6 +205,8 @@ class Compass(QWidget):
         self.wind_speed = 0.0
         self.wind_dir = 0.0            # compass bearing the wind blows FROM
         self.have_wind = False
+        self.home_bearing = 0.0        # compass bearing FROM the vehicle TO home
+        self.have_home = False
         self.setMinimumSize(130, 130)
 
     def sizeHint(self):
@@ -218,6 +220,11 @@ class Compass(QWidget):
         self.wind_speed = speed
         self.wind_dir = direction % 360.0
         self.have_wind = have
+        self.update()
+
+    def set_home_bearing(self, bearing, have=True):
+        self.home_bearing = bearing % 360.0
+        self.have_home = have
         self.update()
 
     def paintEvent(self, _):
@@ -269,6 +276,28 @@ class Compass(QWidget):
             p.setBrush(QBrush(wcol))
             p.drawLine(QPointF(0, outer), QPointF(0, inner))
             p.drawPolygon(QPolygonF([QPointF(0, apex), QPointF(-hw, inner), QPointF(hw, inner)]))
+            p.restore()
+
+        # home-direction bug: a green marker on the rim at the bearing to launch (rotates with
+        # the card, so it sits under the lubber line when the nose points home). QGC parity.
+        if self.have_home:
+            hcol = QColor(80, 220, 130)
+            p.save()
+            p.rotate(-self.heading)
+            p.rotate(self.home_bearing)
+            ry = -R + 3
+            p.setPen(Qt.NoPen)
+            p.setBrush(QBrush(hcol))
+            p.drawPolygon(QPolygonF([QPointF(0, ry + R * 0.11),     # inward-pointing bug
+                                     QPointF(-R * 0.075, ry),
+                                     QPointF(R * 0.075, ry)]))
+            p.setPen(hcol)                                          # 'H' label, kept upright
+            p.setFont(QFont("DejaVu Sans", max(6, int(R * 0.11)), QFont.Bold))
+            p.save()
+            p.translate(0, ry + R * 0.26)
+            p.rotate(self.heading - self.home_bearing)
+            p.drawText(QRectF(-R * 0.15, -R * 0.12, R * 0.30, R * 0.24), Qt.AlignCenter, "H")
+            p.restore()
             p.restore()
 
         # fixed lubber index

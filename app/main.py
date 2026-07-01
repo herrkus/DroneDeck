@@ -1885,6 +1885,10 @@ class DroneDeck(QMainWindow):
                           ve.alt_rel, ve.heading, ve.climb)
         self.compass.set_heading(ve.heading)
         self.compass.set_wind(ve.wind_speed(), ve.wind_dir(), ve.have_wind)
+        if ve.have_position and ve.home:            # bearing to launch, for the home bug
+            self.compass.set_home_bearing(bearing(ve.lat, ve.lon, ve.home[0], ve.home[1]))
+        else:
+            self.compass.set_home_bearing(0.0, have=False)
         self.health.set_health(ve.sensors_present, ve.sensors_enabled, ve.sensors_health)
         self.systems.update_from(ve)
         if ve.have_position:

@@ -80,6 +80,7 @@ check "takeoffalt"          ""                        tests/test_takeoffalt.py
 check "mavversion"          ""                        tests/test_mavversion.py
 check "confirm"             ""                        tests/test_confirm.py
 check "windcompass"         ""                        tests/test_windcompass.py
+check "homebug"             ""                        tests/test_homebug.py
 check "manual"              ""                        tests/test_manual.py
 check "camera"              ""                        tests/test_camera.py
 check "logs"                ""                        tests/test_logs.py
