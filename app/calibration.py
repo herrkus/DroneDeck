@@ -355,6 +355,24 @@ class TuningWidget(ParamPage):
     ]
 
 
+class AirframeWidget(ParamPage):
+    NOUN = "airframe / vehicle-type"
+    LEGEND = ("MAV_TYPE -- 1 fixed-wing  2 quad  4 heli  10 rover  13 hexa  14 octo  "
+              "15 tri  19-20 VTOL tailsitter  21 VTOL tiltrotor  22 VTOL standard.  "
+              "SYS_AUTOSTART is the PX4 airframe config ID (e.g. 4001 generic quad, "
+              "13000-13050 VTOL).  VT_TYPE -- 0 tailsitter  1 tiltrotor  2 standard.")
+    PARAMS = [
+        ("SYS_AUTOSTART", "PX4: airframe config ID"),
+        ("MAV_TYPE",      "PX4: MAVLink vehicle type"),
+        ("VT_TYPE",       "PX4: VTOL type"),
+        ("CA_AIRFRAME",   "PX4: control-allocation airframe"),
+        ("SYS_HITL",      "PX4: hardware-in-the-loop mode"),
+        ("FRAME_CLASS",   "APM: frame class"),
+        ("FRAME_TYPE",    "APM: frame type"),
+        ("Q_ENABLE",      "APM: quadplane enable"),
+    ]
+
+
 class CalibrationDialog(QDialog):
     """Setup view: Radio + Sensors tabs, fed live from the link while open."""
 
@@ -377,10 +395,13 @@ class CalibrationDialog(QDialog):
             tabs.addTab(self.flightmodes, "Flight Modes")
             self.tuning = TuningWidget(param_mgr)
             tabs.addTab(self.tuning, "Tuning")
+            self.airframe = AirframeWidget(param_mgr)
+            tabs.addTab(self.airframe, "Airframe")
             self.safety.refresh()          # auto-request params on open
             self.power.refresh()
             self.flightmodes.refresh()
             self.tuning.refresh()
+            self.airframe.refresh()
         lay = QVBoxLayout(self)
         lay.addWidget(tabs)
         link = self._link()
