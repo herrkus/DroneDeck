@@ -90,7 +90,7 @@ QSplitter::handle:hover { background:#3d7fb5; }
 class WaypointEditor(QDialog):
     """Edit one mission item's command + altitude + the params that matter for it."""
 
-    CMDS = [("Waypoint", 16), ("Takeoff", 22), ("Loiter (time)", 19),
+    CMDS = [("Waypoint", 16), ("Spline waypoint", 82), ("Takeoff", 22), ("Loiter (time)", 19),
             ("Loiter (unlim)", 17), ("Land", 21), ("Return to launch", 20),
             ("ROI (point camera)", 195), ("Clear ROI", 197),
             ("Change speed", 178), ("Jump to WP", 177), ("Land start", 189)]
