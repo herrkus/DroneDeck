@@ -185,6 +185,7 @@ class ParamPage(QWidget):
 
     PARAMS = []                           # [(param_name, label), ...]
     NOUN = "parameters"
+    LEGEND = ""                           # optional value cheat-sheet under the header
 
     def __init__(self, mgr, parent=None):
         super().__init__(parent)
@@ -196,6 +197,11 @@ class ParamPage(QWidget):
         info.setWordWrap(True)
         info.setStyleSheet("color:#8a90a0;")
         lay.addWidget(info)
+        if self.LEGEND:
+            leg = QLabel(self.LEGEND)
+            leg.setWordWrap(True)
+            leg.setStyleSheet("color:#6a707c;")
+            lay.addWidget(leg)
         self.form = QFormLayout()
         for name, label in self.PARAMS:
             lbl, edit = QLabel(label), QLineEdit()
@@ -293,6 +299,30 @@ class PowerWidget(ParamPage):
     ]
 
 
+class FlightModesWidget(ParamPage):
+    NOUN = "flight-mode"
+    LEGEND = ("PX4 slot values -- 0 Manual  1 Altitude  2 Position  3 Mission  4 Hold  "
+              "5 Return  6 Acro  7 Offboard  8 Stabilized  10 Takeoff  11 Land  12 Follow  "
+              "14 Orbit  (-1 unassigned).")
+    PARAMS = [
+        ("COM_FLTMODE1",   "PX4: mode slot 1"),
+        ("COM_FLTMODE2",   "PX4: mode slot 2"),
+        ("COM_FLTMODE3",   "PX4: mode slot 3"),
+        ("COM_FLTMODE4",   "PX4: mode slot 4"),
+        ("COM_FLTMODE5",   "PX4: mode slot 5"),
+        ("COM_FLTMODE6",   "PX4: mode slot 6"),
+        ("RC_MAP_FLTMODE", "PX4: mode-selector RC channel"),
+        ("RC_MAP_MODE_SW", "PX4: mode-switch RC channel"),
+        ("FLTMODE1",       "APM: mode slot 1"),
+        ("FLTMODE2",       "APM: mode slot 2"),
+        ("FLTMODE3",       "APM: mode slot 3"),
+        ("FLTMODE4",       "APM: mode slot 4"),
+        ("FLTMODE5",       "APM: mode slot 5"),
+        ("FLTMODE6",       "APM: mode slot 6"),
+        ("FLTMODE_CH",     "APM: mode-selector RC channel"),
+    ]
+
+
 class CalibrationDialog(QDialog):
     """Setup view: Radio + Sensors tabs, fed live from the link while open."""
 
@@ -311,8 +341,11 @@ class CalibrationDialog(QDialog):
             tabs.addTab(self.safety, "Safety")
             self.power = PowerWidget(param_mgr)
             tabs.addTab(self.power, "Power")
+            self.flightmodes = FlightModesWidget(param_mgr)
+            tabs.addTab(self.flightmodes, "Flight Modes")
             self.safety.refresh()          # auto-request params on open
             self.power.refresh()
+            self.flightmodes.refresh()
         lay = QVBoxLayout(self)
         lay.addWidget(tabs)
         link = self._link()
