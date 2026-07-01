@@ -179,6 +179,7 @@ MAV_CMD_PREFLIGHT_CALIBRATION = 241     # param1 gyro, param2 mag, param5 accel(
 MAV_CMD_DO_ORBIT = 34
 MAV_CMD_DO_SET_HOME = 179
 MAV_CMD_DO_SET_ROI_LOCATION = 195
+MAV_CMD_DO_SET_ROI_NONE = 197           # cancel any active region-of-interest
 MAV_CMD_DO_REPOSITION = 192
 MAV_CMD_DO_CHANGE_SPEED = 178           # param1=type (0 air / 1 ground), param2=speed m/s
 MAV_CMD_DO_PAUSE_CONTINUE = 193

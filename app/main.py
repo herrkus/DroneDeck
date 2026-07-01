@@ -92,7 +92,8 @@ class WaypointEditor(QDialog):
 
     CMDS = [("Waypoint", 16), ("Takeoff", 22), ("Loiter (time)", 19),
             ("Loiter (unlim)", 17), ("Land", 21), ("Return to launch", 20),
-            ("ROI (point camera)", 195), ("Change speed", 178), ("Jump to WP", 177)]
+            ("ROI (point camera)", 195), ("Clear ROI", 197),
+            ("Change speed", 178), ("Jump to WP", 177)]
 
     def __init__(self, item, parent=None):
         super().__init__(parent)
@@ -146,7 +147,7 @@ class WaypointEditor(QDialog):
     def _sync_fields(self):
         """Grey out the fields that don't apply to the chosen command (QGC-style)."""
         cmd = self.cmd.currentData()
-        has_pos = cmd not in (20, 178, 177)           # RTL / change-speed / jump carry no position
+        has_pos = cmd not in (20, 178, 177, 197)      # RTL / speed / jump / clear-ROI: no position
         is_loiter = cmd in (17, 19)
         is_jump = cmd == 177
         self.alt.setEnabled(has_pos)
@@ -172,6 +173,9 @@ class WaypointEditor(QDialog):
             item.param3 = 0.0
             item.param4 = 0.0
             item.alt = 0.0
+        elif cmd == 197:                              # DO_SET_ROI_NONE -- cancel ROI
+            item.param1 = item.param2 = item.param3 = item.param4 = 0.0
+            item.alt = 0.0
         else:
             item.alt = self.alt.value()
             item.param1 = self.p1.value()
@@ -179,7 +183,7 @@ class WaypointEditor(QDialog):
             item.param4 = self.p4.value()
         # RTL / DO_CHANGE_SPEED / DO_JUMP carry no position and must use the MISSION
         # frame (2); PX4 rejects them with a global frame. Others stay georeferenced.
-        item.frame = 2 if cmd in (20, 178, 177) else mavlink.MAV_FRAME_GLOBAL_RELATIVE_ALT_INT
+        item.frame = 2 if cmd in (20, 178, 177, 197) else mavlink.MAV_FRAME_GLOBAL_RELATIVE_ALT_INT
 
 
 class DroneDeck(QMainWindow):
