@@ -515,6 +515,28 @@ class DroneDeck(QMainWindow):
         core_lbl.setFont(QFont("DejaVu Sans Mono", 8))
         self.statusBar().addPermanentWidget(core_lbl)
 
+        self._build_menu()
+        self._default_state = self.saveState()   # snapshot the default dock layout for Reset
+
+    def _build_menu(self):
+        self._view_menu = view = self.menuBar().addMenu("&View")
+        self._act_reset = act_reset = view.addAction("Reset Layout")
+        act_reset.setShortcut("Ctrl+Shift+L")
+        act_reset.triggered.connect(self._reset_layout)
+        view.addSeparator()
+        self._panels_menu = panels = view.addMenu("Panels")   # show/hide any dock (QGC-style)
+        for d in self.findChildren(QDockWidget):
+            panels.addAction(d.toggleViewAction())
+
+    def _reset_layout(self):
+        """Restore the default dock arrangement + the compact bottom row."""
+        if getattr(self, "_default_state", None) is not None:
+            self.restoreState(self._default_state)
+        self._bottom_sized = False
+        self._size_bottom_docks()
+        QTimer.singleShot(0, self._size_bottom_docks)
+        self._on_info("layout reset to default")
+
     CMD_NAMES = {400: "ARM/DISARM", 22: "TAKEOFF", 21: "LAND", 20: "RTL",
                  176: "SET MODE", 192: "REPOSITION", 193: "PAUSE/CONTINUE"}
 
