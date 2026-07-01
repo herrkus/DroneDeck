@@ -704,6 +704,48 @@ class _CellBars(QWidget):
         p.end()
 
 
+class _ServoBars(QWidget):
+    """Eight actuator-output bars (servo1..8), PWM microseconds scaled over 1000-2000 us.
+    Channels reading near zero are treated as inactive (drawn empty with a dash)."""
+    LO, HI = 1000.0, 2000.0
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setMinimumHeight(52)
+        self.vals = [0] * 8
+
+    def set_values(self, vals):
+        vals = list(vals)[:8]
+        self.vals = vals + [0] * (8 - len(vals))
+        self.update()
+
+    def paintEvent(self, _):
+        p = QPainter(self)
+        p.setRenderHint(QPainter.Antialiasing)
+        p.fillRect(self.rect(), QColor(22, 24, 29))
+        n = 8
+        gap = 4.0
+        bw = max(6.0, (self.width() - (n + 1) * gap) / n)
+        top, bot = 4.0, self.height() - 14.0
+        H = max(1.0, bot - top)
+        for i, v in enumerate(self.vals):
+            x = gap + i * (bw + gap)
+            active = v > 0                            # 0 = channel not driven
+            p.setPen(Qt.NoPen)
+            p.setBrush(QColor(38, 42, 50))
+            p.drawRoundedRect(QRectF(x, top, bw, H), 2, 2)
+            if active:
+                frac = max(0.0, min(1.0, (v - self.LO) / (self.HI - self.LO)))
+                fh = H * frac
+                if fh > 0:
+                    p.setBrush(QColor(90, 170, 230))
+                    p.drawRoundedRect(QRectF(x, bot - fh, bw, fh), 2, 2)
+            p.setPen(QColor(200, 205, 212))
+            p.setFont(QFont("DejaVu Sans", 7))
+            p.drawText(QRectF(x - 3, bot + 1, bw + 6, 12), Qt.AlignCenter, str(v) if active else "-")
+        p.end()
+
+
 class SystemsPanel(QWidget):
     """Detailed battery, vibration and altitude readouts, fed from BATTERY_STATUS,
     VIBRATION and ALTITUDE -- the QGC-style 'systems' instrument view."""
@@ -760,6 +802,12 @@ class SystemsPanel(QWidget):
         gf.addRow("Pitch", self.g_pitch)
         gf.addRow("Yaw", self.g_yaw)
         lay.addWidget(gmb)
+
+        act = QGroupBox("Actuator outputs (us)")
+        av = QVBoxLayout(act)
+        self.servo_bars = _ServoBars()
+        av.addWidget(self.servo_bars)
+        lay.addWidget(act)
 
         alt = QGroupBox("Altitude")
         af = QFormLayout(alt)
@@ -819,6 +867,7 @@ class SystemsPanel(QWidget):
                 lbl.setText("--")
         self.b_cells.setText("  ".join(f"{c:.2f}" for c in ve.cells) if ve.cells else "--")
         self.cell_bars.set_cells(ve.cells)
+        self.servo_bars.set_values(ve.servo_raw)
         self.vib_bars.set_values(ve.vibration)
         self.vib_clip.setText("clip {} / {} / {}".format(*ve.clipping))
         self.a_amsl.setText(f"{ve.alt_msl:.1f} m")

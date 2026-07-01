@@ -155,6 +155,11 @@ NEW = {
     # Computes 26 with it excluded, 77 if wrongly included -- a classic silent-CRC pitfall.
     "MOUNT_ORIENTATION": (265, [("uint32_t", "time_boot_ms", 0), ("float", "roll", 0),
                                 ("float", "pitch", 0), ("float", "yaw", 0)]),
+    # servo9..16_raw are extensions -> excluded from the CRC. Wire order sorts port (uint8)
+    # last after the uint32 + eight uint16 servo fields. Computes 222.
+    "SERVO_OUTPUT_RAW": (36, [("uint32_t", "time_usec", 0)]
+                         + [("uint16_t", f"servo{i}_raw", 0) for i in range(1, 9)]
+                         + [("uint8_t", "port", 0)]),
 }
 
 if __name__ == "__main__":

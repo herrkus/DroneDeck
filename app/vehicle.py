@@ -84,6 +84,9 @@ class Vehicle(QObject):
         self.gimbal_pitch = 0.0
         self.gimbal_yaw = 0.0                # relative to vehicle
         self.have_gimbal = False
+        # actuator outputs (SERVO_OUTPUT_RAW), PWM microseconds servo1..8
+        self.servo_raw = [0] * 8
+        self.have_servo = False
         # gps
         self.fix_type = 0
         self.satellites = 0
@@ -276,6 +279,10 @@ class Vehicle(QObject):
         self.gimbal_yaw = float(f.get("yaw", 0.0))
         self.have_gimbal = True
 
+    def _on_servo_output_raw(self, f):
+        self.servo_raw = [int(f.get(f"servo{i}_raw", 0)) for i in range(1, 9)]
+        self.have_servo = True
+
     def wind_speed(self):
         """Horizontal wind speed, m/s."""
         return math.hypot(self.wind_x, self.wind_y)
@@ -333,6 +340,7 @@ class Vehicle(QObject):
         mavlink.ESTIMATOR_STATUS: _on_estimator_status,
         mavlink.WIND_COV: _on_wind_cov,
         mavlink.MOUNT_ORIENTATION: _on_mount_orientation,
+        mavlink.SERVO_OUTPUT_RAW: _on_servo_output_raw,
         mavlink.BATTERY_STATUS: _on_battery_status,
         mavlink.RADIO_STATUS: _on_radio_status,
         mavlink.RC_CHANNELS: _on_rc_channels,

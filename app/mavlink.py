@@ -14,6 +14,7 @@ SYS_STATUS = 1
 GPS_RAW_INT = 24
 ATTITUDE = 30
 GLOBAL_POSITION_INT = 33
+SERVO_OUTPUT_RAW = 36        # actuator PWM outputs (servo1..8_raw us)
 RC_CHANNELS = 65
 RADIO_STATUS = 109
 REQUEST_DATA_STREAM = 66     # GCS->vehicle: legacy telemetry-stream request (ArduPilot)
@@ -79,6 +80,7 @@ MSG_NAME = {
     GPS_RAW_INT: "GPS_RAW_INT",
     ATTITUDE: "ATTITUDE",
     GLOBAL_POSITION_INT: "GLOBAL_POSITION_INT",
+    SERVO_OUTPUT_RAW: "SERVO_OUTPUT_RAW",
     VFR_HUD: "VFR_HUD",
     RC_CHANNELS: "RC_CHANNELS",
     RADIO_STATUS: "RADIO_STATUS",
@@ -120,7 +122,8 @@ MSG_NAME = {
 # Per-message CRC_EXTRA seed bytes (derived + validated in tests/crc_extra_calc.py).
 CRC_EXTRA = {
     HEARTBEAT: 50, SYS_STATUS: 124, GPS_RAW_INT: 24, ATTITUDE: 39,
-    GLOBAL_POSITION_INT: 104, VFR_HUD: 20, COMMAND_INT: 158, COMMAND_LONG: 152,
+    GLOBAL_POSITION_INT: 104, SERVO_OUTPUT_RAW: 222, VFR_HUD: 20,
+    COMMAND_INT: 158, COMMAND_LONG: 152,
     COMMAND_ACK: 143, STATUSTEXT: 83, SET_POSITION_TARGET_GLOBAL_INT: 5,
     PARAM_REQUEST_READ: 214, PARAM_REQUEST_LIST: 159, PARAM_VALUE: 220, PARAM_SET: 168,
     MISSION_CURRENT: 28, MISSION_REQUEST_LIST: 132, MISSION_COUNT: 221,
@@ -141,6 +144,7 @@ FIELDS = {
                  "onboard_present", "onboard_enabled", "onboard_health"],
     GPS_RAW_INT: ["fix_type", "satellites_visible", "lat", "lon", "alt", "eph", "vel", "cog"],
     ATTITUDE: ["roll", "pitch", "yaw", "rollspeed", "pitchspeed", "yawspeed", "time_boot_ms"],
+    SERVO_OUTPUT_RAW: ["time_usec"] + [f"servo{i}_raw" for i in range(1, 9)] + ["port"],
     GLOBAL_POSITION_INT: ["lat", "lon", "alt", "relative_alt", "vx", "vy", "vz", "hdg", "time_boot_ms"],
     VFR_HUD: ["airspeed", "groundspeed", "alt", "climb", "heading", "throttle"],
     RC_CHANNELS: (["time_boot_ms"] + [f"chan{i}_raw" for i in range(1, 19)]
@@ -696,6 +700,8 @@ _WIRE = {
                    "fix_type", "satellites_visible"], 30),
     ATTITUDE: ("<Iffffff",
                ["time_boot_ms", "roll", "pitch", "yaw", "rollspeed", "pitchspeed", "yawspeed"], 28),
+    SERVO_OUTPUT_RAW: ("<I8HB",
+                       ["time_usec"] + [f"servo{i}_raw" for i in range(1, 9)] + ["port"], 21),
     GLOBAL_POSITION_INT: ("<IiiiihhhH",
                           ["time_boot_ms", "lat", "lon", "alt", "relative_alt",
                            "vx", "vy", "vz", "hdg"], 28),

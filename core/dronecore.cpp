@@ -107,6 +107,7 @@ constexpr MsgInfo MSGS[] = {
     {193,  71, 22},  // EKF_STATUS_REPORT
     {230, 163, 42},  // ESTIMATOR_STATUS
     {231, 105, 40},  // WIND_COV
+    { 36, 222, 21},  // SERVO_OUTPUT_RAW (servo9..16 are extensions: excluded from CRC)
     {265,  26, 20},  // MOUNT_ORIENTATION (yaw_absolute is an extension: excluded from CRC)
     {246, 184, 38},  // ADSB_VEHICLE
     {126, 194, 79},  // SERIAL_CONTROL (PX4 nsh shell passthrough)
@@ -200,6 +201,12 @@ void decode(uint32_t msgid, const uint8_t* pl, Decoded& d) {
         push(rd_f32(pl + 8)); push(rd_f32(pl + 12)); push(rd_f32(pl + 16));
         push(rd_f32(pl + 20)); push(rd_f32(pl + 24)); push(rd_f32(pl + 28));
         push(rd_f32(pl + 32)); push(rd_f32(pl + 36));
+        break;
+    case 36: // SERVO_OUTPUT_RAW: time_usec, servo1..8_raw, port
+        push(rd_u32(pl + 0));
+        push(rd_u16(pl + 4)); push(rd_u16(pl + 6)); push(rd_u16(pl + 8)); push(rd_u16(pl + 10));
+        push(rd_u16(pl + 12)); push(rd_u16(pl + 14)); push(rd_u16(pl + 16)); push(rd_u16(pl + 18));
+        push(pl[20]);
         break;
     case 265: // MOUNT_ORIENTATION: time_boot_ms, roll, pitch, yaw, yaw_absolute (deg)
         push(rd_u32(pl + 0));
