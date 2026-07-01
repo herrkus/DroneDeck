@@ -99,6 +99,9 @@ constexpr MsgInfo MSGS[] = {
     {119, 116, 12},  // LOG_REQUEST_DATA
     {120, 134, 97},  // LOG_DATA
     {122, 203,  2},  // LOG_REQUEST_END
+    {141,  47, 32},  // ALTITUDE
+    {147, 154, 36},  // BATTERY_STATUS
+    {241,  90, 32},  // VIBRATION
     {246, 184, 38},  // ADSB_VEHICLE
 };
 
@@ -154,6 +157,22 @@ void decode(uint32_t msgid, const uint8_t* pl, Decoded& d) {
         push(rd_u32(pl + 0));
         for (int i = 0; i < 18; ++i) push(rd_u16(pl + 4 + 2 * i));
         push(pl[40]); push(pl[41]);
+        break;
+    case 141: // ALTITUDE: time_usec, monotonic, amsl, local, relative, terrain, bottom_clearance
+        push(rd_u64(pl + 0));
+        push(rd_f32(pl + 8)); push(rd_f32(pl + 12)); push(rd_f32(pl + 16));
+        push(rd_f32(pl + 20)); push(rd_f32(pl + 24)); push(rd_f32(pl + 28));
+        break;
+    case 147: // BATTERY_STATUS: current_consumed, energy_consumed, temperature, voltages[10],
+              //                 current_battery, id, battery_function, type, battery_remaining
+        push(rd_i32(pl + 0)); push(rd_i32(pl + 4)); push(rd_i16(pl + 8));
+        for (int i = 0; i < 10; ++i) push(rd_u16(pl + 10 + 2 * i));
+        push(rd_i16(pl + 30)); push(pl[32]); push(pl[33]); push(pl[34]); push(int8_t(pl[35]));
+        break;
+    case 241: // VIBRATION: time_usec, vibration_x/y/z, clipping_0/1/2
+        push(rd_u64(pl + 0));
+        push(rd_f32(pl + 8)); push(rd_f32(pl + 12)); push(rd_f32(pl + 16));
+        push(rd_u32(pl + 20)); push(rd_u32(pl + 24)); push(rd_u32(pl + 28));
         break;
     case 69: // MANUAL_CONTROL: x, y, z, r, buttons, target
         push(rd_i16(pl + 0)); push(rd_i16(pl + 2)); push(rd_i16(pl + 4)); push(rd_i16(pl + 6));

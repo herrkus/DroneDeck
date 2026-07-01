@@ -431,3 +431,93 @@ class MavInspector(QWidget):
         for k, v in fields.items():
             parts.append(f"{k}={v:.4g}" if isinstance(v, float) else f"{k}={v}")
         return "  ".join(parts)[:240]
+
+
+class _VibBars(QWidget):
+    """Three horizontal vibration bars (x/y/z), coloured by severity."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setMinimumHeight(60)
+        self.vals = (0.0, 0.0, 0.0)
+
+    def set_values(self, vals):
+        self.vals = vals
+        self.update()
+
+    def paintEvent(self, _):
+        p = QPainter(self)
+        p.setRenderHint(QPainter.Antialiasing)
+        p.fillRect(self.rect(), QColor(22, 24, 29))
+        MAXV = 80.0
+        for i, (lab, v) in enumerate(zip(("X", "Y", "Z"), self.vals)):
+            y = 5 + i * 18
+            track = QRectF(24, y, self.width() - 74, 12)
+            p.setPen(QColor(150, 156, 166))
+            p.drawText(QRectF(4, y - 2, 18, 16), Qt.AlignVCenter, lab)
+            p.setPen(Qt.NoPen)
+            p.setBrush(QColor(38, 42, 50))
+            p.drawRoundedRect(track, 3, 3)
+            frac = max(0.0, min(1.0, v / MAXV))
+            col = (QColor(120, 210, 120) if v < 30 else
+                   QColor(230, 180, 60) if v < 60 else QColor(230, 90, 70))
+            p.setBrush(col)
+            p.drawRoundedRect(QRectF(track.left(), track.top(), track.width() * frac,
+                                     track.height()), 3, 3)
+            p.setPen(QColor(220, 224, 230))
+            p.drawText(QRectF(track.right() + 4, y - 2, 46, 16), Qt.AlignVCenter, f"{v:.0f}")
+        p.end()
+
+
+class SystemsPanel(QWidget):
+    """Detailed battery, vibration and altitude readouts, fed from BATTERY_STATUS,
+    VIBRATION and ALTITUDE -- the QGC-style 'systems' instrument view."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        lay = QVBoxLayout(self)
+
+        bat = QGroupBox("Battery")
+        bf = QFormLayout(bat)
+        self.b_volt = QLabel("--"); self.b_curr = QLabel("--"); self.b_used = QLabel("--")
+        self.b_rem = QLabel("--"); self.b_temp = QLabel("--"); self.b_cells = QLabel("--")
+        bf.addRow("Voltage", self.b_volt)
+        bf.addRow("Current", self.b_curr)
+        bf.addRow("Consumed", self.b_used)
+        bf.addRow("Remaining", self.b_rem)
+        bf.addRow("Temperature", self.b_temp)
+        bf.addRow("Cells (V)", self.b_cells)
+        lay.addWidget(bat)
+
+        vib = QGroupBox("Vibration")
+        vv = QVBoxLayout(vib)
+        self.vib_bars = _VibBars()
+        vv.addWidget(self.vib_bars)
+        self.vib_clip = QLabel("clip 0 / 0 / 0")
+        self.vib_clip.setStyleSheet("color:#8fa3bf;")
+        vv.addWidget(self.vib_clip)
+        lay.addWidget(vib)
+
+        alt = QGroupBox("Altitude")
+        af = QFormLayout(alt)
+        self.a_amsl = QLabel("--"); self.a_rel = QLabel("--"); self.a_terr = QLabel("--")
+        af.addRow("AMSL", self.a_amsl)
+        af.addRow("Above home", self.a_rel)
+        af.addRow("Above terrain", self.a_terr)
+        lay.addWidget(alt)
+        lay.addStretch(1)
+
+    def update_from(self, ve):
+        if ve is None:
+            return
+        self.b_volt.setText(f"{ve.voltage:.2f} V")
+        self.b_curr.setText(f"{ve.current:.1f} A")
+        self.b_used.setText("--" if ve.battery_consumed < 0 else f"{ve.battery_consumed} mAh")
+        self.b_rem.setText("--" if ve.battery_remaining < 0 else f"{ve.battery_remaining}%")
+        self.b_temp.setText("--" if ve.battery_temp is None else f"{ve.battery_temp:.1f} C")
+        self.b_cells.setText("  ".join(f"{c:.2f}" for c in ve.cells) if ve.cells else "--")
+        self.vib_bars.set_values(ve.vibration)
+        self.vib_clip.setText("clip {} / {} / {}".format(*ve.clipping))
+        self.a_amsl.setText(f"{ve.alt_msl:.1f} m")
+        self.a_rel.setText(f"{ve.alt_rel:.1f} m")
+        self.a_terr.setText("--" if ve.alt_terrain is None else f"{ve.alt_terrain:.1f} m")

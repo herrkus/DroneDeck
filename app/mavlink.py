@@ -15,6 +15,9 @@ GPS_RAW_INT = 24
 ATTITUDE = 30
 GLOBAL_POSITION_INT = 33
 RC_CHANNELS = 65
+ALTITUDE = 141
+BATTERY_STATUS = 147
+VIBRATION = 241
 MANUAL_CONTROL = 69
 VFR_HUD = 74
 COMMAND_LONG = 76
@@ -51,6 +54,9 @@ MSG_NAME = {
     GLOBAL_POSITION_INT: "GLOBAL_POSITION_INT",
     VFR_HUD: "VFR_HUD",
     RC_CHANNELS: "RC_CHANNELS",
+    ALTITUDE: "ALTITUDE",
+    BATTERY_STATUS: "BATTERY_STATUS",
+    VIBRATION: "VIBRATION",
     MANUAL_CONTROL: "MANUAL_CONTROL",
     COMMAND_LONG: "COMMAND_LONG",
     COMMAND_ACK: "COMMAND_ACK",
@@ -85,6 +91,7 @@ CRC_EXTRA = {
     MISSION_CURRENT: 28, MISSION_REQUEST_LIST: 132, MISSION_COUNT: 221,
     MISSION_CLEAR_ALL: 232, MISSION_ITEM_REACHED: 11, MISSION_ACK: 153,
     MISSION_REQUEST_INT: 196, MISSION_ITEM_INT: 38, MANUAL_CONTROL: 243, RC_CHANNELS: 118,
+    ALTITUDE: 47, BATTERY_STATUS: 154, VIBRATION: 90,
     LOG_REQUEST_LIST: 128, LOG_ENTRY: 56, LOG_REQUEST_DATA: 116,
     LOG_DATA: 134, LOG_REQUEST_END: 203, ADSB_VEHICLE: 184,
 }
@@ -100,6 +107,13 @@ FIELDS = {
     VFR_HUD: ["airspeed", "groundspeed", "alt", "climb", "heading", "throttle"],
     RC_CHANNELS: (["time_boot_ms"] + [f"chan{i}_raw" for i in range(1, 19)]
                   + ["chancount", "rssi"]),
+    ALTITUDE: ["time_usec", "altitude_monotonic", "altitude_amsl", "altitude_local",
+               "altitude_relative", "altitude_terrain", "bottom_clearance"],
+    VIBRATION: ["time_usec", "vibration_x", "vibration_y", "vibration_z",
+                "clipping_0", "clipping_1", "clipping_2"],
+    BATTERY_STATUS: (["current_consumed", "energy_consumed", "temperature"]
+                     + [f"voltage{i}" for i in range(1, 11)]
+                     + ["current_battery", "id", "battery_function", "type", "battery_remaining"]),
     MANUAL_CONTROL: ["x", "y", "z", "r", "buttons", "target"],
     COMMAND_LONG: ["command", "param1", "param2", "param3", "param4", "param5", "param6", "param7"],
     COMMAND_ACK: ["command", "result"],
@@ -295,6 +309,28 @@ def enc_rc_channels(chans, rssi=200, time_boot_ms=0):
     count = len(chans)
     chans = chans + [65535] * (18 - count)     # UINT16_MAX = channel not used
     return struct.pack("<I18HBB", int(time_boot_ms) & 0xFFFFFFFF, *chans, count, rssi & 0xFF)
+
+
+def enc_altitude(altitude_monotonic, altitude_amsl, altitude_local, altitude_relative,
+                 altitude_terrain=0.0, bottom_clearance=0.0, time_usec=0):
+    return struct.pack("<Qffffff", int(time_usec), altitude_monotonic, altitude_amsl,
+                       altitude_local, altitude_relative, altitude_terrain, bottom_clearance)
+
+
+def enc_vibration(vibration_x, vibration_y, vibration_z, clipping_0=0, clipping_1=0,
+                  clipping_2=0, time_usec=0):
+    return struct.pack("<QfffIII", int(time_usec), vibration_x, vibration_y, vibration_z,
+                       int(clipping_0), int(clipping_1), int(clipping_2))
+
+
+def enc_battery_status(voltages, current_battery=-1, current_consumed=-1, energy_consumed=-1,
+                       battery_remaining=100, temperature=2500, bat_id=0,
+                       battery_function=0, bat_type=0):
+    v = [int(x) & 0xFFFF for x in list(voltages)[:10]]
+    v = v + [65535] * (10 - len(v))                 # UINT16_MAX = cell not present
+    return struct.pack("<iih10HhBBBb", int(current_consumed), int(energy_consumed),
+                       int(temperature), *v, int(current_battery), bat_id & 0xFF,
+                       battery_function & 0xFF, bat_type & 0xFF, int(battery_remaining))
 
 
 def enc_manual_control(target, x, y, z, r, buttons=0):
@@ -517,6 +553,16 @@ _WIRE = {
     RC_CHANNELS: ("<I18HBB",
                   ["time_boot_ms"] + [f"chan{i}_raw" for i in range(1, 19)]
                   + ["chancount", "rssi"], 42),
+    ALTITUDE: ("<Qffffff",
+               ["time_usec", "altitude_monotonic", "altitude_amsl", "altitude_local",
+                "altitude_relative", "altitude_terrain", "bottom_clearance"], 32),
+    VIBRATION: ("<QfffIII",
+                ["time_usec", "vibration_x", "vibration_y", "vibration_z",
+                 "clipping_0", "clipping_1", "clipping_2"], 32),
+    BATTERY_STATUS: ("<iih10HhBBBb",
+                     ["current_consumed", "energy_consumed", "temperature"]
+                     + [f"voltage{i}" for i in range(1, 11)]
+                     + ["current_battery", "id", "battery_function", "type", "battery_remaining"], 36),
     MANUAL_CONTROL: ("<hhhhHB", ["x", "y", "z", "r", "buttons", "target"], 11),
     COMMAND_LONG: ("<fffffffHBBB",
                    ["param1", "param2", "param3", "param4", "param5", "param6", "param7",

@@ -38,6 +38,13 @@ class Vehicle(QObject):
         self.voltage = 0.0
         self.current = 0.0
         self.battery_remaining = -1
+        self.battery_consumed = -1          # mAh drawn (BATTERY_STATUS)
+        self.battery_temp = None            # deg C (None = unknown)
+        self.cells = []                     # per-cell voltages (V)
+        # vibration + detailed altitude
+        self.vibration = (0.0, 0.0, 0.0)    # m/s^2 on x/y/z
+        self.clipping = (0, 0, 0)           # accel clip counts
+        self.alt_terrain = None             # m above terrain (ALTITUDE.bottom_clearance)
         # sensor health bitmasks (SYS_STATUS)
         self.sensors_present = 0
         self.sensors_enabled = 0
@@ -125,6 +132,39 @@ class Vehicle(QObject):
     def _moved(a, b):
         return abs(a[0] - b[0]) > 2e-6 or abs(a[1] - b[1]) > 2e-6
 
+    def _on_altitude(self, f):
+        self.alt_msl = f.get("altitude_amsl", self.alt_msl)
+        self.alt_rel = f.get("altitude_relative", self.alt_rel)
+        self.alt_terrain = f.get("bottom_clearance", None)
+
+    def _on_vibration(self, f):
+        self.vibration = (f.get("vibration_x", 0.0), f.get("vibration_y", 0.0),
+                          f.get("vibration_z", 0.0))
+        self.clipping = (int(f.get("clipping_0", 0)), int(f.get("clipping_1", 0)),
+                         int(f.get("clipping_2", 0)))
+
+    def _on_battery_status(self, f):
+        cells = []
+        for i in range(1, 11):
+            mv = int(f.get(f"voltage{i}", 65535))
+            if mv == 65535:
+                break
+            cells.append(mv / 1000.0)
+        self.cells = cells
+        if cells:
+            self.voltage = sum(cells)               # pack voltage from the cells
+        cur = int(f.get("current_battery", -1))
+        if cur >= 0:
+            self.current = cur / 100.0
+        cons = int(f.get("current_consumed", -1))
+        if cons >= 0:
+            self.battery_consumed = cons
+        rem = int(f.get("battery_remaining", -1))
+        if -100 <= rem <= 100 and rem >= 0:
+            self.battery_remaining = rem
+        temp = int(f.get("temperature", 32767))
+        self.battery_temp = None if temp == 32767 else temp / 100.0
+
     def _on_sys_status(self, f):
         self.voltage = f.get("voltage_battery", 0) / 1000.0
         self.current = f.get("current_battery", 0) / 100.0
@@ -150,6 +190,9 @@ class Vehicle(QObject):
         mavlink.ATTITUDE: _on_attitude,
         mavlink.GLOBAL_POSITION_INT: _on_global_position,
         mavlink.SYS_STATUS: _on_sys_status,
+        mavlink.ALTITUDE: _on_altitude,
+        mavlink.VIBRATION: _on_vibration,
+        mavlink.BATTERY_STATUS: _on_battery_status,
         mavlink.GPS_RAW_INT: _on_gps_raw,
         mavlink.VFR_HUD: _on_vfr_hud,
         mavlink.STATUSTEXT: _on_statustext,

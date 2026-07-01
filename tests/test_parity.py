@@ -106,6 +106,33 @@ def main():
             check(int(m.fields["chan5_raw"]) == 65535, "rc unused chan")
             check(int(m.fields["rssi"]) == 180, "rc rssi")
 
+        m = roundtrip(mavlink.ALTITUDE,
+                      mavlink.enc_altitude(105.0, 120.5, -5.0, 50.0, 12.0, 3.0), crc_fn)
+        if m:
+            check(approx(m.fields["altitude_amsl"], 120.5), "altitude amsl")
+            check(approx(m.fields["altitude_relative"], 50.0), "altitude rel")
+            check(approx(m.fields["bottom_clearance"], 3.0), "altitude bottom")
+
+        m = roundtrip(mavlink.VIBRATION,
+                      mavlink.enc_vibration(0.5, 0.7, 1.2, 3, 4, 5), crc_fn)
+        if m:
+            check(approx(m.fields["vibration_x"], 0.5), "vibration x")
+            check(approx(m.fields["vibration_z"], 1.2), "vibration z")
+            check(int(m.fields["clipping_2"]) == 5, "vibration clip2")
+
+        m = roundtrip(mavlink.BATTERY_STATUS,
+                      mavlink.enc_battery_status([16800, 16750], current_battery=1500,
+                                                 current_consumed=2500, battery_remaining=88,
+                                                 temperature=2600), crc_fn)
+        if m:
+            check(int(m.fields["voltage1"]) == 16800, "battery cell1")
+            check(int(m.fields["voltage2"]) == 16750, "battery cell2")
+            check(int(m.fields["voltage3"]) == 65535, "battery cell3 unused")
+            check(int(m.fields["current_battery"]) == 1500, "battery current")
+            check(int(m.fields["current_consumed"]) == 2500, "battery consumed")
+            check(int(m.fields["battery_remaining"]) == 88, "battery remaining")
+            check(int(m.fields["temperature"]) == 2600, "battery temperature")
+
         m = roundtrip(mavlink.MANUAL_CONTROL,
                       mavlink.enc_manual_control(1, 500, -250, 800, -100, 3), crc_fn)
         if m:

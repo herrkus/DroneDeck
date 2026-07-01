@@ -41,7 +41,7 @@ from instruments import AttitudeIndicator, Compass
 LOG_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "logs")
 from mapview import MapView
 from panels import (TelemetryPanel, MessageConsole, MavInspector, HealthPanel,
-                    StatusStrip, CameraPanel, LogPanel)
+                    StatusStrip, CameraPanel, LogPanel, SystemsPanel)
 
 
 def haversine(lat1, lon1, lat2, lon2):
@@ -405,6 +405,15 @@ class DroneDeck(QMainWindow):
         self.logs.entries.connect(self.log_panel.set_entries)
         self.logs.progress.connect(self.log_panel.set_progress)
         self.logs.finished.connect(self._logs_finished)
+
+        # detailed systems (battery / vibration / altitude), tabbed at the bottom
+        self.systems = SystemsPanel()
+        sdock = QDockWidget("Systems", self)
+        sdock.setObjectName("systems_dock")
+        sdock.setWidget(self.systems)
+        sdock.setFeatures(QDockWidget.DockWidgetMovable | QDockWidget.DockWidgetFloatable)
+        self.addDockWidget(Qt.BottomDockWidgetArea, sdock)
+        self.tabifyDockWidget(ldock, sdock)
 
         # virtual joystick dock (hidden until the Joystick button is toggled)
         self.joystick = VirtualJoystick()
@@ -1054,6 +1063,7 @@ class DroneDeck(QMainWindow):
                           ve.alt_rel, ve.heading, ve.climb)
         self.compass.set_heading(ve.heading)
         self.health.set_health(ve.sensors_present, ve.sensors_enabled, ve.sensors_health)
+        self.systems.update_from(ve)
         if ve.have_position:
             self.map.update_vehicle(ve.lat, ve.lon, ve.heading, ve.home, ve.trail)
 
