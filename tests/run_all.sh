@@ -80,6 +80,7 @@ check "autopilot_version"   ""                        tests/test_autopilot_versi
 check "autopilot_v (py)"    "DRONEDECK_FORCE_PYTHON=1" tests/test_autopilot_version.py
 check "flightchip"          ""                        tests/test_flightchip.py
 check "mapcenter"           ""                        tests/test_mapcenter.py
+check "mapfuzz"             ""                        tests/test_mapfuzz.py
 check "cleartrail"          ""                        tests/test_cleartrail.py
 check "scalebar"            ""                        tests/test_scalebar.py
 check "fitmap"              ""                        tests/test_fitmap.py

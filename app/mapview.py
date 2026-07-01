@@ -32,7 +32,15 @@ _CACHE = os.path.join(_ROOT, "tiles_cache")
 
 
 def deg2num(lat, lon, z):
+    # Sanitise first: a corrupt .plan or a broken GPS can present NaN/Inf/out-of-range coordinates,
+    # and a non-finite tile/pixel value crashes the paintEvent (int(NaN) -> ValueError, int(Inf) ->
+    # OverflowError, or a NaN QPointF SEGFAULTs the native painter). Always return finite tile coords.
+    if not math.isfinite(lat):
+        lat = 0.0
+    if not math.isfinite(lon):
+        lon = 0.0
     lat = max(-85.05, min(85.05, lat))
+    lon = ((lon + 180.0) % 360.0) - 180.0          # wrap longitude into [-180, 180)
     n = 2 ** z
     x = (lon + 180.0) / 360.0 * n
     y = (1.0 - math.log(math.tan(math.radians(lat)) + 1.0 / math.cos(math.radians(lat))) / math.pi) / 2.0 * n
@@ -339,8 +347,10 @@ class MapView(QWidget):
         # geofence circles (inclusion red, exclusion orange)
         for c in self.fence_circles:
             cp = self._ll_to_px(c["lat"], c["lon"], cfx, cfy)
-            mpp = 156543.03392 * math.cos(math.radians(c["lat"])) / (2 ** self.zoom)
-            r_px = float(c.get("radius", 0)) / mpp if mpp else 0
+            clat = c["lat"] if math.isfinite(c["lat"]) else 0.0
+            mpp = 156543.03392 * math.cos(math.radians(clat)) / (2 ** self.zoom)
+            radius = float(c.get("radius", 0) or 0)
+            r_px = (radius if math.isfinite(radius) else 0.0) / mpp if mpp else 0
             col = QColor(255, 80, 80, 230) if c.get("incl", True) else QColor(255, 160, 40, 230)
             fill = QColor(255, 80, 80, 30) if c.get("incl", True) else QColor(255, 160, 40, 40)
             p.setPen(QPen(col, 2, Qt.DashLine))
@@ -450,7 +460,8 @@ class MapView(QWidget):
     def _draw_graticule(self, p, cfx, cfy):
         p.setPen(QPen(QColor(70, 74, 82), 1))
         step = 0.01 if self.zoom >= 13 else 0.1
-        latc, lonc = self.center
+        latc = self.center[0] if math.isfinite(self.center[0]) else 0.0
+        lonc = self.center[1] if math.isfinite(self.center[1]) else 0.0
         p.setFont(QFont("DejaVu Sans Mono", 7))
         for i in range(-6, 7):
             lat = round(latc / step) * step + i * step
@@ -471,7 +482,8 @@ class MapView(QWidget):
         p.drawText(8, self.height() - 8, f"z{self.zoom}  {tag}")
         # scale bar, bottom-left just above the zoom tag; on a translucent plate so it stays
         # readable over any tile (light streets or dark satellite)
-        mpp = 156543.03392 * math.cos(math.radians(self.center[0])) / (2 ** self.zoom)
+        clat = self.center[0] if math.isfinite(self.center[0]) else 0.0
+        mpp = 156543.03392 * math.cos(math.radians(clat)) / (2 ** self.zoom)
         _, bar_px, label = scale_nice(mpp)
         bar_px = int(round(bar_px))
         if bar_px >= 10:
