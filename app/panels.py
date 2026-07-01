@@ -869,9 +869,23 @@ class SystemsPanel(QWidget):
         if ve is None:
             return
         self.b_volt.setText(f"{ve.voltage:.2f} V")
+        # colour pack voltage by the weakest cell -- but ONLY with genuine per-cell data (every
+        # entry in the plausible <5 V Li-cell range). Some autopilots (incl. PX4 SITL) report the
+        # whole pack voltage in voltages[0] (e.g. 16.2 V); treating that as a cell would show a
+        # false green on a sagging pack, so leave it neutral instead.
+        if ve.cells and max(ve.cells) < 5.0:
+            lo = min(ve.cells)
+            self.b_volt.setStyleSheet("color:#37d67a;" if lo >= 3.7 else
+                                      "color:#e0a030;" if lo >= 3.5 else "color:#e05050;")
+        else:
+            self.b_volt.setStyleSheet("")
         self.b_curr.setText(f"{ve.current:.1f} A")
         self.b_used.setText("--" if ve.battery_consumed < 0 else f"{ve.battery_consumed} mAh")
-        self.b_rem.setText("--" if ve.battery_remaining < 0 else f"{ve.battery_remaining}%")
+        rem = ve.battery_remaining      # colour remaining % to match the status-strip chip
+        self.b_rem.setText("--" if rem < 0 else f"{rem}%")
+        self.b_rem.setStyleSheet("" if rem < 0 else
+                                 ("color:#37d67a;" if rem >= 40 else
+                                  "color:#e0a030;" if rem >= 20 else "color:#e05050;"))
         est = ve.battery_time_estimate()
         if est < 0:
             self.b_time.setText("--"); self.b_time.setStyleSheet("")
