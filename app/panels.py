@@ -587,6 +587,37 @@ class MavInspector(QWidget):
         return "  ".join(parts)[:240]
 
 
+class TrafficPanel(QWidget):
+    """Textual ADSB traffic list (callsign / ICAO / altitude / distance / bearing), the
+    tabular companion to the map targets -- like QGroundColor's ADSB view. Rows are built
+    by the main window (which owns the geo helpers) and pushed in via set_rows()."""
+    COLS = ["Callsign", "ICAO", "Alt", "Dist", "Brg"]
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        lay = QVBoxLayout(self)
+        self.table = QTableWidget(0, len(self.COLS))
+        self.table.setHorizontalHeaderLabels(self.COLS)
+        self.table.horizontalHeader().setStretchLastSection(True)
+        self.table.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        self.table.setSelectionMode(QAbstractItemView.NoSelection)
+        self.table.verticalHeader().setVisible(False)
+        self.table.setFont(_MONO)
+        lay.addWidget(self.table)
+        self.status = QLabel("no traffic")
+        self.status.setStyleSheet("color:#8fa3bf;")
+        lay.addWidget(self.status)
+
+    def set_rows(self, rows):
+        """rows: list of 5-tuples of display strings (callsign, icao, alt, dist, brg)."""
+        self.table.setRowCount(len(rows))
+        for r, cols in enumerate(rows):
+            for c, val in enumerate(cols):
+                self.table.setItem(r, c, QTableWidgetItem(str(val)))
+        self.status.setText(f"{len(rows)} target{'' if len(rows) == 1 else 's'}"
+                            if rows else "no traffic")
+
+
 class _VibBars(QWidget):
     """Three horizontal vibration bars (x/y/z), coloured by severity."""
 

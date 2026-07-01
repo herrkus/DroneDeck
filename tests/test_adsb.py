@@ -26,6 +26,9 @@ snap = {}
 def grab():
     snap["traffic"] = {k: dict(v) for k, v in win.traffic.items()}
     snap["map_traffic"] = list(win.map.traffic)
+    tp = win.traffic_panel.table
+    snap["panel_rows"] = tp.rowCount()
+    snap["panel_callsigns"] = sorted(tp.item(r, 0).text() for r in range(tp.rowCount()))
     app.quit()
 
 QTimer.singleShot(3500, grab)
@@ -53,6 +56,10 @@ for v in traffic.values():
         break
 if len(snap.get("map_traffic", [])) < 2:
     fail.append("map did not receive the traffic")
+if snap.get("panel_rows", 0) < 2:
+    fail.append(f"traffic panel listed {snap.get('panel_rows')} rows, expected >= 2")
+if snap.get("panel_callsigns") != ["DRN001", "HEL022"]:
+    fail.append(f"panel callsigns {snap.get('panel_callsigns')} != ['DRN001', 'HEL022']")
 
 print("ADSB FAILED: " + "; ".join(fail) if fail else "ADSB PASSED")
 sys.exit(1 if fail else 0)

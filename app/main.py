@@ -43,7 +43,8 @@ from instruments import AttitudeIndicator, Compass
 LOG_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "logs")
 from mapview import MapView
 from panels import (TelemetryPanel, MessageConsole, MavInspector, HealthPanel,
-                    StatusStrip, CameraPanel, LogPanel, SystemsPanel, MavlinkConsole)
+                    StatusStrip, CameraPanel, LogPanel, SystemsPanel, MavlinkConsole,
+                    TrafficPanel)
 
 
 def haversine(lat1, lon1, lat2, lon2):
@@ -54,6 +55,15 @@ def haversine(lat1, lon1, lat2, lon2):
     dl = math.radians(lon2 - lon1)
     a = math.sin(dp / 2) ** 2 + math.cos(p1) * math.cos(p2) * math.sin(dl / 2) ** 2
     return 2 * r * math.asin(min(1.0, math.sqrt(a)))
+
+
+def bearing(lat1, lon1, lat2, lon2):
+    """Initial great-circle bearing from point 1 to point 2, degrees 0-360 (0 = north)."""
+    p1, p2 = math.radians(lat1), math.radians(lat2)
+    dl = math.radians(lon2 - lon1)
+    y = math.sin(dl) * math.cos(p2)
+    x = math.cos(p1) * math.sin(p2) - math.sin(p1) * math.cos(p2) * math.cos(dl)
+    return math.degrees(math.atan2(y, x)) % 360.0
 
 
 def _fmt_dist(d):
@@ -619,6 +629,15 @@ class DroneDeck(QMainWindow):
         self.addDockWidget(Qt.BottomDockWidgetArea, sdock)
         self.tabifyDockWidget(ldock, sdock)
 
+        # ADSB traffic list (the tabular companion to the map targets)
+        self.traffic_panel = TrafficPanel()
+        tdock = QDockWidget("Traffic", self)
+        tdock.setObjectName("traffic_dock")
+        tdock.setWidget(self.traffic_panel)
+        tdock.setFeatures(QDockWidget.DockWidgetMovable | QDockWidget.DockWidgetFloatable)
+        self.addDockWidget(Qt.BottomDockWidgetArea, tdock)
+        self.tabifyDockWidget(sdock, tdock)
+
         # full telemetry readouts -- a roomy wide tab (was a cramped scroll in the column)
         tscroll = QScrollArea()
         tscroll.setWidgetResizable(True)
@@ -960,6 +979,7 @@ class DroneDeck(QMainWindow):
             self.traffic[icao] = {
                 "lat": f.get("lat", 0) / 1e7, "lon": f.get("lon", 0) / 1e7,
                 "heading": f.get("heading", 0) / 100.0,
+                "alt": f.get("altitude", 0) / 1000.0,      # mm ASL -> m
                 "callsign": (f.get("callsign", "") or "").strip(), "t": now}
 
     def _on_state(self, up):
@@ -1662,6 +1682,21 @@ class DroneDeck(QMainWindow):
             self.map.center = (self.vehicle.lat, self.vehicle.lon)
 
     # -- refresh --------------------------------------------------------------
+    def _refresh_traffic(self, ve):
+        """Rebuild the ADSB traffic table from self.traffic, with distance + bearing from
+        the active vehicle when its position is known."""
+        rows = []
+        for icao, t in sorted(self.traffic.items(),
+                              key=lambda kv: kv[1].get("callsign") or f"{kv[0]:06X}"):
+            alt = t.get("alt")
+            alt_s = f"{alt:.0f} m" if alt is not None else "--"
+            dist_s = brg_s = "--"
+            if ve.have_position and (t.get("lat") or t.get("lon")):
+                dist_s = _fmt_dist(haversine(ve.lat, ve.lon, t["lat"], t["lon"])).strip()
+                brg_s = f"{bearing(ve.lat, ve.lon, t['lat'], t['lon']):.0f}"
+            rows.append((t.get("callsign") or "--", f"{icao:06X}", alt_s, dist_s, brg_s))
+        self.traffic_panel.set_rows(rows)
+
     def _check_failsafe(self, ve):
         """Raise a one-shot console note + toast when a vehicle transitions INTO a
         Critical/Emergency (or worse) MAV_STATE. Fires once per entry into the failsafe
@@ -1696,6 +1731,7 @@ class DroneDeck(QMainWindow):
         self.traffic = {k: v for k, v in self.traffic.items() if now_t - v["t"] < 10.0}
         self.map.set_traffic([{"lat": v["lat"], "lon": v["lon"], "heading": v["heading"],
                                "callsign": v["callsign"]} for v in self.traffic.values()])
+        self._refresh_traffic(ve)
         self.map.set_others([(v.lat, v.lon, v.heading) for s, v in self.vehicles.items()
                              if v is not ve and v.have_position])
 
