@@ -965,16 +965,24 @@ class PyParser:
             spec = _WIRE.get(msgid)
             extra = CRC_EXTRA.get(msgid)
             if spec is None or extra is None:
-                # unknown msgid: skip the whole self-consistent frame (matching the C++ core) and
-                # count its seq for loss%, so undecoded traffic is not mistaken for lost packets.
-                if pos + total >= n or self.buf[pos + total] in (0xFE, 0xFD):
+                # unknown msgid. If the whole claimed frame is not in the buffer yet we cannot
+                # verify it is self-consistent (the byte AFTER it, which confirms a real undecoded
+                # frame, may not have arrived) -- so treat it as incomplete and wait, exactly like a
+                # known incomplete frame. Skipping `total` bytes here would swallow a real frame that
+                # an undecoded frame straddling a read boundary happens to claim (see test_parserfuzz).
+                if pos + total >= n:
+                    first_incomplete = pos if first_incomplete < 0 else first_incomplete
+                    pos += 1
+                elif self.buf[pos + total] in (0xFE, 0xFD):
+                    # self-consistent: a real, undecoded frame type -> skip it whole and count its
+                    # seq for loss%, so undecoded traffic is not mistaken for lost packets.
                     if v2:
                         self.track_seq(self.buf[pos + 5], self.buf[pos + 6], self.buf[pos + 4])
                     else:
                         self.track_seq(self.buf[pos + 3], self.buf[pos + 4], self.buf[pos + 2])
                     pos += total
                 else:
-                    pos += 1
+                    pos += 1                       # not a real frame boundary -> resync by one byte
                 continue
             crc = crc16_mcrf4xx(bytes(self.buf[pos + 1: pos + hdr + payload]), extra)
             off = pos + hdr + payload

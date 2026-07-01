@@ -421,12 +421,17 @@ struct Parser {
 
             const MsgInfo* info = find_info(msgid);
             if (!info) {
-                // Unknown msgid: no CRC seed to validate it, but the header gave us
-                // the exact frame length. If a valid start byte sits right where this
-                // frame ends (or it runs to the buffer edge), the framing is
-                // self-consistent -- skip the whole message rather than byte-scanning
-                // its payload (which used to spawn phantom frames counted as drops).
-                if (pos + total >= n || buf[pos + total] == 0xFE || buf[pos + total] == 0xFD) {
+                // Unknown msgid: no CRC seed to validate it, but the header gave us the exact
+                // frame length. If the whole claimed frame is not in the buffer yet we cannot
+                // verify it is self-consistent (the byte AFTER it -- which confirms a real
+                // undecoded frame -- may not have arrived), so treat it as incomplete and wait,
+                // exactly like a known incomplete frame. Skipping `total` bytes here would swallow
+                // a real frame that an undecoded frame straddling a read boundary claims
+                // (see test_parserfuzz). Only skip whole when the frame is fully present AND a
+                // start byte follows it (self-consistent framing).
+                if (pos + total >= n) {
+                    mark(pos); ++pos;
+                } else if (buf[pos + total] == 0xFE || buf[pos + total] == 0xFD) {
                     if (v2) track_seq(buf[pos + 5], buf[pos + 6], buf[pos + 4]);   // count for loss%
                     else    track_seq(buf[pos + 3], buf[pos + 4], buf[pos + 2]);
                     pos += total;
