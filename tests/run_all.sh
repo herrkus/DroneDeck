@@ -59,6 +59,7 @@ check "ekf (python)"        "DRONEDECK_FORCE_PYTHON=1" tests/test_ekf.py
 check "wind"                ""                        tests/test_wind.py
 check "vibration"           ""                        tests/test_vibration.py
 check "telemfuzz"           ""                        tests/test_telemfuzz.py
+check "widgetfuzz"          ""                        tests/test_widgetfuzz.py
 check "wind (python)"       "DRONEDECK_FORCE_PYTHON=1" tests/test_wind.py
 check "rc"                  ""                        tests/test_rc.py
 check "rc (python)"         "DRONEDECK_FORCE_PYTHON=1" tests/test_rc.py

@@ -676,14 +676,18 @@ class _VibBars(QWidget):
             p.setPen(Qt.NoPen)
             p.setBrush(QColor(38, 42, 50))
             p.drawRoundedRect(track, 3, 3)
-            frac = max(0.0, min(1.0, v / MAXV))
+            # non-finite (a drone can stream NaN vibration): show nothing, NOT a full red bar --
+            # frac would clamp NaN->1.0 and the colour fall through to red, a false critical alarm
+            finite = math.isfinite(v)
+            frac = max(0.0, min(1.0, v / MAXV)) if finite else 0.0
             col = (QColor(120, 210, 120) if v < 30 else
                    QColor(230, 180, 60) if v < 60 else QColor(230, 90, 70))
             p.setBrush(col)
             p.drawRoundedRect(QRectF(track.left(), track.top(), track.width() * frac,
                                      track.height()), 3, 3)
             p.setPen(QColor(220, 224, 230))
-            p.drawText(QRectF(track.right() + 4, y - 2, 46, 16), Qt.AlignVCenter, f"{v:.0f}")
+            p.drawText(QRectF(track.right() + 4, y - 2, 46, 16), Qt.AlignVCenter,
+                       f"{v:.0f}" if finite else "--")
         p.end()
 
 
@@ -717,7 +721,8 @@ class _CellBars(QWidget):
         H = max(1.0, bot - top)
         for i, v in enumerate(self.cells):
             x = gap + i * (bw + gap)
-            frac = max(0.0, min(1.0, (v - self.LO) / (self.HI - self.LO)))
+            finite = math.isfinite(v)
+            frac = max(0.0, min(1.0, (v - self.LO) / (self.HI - self.LO))) if finite else 0.0
             col = (QColor(120, 210, 120) if v >= 3.7 else
                    QColor(230, 180, 60) if v >= 3.5 else QColor(230, 90, 70))
             p.setPen(Qt.NoPen)
@@ -728,7 +733,8 @@ class _CellBars(QWidget):
             p.drawRoundedRect(QRectF(x, bot - fh, bw, fh), 2, 2)
             p.setPen(QColor(210, 214, 220))
             p.setFont(QFont("DejaVu Sans", 7))
-            p.drawText(QRectF(x - 2, bot + 1, bw + 4, 12), Qt.AlignCenter, f"{v:.2f}")
+            p.drawText(QRectF(x - 2, bot + 1, bw + 4, 12), Qt.AlignCenter,
+                       f"{v:.2f}" if finite else "--")
         p.end()
 
 
@@ -758,7 +764,7 @@ class _ServoBars(QWidget):
         H = max(1.0, bot - top)
         for i, v in enumerate(self.vals):
             x = gap + i * (bw + gap)
-            active = v > 0                            # 0 = channel not driven
+            active = math.isfinite(v) and v > 0       # 0 / non-finite = channel not driven
             p.setPen(Qt.NoPen)
             p.setBrush(QColor(38, 42, 50))
             p.drawRoundedRect(QRectF(x, top, bw, H), 2, 2)
