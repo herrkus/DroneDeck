@@ -41,6 +41,7 @@ check "fence_shapes"        ""                        tests/test_fence_shapes.py
 check "params"              ""                        tests/test_params.py
 check "tlog"                ""                        tests/test_tlog.py
 check "analyze"             ""                        tests/test_analyze.py
+check "planfile"            ""                        tests/test_planfile.py
 check "manual"              ""                        tests/test_manual.py
 check "camera"              ""                        tests/test_camera.py
 check "logs"                ""                        tests/test_logs.py

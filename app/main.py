@@ -22,7 +22,7 @@ from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QHBoxLayout,
                                QPushButton, QLabel, QCheckBox, QMessageBox, QScrollArea,
                                QDockWidget, QComboBox, QInputDialog, QListWidget,
                                QGroupBox, QTabWidget, QSpinBox, QDialog, QFormLayout,
-                               QDoubleSpinBox, QDialogButtonBox)
+                               QDoubleSpinBox, QDialogButtonBox, QFileDialog)
 
 import core
 import mavlink
@@ -577,6 +577,9 @@ class DroneDeck(QMainWindow):
         self._default_state = self.saveState()   # snapshot the default dock layout for Reset
 
     def _build_menu(self):
+        filem = self.menuBar().addMenu("&File")
+        filem.addAction("Open Plan...").triggered.connect(self._open_plan)
+        filem.addAction("Save Plan...").triggered.connect(self._save_plan)
         self._view_menu = view = self.menuBar().addMenu("&View")
         self._act_reset = act_reset = view.addAction("Reset Layout")
         act_reset.setShortcut("Ctrl+Shift+L")
@@ -594,6 +597,48 @@ class DroneDeck(QMainWindow):
     def _open_analyze(self):
         from analyze import AnalyzeDialog
         AnalyzeDialog(self, LOG_DIR).exec()
+
+    def _open_plan(self):
+        path, _ = QFileDialog.getOpenFileName(self, "Open mission plan", LOG_DIR,
+                                              "QGC Plan (*.plan);;All files (*)")
+        if not path:
+            return
+        try:
+            import planfile
+            items = planfile.load_plan(path)
+        except Exception as e:
+            QMessageBox.warning(self, "Open Plan", f"Could not read plan:\n{e}")
+            return
+        if not items:
+            self._on_info("plan has no mission items")
+            return
+        self.mission_items = items
+        self._renumber()
+        self._refresh_mission_view()
+        self.map.center = (items[0].lat, items[0].lon)
+        self.map.update()
+        self._on_info(f"loaded {len(items)} waypoints from {os.path.basename(path)}")
+
+    def _save_plan(self):
+        if not self.mission_items:
+            QMessageBox.information(self, "Save Plan", "No waypoints to save.")
+            return
+        path, _ = QFileDialog.getSaveFileName(self, "Save mission plan",
+                                              os.path.join(LOG_DIR, "mission.plan"),
+                                              "QGC Plan (*.plan)")
+        if not path:
+            return
+        if not path.endswith(".plan"):
+            path += ".plan"
+        try:
+            import planfile
+            self._renumber()
+            planfile.save_plan(path, self.mission_items,
+                               home=self.vehicle.home if self.vehicle.home else None)
+        except Exception as e:
+            QMessageBox.warning(self, "Save Plan", f"Could not save plan:\n{e}")
+            return
+        self._on_info(f"saved {len(self.mission_items)} waypoints to {os.path.basename(path)}")
 
     def _fence_from_mission(self):
         """Build an inclusion geofence (convex hull + margin) around the planned mission
