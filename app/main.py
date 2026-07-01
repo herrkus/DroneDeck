@@ -846,6 +846,7 @@ class DroneDeck(QMainWindow):
         self.vehicle.status_text.connect(self.console.add_message)
         self.vehicle.status_text.connect(self._on_new_message)
         self.vehicle.command_ack.connect(self._on_command_ack)
+        self.vehicle.mission_reached.connect(self._on_mission_reached)
         self.map.clicked.connect(self._on_map_click)
         self.map.contextAction.connect(self._on_map_context)
         self.map.wpAction.connect(self._on_wp_action)
@@ -909,6 +910,11 @@ class DroneDeck(QMainWindow):
                            if sev <= 4), "")
             self._notify(f"{name} REJECTED: {res}" + (f"  --  {reason}" if reason else ""),
                          "#c02020")
+
+    def _on_mission_reached(self, seq):
+        """MISSION_ITEM_REACHED -- note each waypoint the vehicle completes (QGC-style)."""
+        self.console.add_note(f"reached waypoint {seq}", "#8fd0ff")
+        self._on_info(f"reached waypoint {seq}")
 
     def _notify(self, text, color="#e0a030", ms=7000):
         """Show a transient, auto-hiding notification banner (a toast)."""
@@ -1041,6 +1047,7 @@ class DroneDeck(QMainWindow):
             veh.status_text.connect(self.console.add_message)
             veh.status_text.connect(self._on_new_message)
             veh.command_ack.connect(self._on_command_ack)
+            veh.mission_reached.connect(self._on_mission_reached)
         self.vehicles[sysid] = veh
         active_sid = next((s for s, v in self.vehicles.items() if v is self.vehicle), sysid)
         self.vehicle_combo.blockSignals(True)

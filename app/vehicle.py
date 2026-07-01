@@ -27,6 +27,7 @@ class Vehicle(QObject):
     text_status = Signal(str)       # human-readable connection notes
     status_text = Signal(int, str)  # STATUSTEXT: severity, text
     command_ack = Signal(int, int)  # COMMAND_ACK: command, result
+    mission_reached = Signal(int)   # MISSION_ITEM_REACHED: waypoint seq just completed
 
     TRAIL_MAX = 4000
 
@@ -122,6 +123,7 @@ class Vehicle(QObject):
         self.pos_horiz_acc = None           # m, from ESTIMATOR_STATUS
         self.pos_vert_acc = None
         self.current_wp = -1        # active mission waypoint seq (from MISSION_CURRENT)
+        self.reached_wp = -1        # last waypoint completed (from MISSION_ITEM_REACHED)
         # status
         self.sysid = 0
         self.mav_type = 0
@@ -412,6 +414,10 @@ class Vehicle(QObject):
     def _on_mission_current(self, f):
         self.current_wp = int(f.get("seq", -1))
 
+    def _on_mission_reached(self, f):
+        self.reached_wp = int(f.get("seq", -1))
+        self.mission_reached.emit(self.reached_wp)
+
     _H = {
         mavlink.HEARTBEAT: _on_heartbeat,
         mavlink.ATTITUDE: _on_attitude,
@@ -438,6 +444,7 @@ class Vehicle(QObject):
         mavlink.STATUSTEXT: _on_statustext,
         mavlink.COMMAND_ACK: _on_command_ack,
         mavlink.MISSION_CURRENT: _on_mission_current,
+        mavlink.MISSION_ITEM_REACHED: _on_mission_reached,
     }
 
     # -- derived --------------------------------------------------------------
