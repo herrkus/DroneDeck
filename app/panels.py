@@ -63,7 +63,8 @@ class TelemetryPanel(QWidget):
             "MOTION": [("gspeed", "Ground spd"), ("aspeed", "Air spd"), ("climb", "Climb"),
                        ("throttle", "Throttle"), ("hdg", "Heading"), ("wind", "Wind")],
             "NAVIGATION": [("home_dist", "Dist to home"), ("flight_time", "Flight time"),
-                           ("home_eta", "Home ETA"), ("wp_dist", "Dist to WP")],
+                           ("home_eta", "Home ETA"), ("wp_dist", "Dist to WP"),
+                           ("odometer", "Distance flown")],
             "GPS": [("fix", "Fix"), ("sats", "Satellites"), ("hdop", "HDOP"), ("pos_acc", "Pos acc")],
         }
         # Wide-and-short: this panel lives in a wide bottom dock, so the groups flow
@@ -188,6 +189,7 @@ class TelemetryPanel(QWidget):
         self._set("flight_time", nav.get("flight_time", "--"))
         self._set("home_eta", nav.get("home_eta", "--"))
         self._set("wp_dist", nav.get("wp_dist", "--"))
+        self._set("odometer", nav.get("odometer", "--"))
 
 
 class LogPanel(QWidget):

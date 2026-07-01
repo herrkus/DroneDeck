@@ -12,6 +12,16 @@ from PySide6.QtCore import QObject, Signal
 import mavlink
 
 
+def _haversine(lat1, lon1, lat2, lon2):
+    """Great-circle distance in metres (kept local so vehicle.py has no UI/main dependency)."""
+    r = 6371000.0
+    p1, p2 = math.radians(lat1), math.radians(lat2)
+    dp = math.radians(lat2 - lat1)
+    dl = math.radians(lon2 - lon1)
+    a = math.sin(dp / 2) ** 2 + math.cos(p1) * math.cos(p2) * math.sin(dl / 2) ** 2
+    return 2 * r * math.asin(min(1.0, math.sqrt(a)))
+
+
 class Vehicle(QObject):
     updated = Signal()              # emitted after a batch of messages is applied
     text_status = Signal(str)       # human-readable connection notes
@@ -91,6 +101,8 @@ class Vehicle(QObject):
         self.have_position = False
         self.home = None            # (lat, lon)
         self.trail = []             # [(lat, lon), ...]
+        self.distance_traveled = 0.0   # m, cumulative ground track since connect (odometer)
+        self._odo_pos = None           # last position counted toward the odometer
         self.last_heartbeat = 0.0
         self.msg_count = 0
 
@@ -151,6 +163,17 @@ class Vehicle(QObject):
                 self.trail.append((self.lat, self.lon))
                 if len(self.trail) > self.TRAIL_MAX:
                     self.trail.pop(0)
+            # odometer: accumulate ground track in >=0.5 m steps (rejects GPS jitter), and
+            # resync without counting on a >=1 km jump (glitch / home reset).
+            if self._odo_pos is None:
+                self._odo_pos = (self.lat, self.lon)
+            else:
+                d = _haversine(self._odo_pos[0], self._odo_pos[1], self.lat, self.lon)
+                if 0.5 <= d < 1000.0:
+                    self.distance_traveled += d
+                    self._odo_pos = (self.lat, self.lon)
+                elif d >= 1000.0:
+                    self._odo_pos = (self.lat, self.lon)
 
     @staticmethod
     def _moved(a, b):

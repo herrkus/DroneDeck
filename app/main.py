@@ -1755,7 +1755,8 @@ class DroneDeck(QMainWindow):
             self._flight_time = now - self._arm_t0
         else:
             self._arm_t0 = None
-        nav = {"flight_time": _fmt_mmss(self._flight_time)}
+        nav = {"flight_time": _fmt_mmss(self._flight_time),
+               "odometer": _fmt_dist(ve.distance_traveled).strip()}
         if ve.have_position and ve.home:
             d = haversine(ve.lat, ve.lon, ve.home[0], ve.home[1])
             nav["home_dist"] = _fmt_dist(d)
