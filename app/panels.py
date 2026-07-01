@@ -851,6 +851,18 @@ class SystemsPanel(QWidget):
         rf.addRow("RSSI (remote)", self.r_remrssi)
         rf.addRow("Noise", self.r_noise)
         lay.addWidget(radio)
+
+        # GPS integrity / security (GNSS_INTEGRITY, development dialect) -- hidden until received
+        self._gi_group = QGroupBox("GPS integrity")
+        gif = QFormLayout(self._gi_group)
+        self.gi_jam = QLabel("--"); self.gi_spoof = QLabel("--")
+        self.gi_raim = QLabel("--"); self.gi_sig = QLabel("--")
+        gif.addRow("Jamming", self.gi_jam)
+        gif.addRow("Spoofing", self.gi_spoof)
+        gif.addRow("RAIM", self.gi_raim)
+        gif.addRow("Signal", self.gi_sig)
+        self._gi_group.setVisible(False)
+        lay.addWidget(self._gi_group)
         lay.addStretch(1)
 
     def update_from(self, ve):
@@ -930,3 +942,19 @@ class SystemsPanel(QWidget):
         self.r_rssi.setText("--" if ve.radio_rssi is None else str(ve.radio_rssi))
         self.r_remrssi.setText("--" if ve.radio_remrssi is None else str(ve.radio_remrssi))
         self.r_noise.setText("--" if ve.radio_noise is None else str(ve.radio_noise))
+
+        if ve.have_gnss_integrity:
+            self._gi_group.setVisible(True)
+
+            def gcol(state, ok_vals):
+                # 3 = detected/failed (red), 2 = mitigated (amber), ok_vals -> green, else neutral
+                return ("#e05050" if state == 3 else "#e0a030" if state == 2
+                        else "#37d67a" if state in ok_vals else "#8fa3bf")
+            self.gi_jam.setText(mavlink.GPS_JAMMING_TEXT.get(ve.gps_jamming, "--"))
+            self.gi_jam.setStyleSheet(f"color:{gcol(ve.gps_jamming, (1,))};")
+            self.gi_spoof.setText(mavlink.GPS_SPOOFING_TEXT.get(ve.gps_spoofing, "--"))
+            self.gi_spoof.setStyleSheet(f"color:{gcol(ve.gps_spoofing, (1,))};")
+            self.gi_raim.setText(mavlink.GPS_RAIM_TEXT.get(ve.gps_raim, "--"))
+            self.gi_raim.setStyleSheet(f"color:{gcol(ve.gps_raim, (2,))};")
+            q = ve.gps_signal_quality
+            self.gi_sig.setText("--" if q > 10 else f"{q}/10")

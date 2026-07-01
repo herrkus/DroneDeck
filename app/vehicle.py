@@ -95,6 +95,12 @@ class Vehicle(QObject):
         self.product_id = 0
         self.capabilities = 0
         self.have_autopilot_version = False
+        # GPS integrity / security (GNSS_INTEGRITY): 3 = jamming/spoofing detected, RAIM failed
+        self.gps_jamming = 0
+        self.gps_spoofing = 0
+        self.gps_raim = 0
+        self.gps_signal_quality = 255       # 0-10; 255 = n/a
+        self.have_gnss_integrity = False
         # autopilot time estimates (TIME_ESTIMATE_TO_TARGET), seconds; -1 = n/a
         self.eta_safe_return = -1
         self.eta_land = -1
@@ -317,6 +323,13 @@ class Vehicle(QObject):
         self.fw_git = git.hex() if any(git) else ""
         self.have_autopilot_version = True
 
+    def _on_gnss_integrity(self, f):
+        self.gps_jamming = int(f.get("jamming_state", 0))
+        self.gps_spoofing = int(f.get("spoofing_state", 0))
+        self.gps_raim = int(f.get("raim_state", 0))
+        self.gps_signal_quality = int(f.get("gnss_signal_quality", 255))
+        self.have_gnss_integrity = True
+
     def _on_time_estimate(self, f):
         self.eta_safe_return = int(f.get("safe_return", -1))
         self.eta_land = int(f.get("land", -1))
@@ -407,6 +420,7 @@ class Vehicle(QObject):
         mavlink.ESC_STATUS: _on_esc_status,
         mavlink.EXTENDED_SYS_STATE: _on_extended_sys_state,
         mavlink.TIME_ESTIMATE_TO_TARGET: _on_time_estimate,
+        mavlink.GNSS_INTEGRITY: _on_gnss_integrity,
         mavlink.AUTOPILOT_VERSION: _on_autopilot_version,
         mavlink.HOME_POSITION: _on_home_position,
         mavlink.BATTERY_STATUS: _on_battery_status,

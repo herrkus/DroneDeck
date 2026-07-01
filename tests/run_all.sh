@@ -66,6 +66,8 @@ check "extstate"            ""                        tests/test_extstate.py
 check "extstate (python)"   "DRONEDECK_FORCE_PYTHON=1" tests/test_extstate.py
 check "tett"                ""                        tests/test_tett.py
 check "tett (python)"       "DRONEDECK_FORCE_PYTHON=1" tests/test_tett.py
+check "gnss"                ""                        tests/test_gnss.py
+check "gnss (python)"       "DRONEDECK_FORCE_PYTHON=1" tests/test_gnss.py
 check "autopilot_version"   ""                        tests/test_autopilot_version.py
 check "autopilot_v (py)"    "DRONEDECK_FORCE_PYTHON=1" tests/test_autopilot_version.py
 check "flightchip"          ""                        tests/test_flightchip.py

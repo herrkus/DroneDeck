@@ -178,6 +178,15 @@ NEW = {
                                       ("int32_t", "mission_next_item", 0),
                                       ("int32_t", "mission_end", 0),
                                       ("int32_t", "commanded_action", 0)]),
+    # GNSS_INTEGRITY (development.xml): uint32 + 2 uint16 + 9 uint8, no extensions. Computes 169.
+    "GNSS_INTEGRITY": (441, [("uint32_t", "system_errors", 0), ("uint16_t", "raim_hfom", 0),
+                             ("uint16_t", "raim_vfom", 0), ("uint8_t", "id", 0),
+                             ("uint8_t", "authentication_state", 0), ("uint8_t", "jamming_state", 0),
+                             ("uint8_t", "spoofing_state", 0), ("uint8_t", "raim_state", 0),
+                             ("uint8_t", "corrections_quality", 0),
+                             ("uint8_t", "system_status_summary", 0),
+                             ("uint8_t", "gnss_signal_quality", 0),
+                             ("uint8_t", "post_processing_quality", 0)]),
     # uid2 (uint8[18]) is an extension -> excluded. Three uint8[8] custom-version arrays keep
     # their length byte in the CRC. Computes 178.
     "AUTOPILOT_VERSION": (148, [("uint64_t", "capabilities", 0), ("uint64_t", "uid", 0),
