@@ -561,6 +561,7 @@ class DroneDeck(QMainWindow):
         self._msg_worst = 99        # worst (lowest) unread severity; 99 = none
         self._takeoff_alt = 25.0    # remembered takeoff altitude (persisted across runs)
         self._ruler_a = None        # first point of the map measure tool, or None
+        self._stream_reqs = {}      # sysid -> {tries, last_t}: bounded re-request of telemetry streams
         # no maximum height -- drag the map/messages divider to grow the board freely
         msg_wrap = QWidget()
         mcl = QVBoxLayout(msg_wrap)
@@ -918,6 +919,7 @@ class DroneDeck(QMainWindow):
             self.link.close()
             self.link.deleteLater()
         self.link = self._make_link()
+        self._stream_reqs.clear()   # re-request telemetry streams on a fresh/re-connect
         t = self.transport_combo.currentText()
         p = self.link_edit.text().strip()
         try:
@@ -992,12 +994,36 @@ class DroneDeck(QMainWindow):
             is_new = sysid not in self.vehicles
             veh = self._ensure_vehicle(sysid)
             veh.consume(msgs)
-            if is_new and self.link is not None:
-                # A real drone streams little until asked -- request telemetry now that
-                # we know it exists (and its autopilot, for the right request dialect).
-                self.link.request_data_streams(sysid, veh.autopilot)
-                self._on_info(f"vehicle #{sysid} detected -- requesting telemetry streams")
+            if self.link is not None:
+                self._maybe_request_streams(sysid, veh, is_new)
         self._sync_mode_combo()   # keep the mode selector matched to the autopilot
+
+    STREAM_MAX_TRIES = 5          # cap re-requests so a silent vehicle can't be spammed forever
+    STREAM_RETRY_S = 2.0          # wait between stream re-requests
+
+    def _maybe_request_streams(self, sysid, veh, is_new):
+        """Request telemetry streams on first detection, and -- because a real drone streams
+        little until asked and a single request can be dropped on a lossy radio link -- re-request
+        (bounded) until high-rate telemetry actually arrives. The retry also covers the case where
+        the first packet from a vehicle wasn't its HEARTBEAT, so its autopilot type (hence the
+        right SET_MESSAGE_INTERVAL dialect) wasn't known on the first request."""
+        st = self._stream_reqs.get(sysid)
+        if is_new or st is None:
+            self.link.request_data_streams(sysid, veh.autopilot)
+            self._stream_reqs[sysid] = {"tries": 1, "last_t": time.monotonic()}
+            self._on_info(f"vehicle #{sysid} detected -- requesting telemetry streams")
+            return
+        if veh.have_attitude or veh.have_position:
+            return                              # telemetry is flowing -- nothing more to do
+        if st["tries"] >= self.STREAM_MAX_TRIES:
+            return                              # gave up (vehicle silent) -- do not spam
+        now = time.monotonic()
+        if now - st["last_t"] >= self.STREAM_RETRY_S:
+            self.link.request_data_streams(sysid, veh.autopilot)
+            st["tries"] += 1
+            st["last_t"] = now
+            self._on_info(f"vehicle #{sysid}: no telemetry yet -- re-requesting streams "
+                          f"(try {st['tries']}/{self.STREAM_MAX_TRIES})")
 
     def _ensure_vehicle(self, sysid):
         veh = self.vehicles.get(sysid)

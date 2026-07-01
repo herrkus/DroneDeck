@@ -135,6 +135,7 @@ class Vehicle(QObject):
         self.last_ack = None        # (command, result)
         # bookkeeping
         self.have_position = False
+        self.have_attitude = False  # True once ATTITUDE arrives -- "telemetry is flowing" (no GPS needed)
         self.home = None            # (lat, lon) -- first fix, or authoritative HOME_POSITION
         self.home_alt = None        # m AMSL, from HOME_POSITION
         self.have_home_position = False   # True once the autopilot reports HOME_POSITION
@@ -185,6 +186,7 @@ class Vehicle(QObject):
         self.roll = f.get("roll", 0.0)
         self.pitch = f.get("pitch", 0.0)
         self.yaw = f.get("yaw", 0.0)
+        self.have_attitude = True
 
     def _on_global_position(self, f):
         self.lat = f.get("lat", 0) / 1e7
