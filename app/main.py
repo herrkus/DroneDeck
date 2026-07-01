@@ -343,11 +343,20 @@ class DroneDeck(QMainWindow):
         self.link_banner.setStyleSheet(
             "background:#c02020; color:white; font-weight:bold; padding:6px; font-size:13px;")
         self.link_banner.hide()
+        # transient notification toast (e.g. command rejections), auto-hides
+        self.notice_banner = QLabel("")
+        self.notice_banner.setAlignment(Qt.AlignCenter)
+        self.notice_banner.setWordWrap(True)
+        self.notice_banner.hide()
+        self._notice_timer = QTimer(self)
+        self._notice_timer.setSingleShot(True)
+        self._notice_timer.timeout.connect(self.notice_banner.hide)
         central = QWidget()
         cv = QVBoxLayout(central)
         cv.setContentsMargins(0, 0, 0, 0)
         cv.setSpacing(0)
         cv.addWidget(self.link_banner)
+        cv.addWidget(self.notice_banner)
         cv.addWidget(self.status_strip)
         cv.addWidget(split, 1)
         self.setCentralWidget(central)
@@ -532,6 +541,25 @@ class DroneDeck(QMainWindow):
         line = f"{name}: {res}"
         self._on_info(line)
         self.console.add_note(line, "#37d67a" if ok else "#e05050")
+        # A rejected safety-critical command (arm, takeoff, ...) is easy to miss in the
+        # console -- pop a prominent toast with the autopilot's own reason (the most
+        # recent warning/error STATUSTEXT, e.g. "Arming denied: GPS not ready").
+        critical = {mavlink.MAV_CMD_COMPONENT_ARM_DISARM, mavlink.MAV_CMD_NAV_TAKEOFF,
+                    mavlink.MAV_CMD_NAV_LAND, mavlink.MAV_CMD_NAV_RETURN_TO_LAUNCH,
+                    mavlink.MAV_CMD_DO_SET_MODE}
+        if not ok and command in critical:
+            reason = next((txt for sev, txt in reversed(self.vehicle.messages[-12:])
+                           if sev <= 4), "")
+            self._notify(f"{name} REJECTED: {res}" + (f"  --  {reason}" if reason else ""),
+                         "#c02020")
+
+    def _notify(self, text, color="#e0a030", ms=7000):
+        """Show a transient, auto-hiding notification banner (a toast)."""
+        self.notice_banner.setStyleSheet(
+            f"background:{color}; color:white; font-weight:bold; padding:6px; font-size:13px;")
+        self.notice_banner.setText(text)
+        self.notice_banner.show()
+        self._notice_timer.start(ms)
 
     # -- actions --------------------------------------------------------------
     def _connect(self):
