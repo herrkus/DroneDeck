@@ -47,6 +47,13 @@ LOG_ENTRY = 118
 LOG_REQUEST_DATA = 119
 LOG_DATA = 120
 LOG_REQUEST_END = 122
+# MAVLink serial/shell passthrough (PX4 nsh console)
+SERIAL_CONTROL = 126
+SERIAL_CONTROL_DEV_SHELL = 10
+SERIAL_CONTROL_FLAG_REPLY = 1
+SERIAL_CONTROL_FLAG_RESPOND = 2
+SERIAL_CONTROL_FLAG_EXCLUSIVE = 4
+SERIAL_CONTROL_FLAG_MULTI = 16
 ADSB_VEHICLE = 246
 
 MSG_NAME = {
@@ -85,6 +92,7 @@ MSG_NAME = {
     LOG_REQUEST_DATA: "LOG_REQUEST_DATA",
     LOG_DATA: "LOG_DATA",
     LOG_REQUEST_END: "LOG_REQUEST_END",
+    SERIAL_CONTROL: "SERIAL_CONTROL",
     ADSB_VEHICLE: "ADSB_VEHICLE",
 }
 
@@ -101,6 +109,7 @@ CRC_EXTRA = {
     REQUEST_DATA_STREAM: 148,
     LOG_REQUEST_LIST: 128, LOG_ENTRY: 56, LOG_REQUEST_DATA: 116,
     LOG_DATA: 134, LOG_REQUEST_END: 203, ADSB_VEHICLE: 184,
+    SERIAL_CONTROL: 194,
 }
 
 # Decoded-field order. Index i here is index i in Decoded.f[] from the C++ core.
@@ -146,6 +155,7 @@ FIELDS = {
     LOG_ENTRY: ["time_utc", "size", "id", "num_logs", "last_log_num"],
     LOG_REQUEST_DATA: ["ofs", "count", "id", "target_system", "target_component"],
     LOG_DATA: ["ofs", "id", "count"],        # `data` (90 bytes) attached separately
+    SERIAL_CONTROL: ["baudrate", "timeout", "device", "flags", "count"],  # `data` (70 B) attached
     LOG_REQUEST_END: ["target_system", "target_component"],
     ADSB_VEHICLE: ["ICAO_address", "lat", "lon", "altitude", "heading", "hor_velocity",
                    "ver_velocity", "flags", "squawk", "altitude_type", "emitter_type",
@@ -298,6 +308,18 @@ def frame(msgid: int, payload: bytes, seq: int, sysid: int, compid: int, crc_fn=
     if crc_fn is None:
         crc_fn = crc16_mcrf4xx
     head = bytes((0xFE, len(payload), seq & 0xFF, sysid & 0xFF, compid & 0xFF, msgid & 0xFF))
+    crc = crc_fn(head[1:] + payload, CRC_EXTRA[msgid])
+    return head + payload + struct.pack("<H", crc)
+
+
+def frame_v2(msgid: int, payload: bytes, seq: int, sysid: int, compid: int, crc_fn=None) -> bytes:
+    """Wrap a payload in a MAVLink v2 frame (0xFD, unsigned). Needed for messages
+    with extension fields (e.g. SERIAL_CONTROL's target_system) that some autopilots
+    only honour over v2 -- PX4's nsh shell is one."""
+    if crc_fn is None:
+        crc_fn = crc16_mcrf4xx
+    head = bytes((0xFD, len(payload) & 0xFF, 0, 0, seq & 0xFF, sysid & 0xFF, compid & 0xFF,
+                  msgid & 0xFF, (msgid >> 8) & 0xFF, (msgid >> 16) & 0xFF))
     crc = crc_fn(head[1:] + payload, CRC_EXTRA[msgid])
     return head + payload + struct.pack("<H", crc)
 
@@ -478,6 +500,22 @@ def enc_param_set(param_id, value, param_type=MAV_PARAM_TYPE_REAL32,
                        target_component & 0xFF, _pid(param_id), param_type & 0xFF)
 
 
+def enc_serial_control(device, flags, data=b"", timeout=0, baudrate=0, count=None,
+                       target_system=1, target_component=1):
+    # target_system/target_component are MAVLink extension fields -- PX4's shell
+    # only answers when it is addressed, so we always include them (they don't
+    # affect the CRC_EXTRA seed, which is computed over the base fields only).
+    if isinstance(data, str):
+        data = data.encode("utf-8", "replace")
+    data = bytes(data)
+    if count is None:
+        count = len(data)
+    data = (data + b"\x00" * 70)[:70]
+    return struct.pack("<IHBBB70sBB", int(baudrate) & 0xFFFFFFFF, int(timeout) & 0xFFFF,
+                       int(device) & 0xFF, int(flags) & 0xFF, int(count) & 0xFF, data,
+                       int(target_system) & 0xFF, int(target_component) & 0xFF)
+
+
 def enc_mission_count(count, target_system=1, target_component=1, mission_type=0):
     return struct.pack("<HBBB", int(count) & 0xFFFF, target_system & 0xFF,
                        target_component & 0xFF, mission_type & 0xFF)
@@ -654,6 +692,7 @@ _WIRE = {
     LOG_ENTRY: ("<IIHHH", ["time_utc", "size", "id", "num_logs", "last_log_num"], 14),
     LOG_REQUEST_DATA: ("<IIHBB", ["ofs", "count", "id", "target_system", "target_component"], 12),
     LOG_DATA: ("<IHB90s", ["ofs", "id", "count", "data"], 97),
+    SERIAL_CONTROL: ("<IHBBB70s", ["baudrate", "timeout", "device", "flags", "count", "data"], 79),
     LOG_REQUEST_END: ("<BB", ["target_system", "target_component"], 2),
     ADSB_VEHICLE: ("<IiiiHHhHHB9sBB",
                    ["ICAO_address", "lat", "lon", "altitude", "heading", "hor_velocity",

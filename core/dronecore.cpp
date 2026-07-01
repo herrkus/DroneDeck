@@ -105,6 +105,7 @@ constexpr MsgInfo MSGS[] = {
     {147, 154, 36},  // BATTERY_STATUS
     {241,  90, 32},  // VIBRATION
     {246, 184, 38},  // ADSB_VEHICLE
+    {126, 194, 79},  // SERIAL_CONTROL (PX4 nsh shell passthrough)
 };
 
 const MsgInfo* find_info(uint32_t id) {
@@ -265,6 +266,10 @@ void decode(uint32_t msgid, const uint8_t* pl, Decoded& d) {
         break;
     case 122: // LOG_REQUEST_END: target_system, target_component
         push(pl[0]); push(pl[1]);
+        break;
+    case 126: // SERIAL_CONTROL: baudrate, timeout, device, flags, count + data[70] into text[]
+        push(rd_u32(pl + 0)); push(rd_u16(pl + 4)); push(pl[6]); push(pl[7]); push(pl[8]);
+        std::memcpy(d.text, pl + 9, 70);
         break;
     case 246: // ADSB_VEHICLE: ICAO, lat, lon, altitude, heading, hor_vel, ver_vel,
               //               flags, squawk, altitude_type, emitter_type, tslc (+callsign)

@@ -115,7 +115,7 @@ class Parser:
                 fields["text"] = bytes(d.text).split(b"\x00")[0].decode("utf-8", "replace")
             elif d.msgid in (mavlink.PARAM_VALUE, mavlink.PARAM_SET, mavlink.PARAM_REQUEST_READ):
                 fields["param_id"] = bytes(d.text).split(b"\x00")[0].decode("utf-8", "replace")
-            elif d.msgid == mavlink.LOG_DATA:
+            elif d.msgid in (mavlink.LOG_DATA, mavlink.SERIAL_CONTROL):
                 fields["data"] = bytes(d.text)[:int(fields.get("count", 0))]
             elif d.msgid == mavlink.ADSB_VEHICLE:
                 fields["callsign"] = bytes(d.text).split(b"\x00")[0].decode("utf-8", "replace")

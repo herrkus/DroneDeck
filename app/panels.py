@@ -4,12 +4,12 @@ from __future__ import annotations
 import time
 
 from PySide6.QtCore import Qt, QRectF, QPointF, Signal
-from PySide6.QtGui import QFont, QColor, QPainter, QPen
+from PySide6.QtGui import QFont, QColor, QPainter, QPen, QTextCursor
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QFormLayout, QGroupBox, QLabel,
                                QListWidget, QListWidgetItem, QTableWidget,
                                QTableWidgetItem, QHeaderView, QPushButton, QSlider,
                                QSpinBox, QHBoxLayout, QGridLayout, QProgressBar,
-                               QAbstractItemView)
+                               QAbstractItemView, QPlainTextEdit, QLineEdit)
 
 import mavlink
 
@@ -247,6 +247,52 @@ class CameraPanel(QWidget):
         self.pitch.setValue(0)
         self.yaw.setValue(0)
         self._emit_gimbal()
+
+
+class MavlinkConsole(QWidget):
+    """Interactive shell to the autopilot's nsh over SERIAL_CONTROL (PX4). Type a
+    command, press Enter; output streams back as SERIAL_CONTROL replies."""
+    send_bytes = Signal(bytes)          # command bytes -> SERIAL_CONTROL
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        lay = QVBoxLayout(self)
+        lay.setContentsMargins(3, 3, 3, 3)
+        lay.setSpacing(3)
+        self.out = QPlainTextEdit()
+        self.out.setReadOnly(True)
+        self.out.setFont(QFont("DejaVu Sans Mono", 9))
+        self.out.setMaximumBlockCount(4000)
+        self.out.setPlaceholderText("PX4 nsh console -- connect, then type e.g. 'ver', 'help', "
+                                    "'listener sensor_accel' and press Enter.")
+        lay.addWidget(self.out, 1)
+        row = QHBoxLayout()
+        self.inp = QLineEdit()
+        self.inp.setFont(QFont("DejaVu Sans Mono", 9))
+        self.inp.setPlaceholderText("command + Enter")
+        self.inp.returnPressed.connect(self._send)
+        btn = QPushButton("Send")
+        btn.clicked.connect(self._send)
+        row.addWidget(self.inp, 1)
+        row.addWidget(btn)
+        lay.addLayout(row)
+
+    def _send(self):
+        cmd = self.inp.text()
+        self.inp.clear()
+        self.send_bytes.emit((cmd + "\n").encode("utf-8", "replace"))
+
+    def handle_messages(self, batch):
+        chunk = bytearray()
+        for m in batch:
+            if m.msgid == mavlink.SERIAL_CONTROL:
+                n = int(m.fields.get("count", 0))
+                chunk += bytes(m.fields.get("data", b""))[:n]
+        if chunk:
+            text = chunk.decode("utf-8", "replace").replace("\r\n", "\n").replace("\r", "")
+            self.out.moveCursor(QTextCursor.End)
+            self.out.insertPlainText(text)
+            self.out.moveCursor(QTextCursor.End)
 
 
 class StatusStrip(QWidget):

@@ -250,6 +250,17 @@ class Link(QObject):
                   ptype: int = mavlink.MAV_PARAM_TYPE_REAL32):
         self._send_msg(mavlink.PARAM_SET, mavlink.enc_param_set(param_id, value, ptype, target_sys))
 
+    def send_serial_control(self, data=b"", device=mavlink.SERIAL_CONTROL_DEV_SHELL,
+                            flags=(mavlink.SERIAL_CONTROL_FLAG_RESPOND
+                                   | mavlink.SERIAL_CONTROL_FLAG_EXCLUSIVE
+                                   | mavlink.SERIAL_CONTROL_FLAG_MULTI)):
+        # Talk to the autopilot's nsh shell (PX4) over SERIAL_CONTROL. RESPOND asks
+        # for output, MULTI keeps it streaming; the reply arrives as SERIAL_CONTROL.
+        # Sent as MAVLink v2 -- PX4's shell only answers v2 (extension fields).
+        payload = mavlink.enc_serial_control(device, flags, data)
+        self._send(mavlink.frame_v2(mavlink.SERIAL_CONTROL, payload, self._next_seq(),
+                                    self.gcs_sysid, self.gcs_compid, crc_fn=core.crc_extra))
+
     # -- mission protocol (mission_type: 0=mission, 1=fence, 2=rally) ----------
     def send_mission_count(self, target_sys: int, count: int, mission_type: int = 0):
         self._send_msg(mavlink.MISSION_COUNT,

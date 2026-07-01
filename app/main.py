@@ -41,7 +41,7 @@ from instruments import AttitudeIndicator, Compass
 LOG_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "logs")
 from mapview import MapView
 from panels import (TelemetryPanel, MessageConsole, MavInspector, HealthPanel,
-                    StatusStrip, CameraPanel, LogPanel, SystemsPanel)
+                    StatusStrip, CameraPanel, LogPanel, SystemsPanel, MavlinkConsole)
 
 
 def haversine(lat1, lon1, lat2, lon2):
@@ -459,6 +459,16 @@ class DroneDeck(QMainWindow):
         self.logs.progress.connect(self.log_panel.set_progress)
         self.logs.finished.connect(self._logs_finished)
 
+        # MAVLink / nsh console (PX4 shell over SERIAL_CONTROL), tabbed at the bottom
+        self.shell = MavlinkConsole()
+        shdock = QDockWidget("Console", self)
+        shdock.setObjectName("console_dock")
+        shdock.setWidget(self.shell)
+        shdock.setFeatures(QDockWidget.DockWidgetMovable | QDockWidget.DockWidgetFloatable)
+        self.addDockWidget(Qt.BottomDockWidgetArea, shdock)
+        self.tabifyDockWidget(ldock, shdock)
+        self.shell.send_bytes.connect(self._shell_send)
+
         # detailed systems (battery / vibration / altitude), tabbed at the bottom
         self.systems = SystemsPanel()
         sysscroll = QScrollArea()
@@ -528,10 +538,15 @@ class DroneDeck(QMainWindow):
         link.messages.connect(self.params.handle_messages)
         link.messages.connect(self.logs.handle_messages)
         link.messages.connect(self.inspector.consume)
+        link.messages.connect(self.shell.handle_messages)
         link.info.connect(self._on_info)
         link.state.connect(self._on_state)
         link.recorder = self._recorder        # keep recording across reconnects
         return link
+
+    def _shell_send(self, data):
+        if self._has_vehicle():
+            self.link.send_serial_control(data)
 
     def _on_transport(self):
         t = self.transport_combo.currentText()

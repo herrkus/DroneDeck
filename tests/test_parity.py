@@ -176,6 +176,15 @@ def main():
             check(int(m.fields["count"]) == 90, "log_data count")
             check(bytes(m.fields["data"])[:90] == blob, "log_data blob round-trip")
 
+        sc = b"nsh> pxh> ok\n"
+        m = roundtrip(mavlink.SERIAL_CONTROL,
+                      mavlink.enc_serial_control(mavlink.SERIAL_CONTROL_DEV_SHELL,
+                                                 mavlink.SERIAL_CONTROL_FLAG_REPLY, sc), crc_fn)
+        if m:
+            check(int(m.fields["device"]) == mavlink.SERIAL_CONTROL_DEV_SHELL, "serial_control device")
+            check(int(m.fields["count"]) == len(sc), "serial_control count")
+            check(bytes(m.fields["data"])[:len(sc)] == sc, "serial_control shell data round-trip")
+
         m = roundtrip(mavlink.ADSB_VEHICLE,
                       mavlink.enc_adsb_vehicle(0xABCDEF, int(54.70e7), int(25.30e7),
                                                120000, 9000, "TEST123", emitter_type=3), crc_fn)
