@@ -353,6 +353,10 @@ class DroneDeck(QMainWindow):
         self.btn_fit = QPushButton("Fit")
         self.btn_fit.clicked.connect(self._fit_map)
         tb.addWidget(self.btn_fit)
+        self.btn_ruler = QPushButton("Ruler")
+        self.btn_ruler.setCheckable(True)
+        self.btn_ruler.toggled.connect(self._toggle_ruler)
+        tb.addWidget(self.btn_ruler)
         self.chk_follow = QCheckBox("Follow")
         self.chk_follow.setChecked(True)
         self.chk_follow.toggled.connect(self._set_follow)
@@ -556,6 +560,7 @@ class DroneDeck(QMainWindow):
         self._msg_unread = 0        # STATUSTEXT arrived while the Messages tab wasn't visible
         self._msg_worst = 99        # worst (lowest) unread severity; 99 = none
         self._takeoff_alt = 25.0    # remembered takeoff altitude (persisted across runs)
+        self._ruler_a = None        # first point of the map measure tool, or None
         # no maximum height -- drag the map/messages divider to grow the board freely
         msg_wrap = QWidget()
         mcl = QVBoxLayout(msg_wrap)
@@ -1300,6 +1305,9 @@ class DroneDeck(QMainWindow):
         self._on_info(f"VTOL transition to {name} requested")
 
     def _on_map_click(self, lat, lon):
+        if self.btn_ruler.isChecked():          # measure tool takes priority over goto/plan
+            self._ruler_click(lat, lon)
+            return
         if self.plan_mode:
             self._add_waypoint(lat, lon)
             return
@@ -1811,6 +1819,31 @@ class DroneDeck(QMainWindow):
         else:
             self.statusBar().showMessage("Nothing to fit (no mission, vehicle or home)", 2500)
 
+    def _toggle_ruler(self, on):
+        """Enable/disable the map measure tool; clears any partial measurement when turned off."""
+        if on:
+            self.statusBar().showMessage("Ruler: click two points to measure distance & bearing", 0)
+        else:
+            self._ruler_a = None
+            self.map.set_ruler(None)
+            self.statusBar().clearMessage()
+
+    def _ruler_click(self, lat, lon):
+        """Handle a map click while the ruler is active: first sets A, second measures A->B."""
+        if self._ruler_a is None:
+            self._ruler_a = (lat, lon)
+            self.map.set_ruler(self._ruler_a)
+            self.statusBar().showMessage("Ruler: click the second point", 0)
+        else:
+            a, b = self._ruler_a, (lat, lon)
+            d = haversine(a[0], a[1], b[0], b[1])
+            brg = bearing(a[0], a[1], b[0], b[1])
+            dtxt = f"{d:.0f} m" if d < 1000 else f"{d / 1000:.2f} km"
+            label = f"{dtxt}  {brg:.0f}°"
+            self.map.set_ruler(a, b, label)
+            self.statusBar().showMessage(f"Ruler: {label}  (click to start a new measurement)", 0)
+            self._ruler_a = None            # next click starts a fresh A->B
+
     def _on_new_message(self, sev, _text):
         """Count a STATUSTEXT as unread unless the Messages tab is the one on screen."""
         if not self.msg_dock.isVisible():
@@ -1997,6 +2030,7 @@ class DroneDeck(QMainWindow):
         self.chk_follow.setToolTip("Keep the map centred on the vehicle  (F)")
         self.btn_center.setToolTip("Recentre the map on the vehicle once  (C)")
         self.btn_fit.setToolTip("Zoom to frame the mission, vehicle and home")
+        self.btn_ruler.setToolTip("Measure tool: click two points for distance & bearing")
         self.transport_combo.setToolTip("Link type: UDP / TCP / Serial / Replay a .tlog")
         self.link_edit.setToolTip("UDP port, TCP host:port, serial port:baud, or .tlog path")
         self.vehicle_combo.setToolTip("Select which vehicle to control")

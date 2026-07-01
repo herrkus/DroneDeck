@@ -86,6 +86,7 @@ class MapView(QWidget):
         self.others = []                      # other vehicles: [(lat, lon, heading)]
         self.selected_wp = -1
         self.current_wp = -1                  # live mission target (MISSION_CURRENT)
+        self.ruler = None                     # ((lat,lon)a, (lat,lon)b|None, label) or None
         self._wp_drag = None
         self._pending = set()
         self._drag = None
@@ -122,6 +123,12 @@ class MapView(QWidget):
             self.update()
             return True
         return False
+
+    def set_ruler(self, a, b=None, label=""):
+        """Set the measure-tool overlay: point a, optional point b, and a precomputed label.
+        Pass a=None to clear."""
+        self.ruler = (a, b, label) if a else None
+        self.update()
 
     def fit_bounds(self, points, pad_px=48):
         """Centre + zoom to frame all (lat, lon) points within the widget (with padding).
@@ -413,6 +420,29 @@ class MapView(QWidget):
             p.drawPolygon(QPolygonF([QPointF(0, -12), QPointF(8, 10),
                                      QPointF(0, 5), QPointF(-8, 10)]))
             p.restore()
+
+        # ruler / measure overlay (amber dashed line, endpoint dots, distance label)
+        if self.ruler:
+            a, b, label = self.ruler
+            rcol = QColor(255, 200, 70)
+            pa = self._ll_to_px(a[0], a[1], cfx, cfy)
+            p.setPen(QPen(rcol, 2, Qt.DashLine))
+            p.setBrush(QBrush(rcol))
+            p.drawEllipse(pa, 4, 4)
+            if b:
+                pb = self._ll_to_px(b[0], b[1], cfx, cfy)
+                p.drawLine(pa, pb)
+                p.drawEllipse(pb, 4, 4)
+                if label:
+                    mid = QPointF((pa.x() + pb.x()) / 2.0, (pa.y() + pb.y()) / 2.0)
+                    p.setFont(QFont("DejaVu Sans Mono", 9, QFont.Bold))
+                    tw = p.fontMetrics().horizontalAdvance(label)
+                    box = QRectF(mid.x() - tw / 2.0 - 5, mid.y() - 20, tw + 10, 18)
+                    p.setPen(Qt.NoPen)
+                    p.setBrush(QColor(18, 20, 24, 190))
+                    p.drawRoundedRect(box, 4, 4)
+                    p.setPen(rcol)
+                    p.drawText(box, Qt.AlignCenter, label)
 
         self._draw_hud(p, any_tile)
         p.end()
