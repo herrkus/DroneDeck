@@ -61,7 +61,8 @@ class TelemetryPanel(QWidget):
             "BATTERY": [("voltage", "Voltage"), ("current", "Current"), ("remaining", "Remaining")],
             "POSITION": [("lat", "Latitude"), ("lon", "Longitude"), ("alt_msl", "Alt MSL"), ("alt_rel", "Alt rel")],
             "MOTION": [("gspeed", "Ground spd"), ("aspeed", "Air spd"), ("climb", "Climb"),
-                       ("throttle", "Throttle"), ("hdg", "Heading"), ("wind", "Wind")],
+                       ("throttle", "Throttle"), ("hdg", "Heading"), ("wind", "Wind"),
+                       ("vibe", "Vibration")],
             "NAVIGATION": [("home_dist", "Dist to home"), ("home_alt", "Home alt"),
                            ("flight_time", "Flight time"), ("home_eta", "Home ETA"),
                            ("wp_num", "Waypoint"), ("wp_dist", "Dist to WP"),
@@ -175,6 +176,13 @@ class TelemetryPanel(QWidget):
             self._set("wind", f"{ve.wind_speed():4.1f} m/s from {ve.wind_dir():3.0f} deg")
         else:
             self._set("wind", "--")
+        if ve.have_vibration:
+            # peak axis vibration; PX4 rule of thumb: <30 good, 30-60 caution, >60 bad
+            vpk = max(ve.vibration)
+            self._set("vibe", f"{vpk:4.1f} m/s2",
+                      "#37d67a" if vpk < 30 else "#e0a030" if vpk < 60 else "#e05050")
+        else:
+            self._set("vibe", "--")
 
         self._set("fix", ve.fix_text, "#37d67a" if ve.fix_type >= 3 else "#e0a030")
         self._set("sats", str(ve.satellites))

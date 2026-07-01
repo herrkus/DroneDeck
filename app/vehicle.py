@@ -56,6 +56,7 @@ class Vehicle(QObject):
         # vibration + detailed altitude
         self.vibration = (0.0, 0.0, 0.0)    # m/s^2 on x/y/z
         self.clipping = (0, 0, 0)           # accel clip counts
+        self.have_vibration = False         # a VIBRATION message has arrived (0,0,0 is also valid)
         self.alt_terrain = None             # m above terrain (ALTITUDE.bottom_clearance)
         # telemetry radio link quality (RADIO_STATUS); None = no radio reporting
         self.radio_rssi = None
@@ -246,6 +247,7 @@ class Vehicle(QObject):
                           f.get("vibration_z", 0.0))
         self.clipping = (int(f.get("clipping_0", 0)), int(f.get("clipping_1", 0)),
                          int(f.get("clipping_2", 0)))
+        self.have_vibration = True
 
     def _on_battery_status(self, f):
         cells = []
