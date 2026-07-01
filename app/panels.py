@@ -832,6 +832,15 @@ class SystemsPanel(QWidget):
         af.addRow("Above terrain", self.a_terr)
         lay.addWidget(alt)
 
+        fst = QGroupBox("Flight state")
+        ff = QFormLayout(fst)
+        self.f_landed = QLabel("--")
+        self.f_vtol = QLabel("--")
+        self._f_vtol_label = QLabel("VTOL")
+        ff.addRow("State", self.f_landed)
+        ff.addRow(self._f_vtol_label, self.f_vtol)
+        lay.addWidget(fst)
+
         radio = QGroupBox("Radio link")
         rf = QFormLayout(radio)
         self.r_rssi = QLabel("--"); self.r_remrssi = QLabel("--"); self.r_noise = QLabel("--")
@@ -894,6 +903,21 @@ class SystemsPanel(QWidget):
                                 f"{ve.esc_current[i]:4.1f} A")
         else:
             self._esc_group.hide()
+        if ve.have_ext_state:
+            self.f_landed.setText(mavlink.MAV_LANDED_STATE_TEXT.get(ve.landed_state, "--"))
+            col = ("#37d67a" if ve.landed_state == 2 else            # in air
+                   "#e0a030" if ve.landed_state in (3, 4) else "")   # takeoff / landing
+            self.f_landed.setStyleSheet(f"color:{col};" if col else "")
+            vtol_on = ve.vtol_state > 0
+            self._f_vtol_label.setVisible(vtol_on)
+            self.f_vtol.setVisible(vtol_on)
+            if vtol_on:
+                self.f_vtol.setText(mavlink.MAV_VTOL_STATE_TEXT.get(ve.vtol_state, "--"))
+        else:
+            self.f_landed.setText("--")
+            self.f_landed.setStyleSheet("")
+            self._f_vtol_label.hide()
+            self.f_vtol.hide()
         self.vib_bars.set_values(ve.vibration)
         self.vib_clip.setText("clip {} / {} / {}".format(*ve.clipping))
         self.a_amsl.setText(f"{ve.alt_msl:.1f} m")

@@ -109,6 +109,7 @@ constexpr MsgInfo MSGS[] = {
     {231, 105, 40},  // WIND_COV
     { 36, 222, 21},  // SERVO_OUTPUT_RAW (servo9..16 are extensions: excluded from CRC)
     {242, 104, 52},  // HOME_POSITION (time_usec is an extension: excluded from CRC)
+    {245, 130,  2},  // EXTENDED_SYS_STATE (vtol_state, landed_state)
     {265,  26, 20},  // MOUNT_ORIENTATION (yaw_absolute is an extension: excluded from CRC)
     {291,  10, 57},  // ESC_STATUS (rpm/voltage/current x4 + index)
     {246, 184, 38},  // ADSB_VEHICLE
@@ -209,6 +210,9 @@ void decode(uint32_t msgid, const uint8_t* pl, Decoded& d) {
         push(rd_u16(pl + 4)); push(rd_u16(pl + 6)); push(rd_u16(pl + 8)); push(rd_u16(pl + 10));
         push(rd_u16(pl + 12)); push(rd_u16(pl + 14)); push(rd_u16(pl + 16)); push(rd_u16(pl + 18));
         push(pl[20]);
+        break;
+    case 245: // EXTENDED_SYS_STATE: vtol_state, landed_state
+        push(pl[0]); push(pl[1]);
         break;
     case 242: // HOME_POSITION: lat, lon, alt (int), x/y/z, q[4], approach_x/y/z (float)
         push(rd_i32(pl + 0)); push(rd_i32(pl + 4)); push(rd_i32(pl + 8));

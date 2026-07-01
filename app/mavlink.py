@@ -73,6 +73,7 @@ SERIAL_CONTROL_FLAG_EXCLUSIVE = 4
 SERIAL_CONTROL_FLAG_MULTI = 16
 ADSB_VEHICLE = 246
 HOME_POSITION = 242          # authoritative home the autopilot uses for RTL (+ altitude)
+EXTENDED_SYS_STATE = 245     # landed_state (ground/air/takeoff/landing) + vtol_state
 MOUNT_ORIENTATION = 265      # gimbal attitude report (roll/pitch/yaw deg)
 ESC_STATUS = 291             # per-ESC rpm / voltage / current (banks of 4 from 'index')
 
@@ -95,6 +96,7 @@ MSG_NAME = {
     WIND_COV: "WIND_COV",
     MOUNT_ORIENTATION: "MOUNT_ORIENTATION",
     HOME_POSITION: "HOME_POSITION",
+    EXTENDED_SYS_STATE: "EXTENDED_SYS_STATE",
     ESC_STATUS: "ESC_STATUS",
     MANUAL_CONTROL: "MANUAL_CONTROL",
     COMMAND_INT: "COMMAND_INT",
@@ -135,7 +137,7 @@ CRC_EXTRA = {
     MISSION_REQUEST_INT: 196, MISSION_ITEM_INT: 38, MANUAL_CONTROL: 243, RC_CHANNELS: 118,
     ALTITUDE: 47, BATTERY_STATUS: 154, VIBRATION: 90, RADIO_STATUS: 185,
     EKF_STATUS_REPORT: 71, ESTIMATOR_STATUS: 163, WIND_COV: 105, MOUNT_ORIENTATION: 26,
-    HOME_POSITION: 104, ESC_STATUS: 10, REQUEST_DATA_STREAM: 148,
+    HOME_POSITION: 104, EXTENDED_SYS_STATE: 130, ESC_STATUS: 10, REQUEST_DATA_STREAM: 148,
     LOG_REQUEST_LIST: 128, LOG_ENTRY: 56, LOG_REQUEST_DATA: 116,
     LOG_DATA: 134, LOG_REQUEST_END: 203, ADSB_VEHICLE: 184,
     SERIAL_CONTROL: 194,
@@ -171,6 +173,7 @@ FIELDS = {
     ESC_STATUS: (["time_usec"] + [f"rpm{i}" for i in range(1, 5)]
                  + [f"voltage{i}" for i in range(1, 5)]
                  + [f"current{i}" for i in range(1, 5)] + ["index"]),
+    EXTENDED_SYS_STATE: ["vtol_state", "landed_state"],
     BATTERY_STATUS: (["current_consumed", "energy_consumed", "temperature"]
                      + [f"voltage{i}" for i in range(1, 11)]
                      + ["current_battery", "id", "battery_function", "type", "battery_remaining"]),
@@ -230,6 +233,11 @@ MAV_CMD_DO_PAUSE_CONTINUE = 193
 MAV_CMD_DO_VTOL_TRANSITION = 3000       # param1 = MAV_VTOL_STATE (3 = MC, 4 = FW)
 MAV_VTOL_STATE_MC = 3                    # multicopter / hover
 MAV_VTOL_STATE_FW = 4                    # fixed-wing / forward flight
+
+# EXTENDED_SYS_STATE enums -> human-readable (0 = undefined/unknown -> blank)
+MAV_LANDED_STATE_TEXT = {0: "--", 1: "On ground", 2: "In air", 3: "Taking off", 4: "Landing"}
+MAV_VTOL_STATE_TEXT = {0: "--", 1: "-> Fixed-wing", 2: "-> Multicopter",
+                       3: "Multicopter", 4: "Fixed-wing"}
 # camera + gimbal (all carried by COMMAND_LONG)
 MAV_CMD_DO_MOUNT_CONTROL = 205          # gimbal: param1=pitch, param2=roll, param3=yaw
 MAV_CMD_DO_SET_CAM_TRIGG_DIST = 206     # param1=distance m (0 = off)
@@ -746,6 +754,7 @@ _WIRE = {
                  ["time_usec"] + [f"rpm{i}" for i in range(1, 5)]
                  + [f"voltage{i}" for i in range(1, 5)]
                  + [f"current{i}" for i in range(1, 5)] + ["index"], 57),
+    EXTENDED_SYS_STATE: ("<2B", ["vtol_state", "landed_state"], 2),
     BATTERY_STATUS: ("<iih10HhBBBb",
                      ["current_consumed", "energy_consumed", "temperature"]
                      + [f"voltage{i}" for i in range(1, 11)]

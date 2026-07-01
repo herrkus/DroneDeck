@@ -87,6 +87,10 @@ class Vehicle(QObject):
         # actuator outputs (SERVO_OUTPUT_RAW), PWM microseconds servo1..8
         self.servo_raw = [0] * 8
         self.have_servo = False
+        # flight state (EXTENDED_SYS_STATE)
+        self.landed_state = 0       # 1=on ground, 2=in air, 3=takeoff, 4=landing
+        self.vtol_state = 0         # 1=->FW, 2=->MC, 3=MC, 4=FW
+        self.have_ext_state = False
         # per-ESC status (ESC_STATUS), banks of 4 addressed by 'index'
         self.esc_rpm = [0] * 8
         self.esc_voltage = [0.0] * 8
@@ -290,6 +294,11 @@ class Vehicle(QObject):
         self.servo_raw = [int(f.get(f"servo{i}_raw", 0)) for i in range(1, 9)]
         self.have_servo = True
 
+    def _on_extended_sys_state(self, f):
+        self.landed_state = int(f.get("landed_state", 0))
+        self.vtol_state = int(f.get("vtol_state", 0))
+        self.have_ext_state = True
+
     def _on_esc_status(self, f):
         idx = int(f.get("index", 0))                    # first ESC in this bank (0, 4, 8, ...)
         for k in range(4):
@@ -367,6 +376,7 @@ class Vehicle(QObject):
         mavlink.MOUNT_ORIENTATION: _on_mount_orientation,
         mavlink.SERVO_OUTPUT_RAW: _on_servo_output_raw,
         mavlink.ESC_STATUS: _on_esc_status,
+        mavlink.EXTENDED_SYS_STATE: _on_extended_sys_state,
         mavlink.HOME_POSITION: _on_home_position,
         mavlink.BATTERY_STATUS: _on_battery_status,
         mavlink.RADIO_STATUS: _on_radio_status,

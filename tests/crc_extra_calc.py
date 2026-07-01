@@ -171,6 +171,8 @@ NEW = {
     "ESC_STATUS": (291, [("uint64_t", "time_usec", 0), ("int32_t", "rpm", 4),
                          ("float", "voltage", 4), ("float", "current", 4),
                          ("uint8_t", "index", 0)]),
+    # two uint8 in declaration order, no extensions. Computes 130.
+    "EXTENDED_SYS_STATE": (245, [("uint8_t", "vtol_state", 0), ("uint8_t", "landed_state", 0)]),
 }
 
 if __name__ == "__main__":
