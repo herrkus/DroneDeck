@@ -132,9 +132,11 @@ def main():
     send(mavlink.STATUSTEXT, mavlink.enc_statustext(6, "DroneDeck SITL: ready"))
 
     next_t = {"hb": 0.0, "att": 0.0, "pos": 0.0, "hud": 0.0, "sys": 0.0, "gps": 0.0,
-              "txt": 3.0, "adsb": 0.5, "rc": 0.0, "alt2": 0.0, "vib": 0.0, "bat": 0.0}
+              "txt": 3.0, "adsb": 0.5, "rc": 0.0, "alt2": 0.0, "vib": 0.0, "bat": 0.0,
+              "radio": 0.0}
     period = {"hb": 0.25, "att": 0.04, "pos": 0.2, "hud": 0.2, "sys": 1.0, "gps": 1.0,
-              "txt": 9.0, "adsb": 1.0, "rc": 0.1, "alt2": 0.2, "vib": 1.0, "bat": 1.0}
+              "txt": 9.0, "adsb": 1.0, "rc": 0.1, "alt2": 0.2, "vib": 1.0, "bat": 1.0,
+              "radio": 1.0}
 
     t0 = time.monotonic()
     last = t0
@@ -281,6 +283,11 @@ def main():
                     [per_cell, per_cell, per_cell], current_battery=int(current * 100),
                     current_consumed=int(t * 2), energy_consumed=int(t * 3),
                     battery_remaining=batt_pct, temperature=int(2500 + 300 * math.sin(t * 0.05))))
+            if t >= next_t["radio"]:
+                next_t["radio"] += period["radio"]
+                send(mavlink.RADIO_STATUS, mavlink.enc_radio_status(
+                    int(200 + 10 * math.sin(t * 0.2)), int(195 + 10 * math.cos(t * 0.2)),
+                    noise=42, rxerrors=0))
             if t >= next_t["gps"]:
                 next_t["gps"] += period["gps"]
                 send(mavlink.GPS_RAW_INT, mavlink.enc_gps_raw_int(

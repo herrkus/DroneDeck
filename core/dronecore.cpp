@@ -100,6 +100,7 @@ constexpr MsgInfo MSGS[] = {
     {119, 116, 12},  // LOG_REQUEST_DATA
     {120, 134, 97},  // LOG_DATA
     {122, 203,  2},  // LOG_REQUEST_END
+    {109, 185,  9},  // RADIO_STATUS
     {141,  47, 32},  // ALTITUDE
     {147, 154, 36},  // BATTERY_STATUS
     {241,  90, 32},  // VIBRATION
@@ -158,6 +159,10 @@ void decode(uint32_t msgid, const uint8_t* pl, Decoded& d) {
         push(rd_u32(pl + 0));
         for (int i = 0; i < 18; ++i) push(rd_u16(pl + 4 + 2 * i));
         push(pl[40]); push(pl[41]);
+        break;
+    case 109: // RADIO_STATUS: rxerrors, fixed, rssi, remrssi, txbuf, noise, remnoise
+        push(rd_u16(pl + 0)); push(rd_u16(pl + 2));
+        push(pl[4]); push(pl[5]); push(pl[6]); push(pl[7]); push(pl[8]);
         break;
     case 141: // ALTITUDE: time_usec, monotonic, amsl, local, relative, terrain, bottom_clearance
         push(rd_u64(pl + 0));

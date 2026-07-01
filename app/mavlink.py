@@ -15,6 +15,7 @@ GPS_RAW_INT = 24
 ATTITUDE = 30
 GLOBAL_POSITION_INT = 33
 RC_CHANNELS = 65
+RADIO_STATUS = 109
 ALTITUDE = 141
 BATTERY_STATUS = 147
 VIBRATION = 241
@@ -55,6 +56,7 @@ MSG_NAME = {
     GLOBAL_POSITION_INT: "GLOBAL_POSITION_INT",
     VFR_HUD: "VFR_HUD",
     RC_CHANNELS: "RC_CHANNELS",
+    RADIO_STATUS: "RADIO_STATUS",
     ALTITUDE: "ALTITUDE",
     BATTERY_STATUS: "BATTERY_STATUS",
     VIBRATION: "VIBRATION",
@@ -93,7 +95,7 @@ CRC_EXTRA = {
     MISSION_CURRENT: 28, MISSION_REQUEST_LIST: 132, MISSION_COUNT: 221,
     MISSION_CLEAR_ALL: 232, MISSION_ITEM_REACHED: 11, MISSION_ACK: 153,
     MISSION_REQUEST_INT: 196, MISSION_ITEM_INT: 38, MANUAL_CONTROL: 243, RC_CHANNELS: 118,
-    ALTITUDE: 47, BATTERY_STATUS: 154, VIBRATION: 90,
+    ALTITUDE: 47, BATTERY_STATUS: 154, VIBRATION: 90, RADIO_STATUS: 185,
     LOG_REQUEST_LIST: 128, LOG_ENTRY: 56, LOG_REQUEST_DATA: 116,
     LOG_DATA: 134, LOG_REQUEST_END: 203, ADSB_VEHICLE: 184,
 }
@@ -109,6 +111,7 @@ FIELDS = {
     VFR_HUD: ["airspeed", "groundspeed", "alt", "climb", "heading", "throttle"],
     RC_CHANNELS: (["time_boot_ms"] + [f"chan{i}_raw" for i in range(1, 19)]
                   + ["chancount", "rssi"]),
+    RADIO_STATUS: ["rxerrors", "fixed", "rssi", "remrssi", "txbuf", "noise", "remnoise"],
     ALTITUDE: ["time_usec", "altitude_monotonic", "altitude_amsl", "altitude_local",
                "altitude_relative", "altitude_terrain", "bottom_clearance"],
     VIBRATION: ["time_usec", "vibration_x", "vibration_y", "vibration_z",
@@ -316,6 +319,12 @@ def enc_rc_channels(chans, rssi=200, time_boot_ms=0):
     count = len(chans)
     chans = chans + [65535] * (18 - count)     # UINT16_MAX = channel not used
     return struct.pack("<I18HBB", int(time_boot_ms) & 0xFFFFFFFF, *chans, count, rssi & 0xFF)
+
+
+def enc_radio_status(rssi, remrssi, noise=40, remnoise=40, txbuf=100, rxerrors=0, fixed=0):
+    return struct.pack("<HHBBBBB", int(rxerrors) & 0xFFFF, int(fixed) & 0xFFFF,
+                       int(rssi) & 0xFF, int(remrssi) & 0xFF, int(txbuf) & 0xFF,
+                       int(noise) & 0xFF, int(remnoise) & 0xFF)
 
 
 def enc_altitude(altitude_monotonic, altitude_amsl, altitude_local, altitude_relative,
@@ -567,6 +576,8 @@ _WIRE = {
     RC_CHANNELS: ("<I18HBB",
                   ["time_boot_ms"] + [f"chan{i}_raw" for i in range(1, 19)]
                   + ["chancount", "rssi"], 42),
+    RADIO_STATUS: ("<HHBBBBB",
+                   ["rxerrors", "fixed", "rssi", "remrssi", "txbuf", "noise", "remnoise"], 9),
     ALTITUDE: ("<Qffffff",
                ["time_usec", "altitude_monotonic", "altitude_amsl", "altitude_local",
                 "altitude_relative", "altitude_terrain", "bottom_clearance"], 32),

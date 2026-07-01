@@ -112,6 +112,10 @@ NEW = {
     "RC_CHANNELS": (118, [("uint32_t", "time_boot_ms", 0)]
                     + [("uint16_t", f"chan{i}_raw", 0) for i in range(1, 19)]
                     + [("uint8_t", "chancount", 0), ("uint8_t", "rssi", 0)]),
+    "RADIO_STATUS": (185, [("uint16_t", "rxerrors", 0), ("uint16_t", "fixed", 0),
+                           ("uint8_t", "rssi", 0), ("uint8_t", "remrssi", 0),
+                           ("uint8_t", "txbuf", 0), ("uint8_t", "noise", 0),
+                           ("uint8_t", "remnoise", 0)]),
     "COMMAND_INT": (158, [("float", "param1", 0), ("float", "param2", 0), ("float", "param3", 0),
                           ("float", "param4", 0), ("int32_t", "x", 0), ("int32_t", "y", 0),
                           ("float", "z", 0), ("uint16_t", "command", 0),

@@ -106,6 +106,14 @@ def main():
             check(int(m.fields["chan5_raw"]) == 65535, "rc unused chan")
             check(int(m.fields["rssi"]) == 180, "rc rssi")
 
+        m = roundtrip(mavlink.RADIO_STATUS,
+                      mavlink.enc_radio_status(190, 185, noise=42, rxerrors=3), crc_fn)
+        if m:
+            check(int(m.fields["rssi"]) == 190, "radio rssi")
+            check(int(m.fields["remrssi"]) == 185, "radio remrssi")
+            check(int(m.fields["noise"]) == 42, "radio noise")
+            check(int(m.fields["rxerrors"]) == 3, "radio rxerrors")
+
         m = roundtrip(mavlink.ALTITUDE,
                       mavlink.enc_altitude(105.0, 120.5, -5.0, 50.0, 12.0, 3.0), crc_fn)
         if m:

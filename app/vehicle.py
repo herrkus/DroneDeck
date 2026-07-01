@@ -45,6 +45,10 @@ class Vehicle(QObject):
         self.vibration = (0.0, 0.0, 0.0)    # m/s^2 on x/y/z
         self.clipping = (0, 0, 0)           # accel clip counts
         self.alt_terrain = None             # m above terrain (ALTITUDE.bottom_clearance)
+        # telemetry radio link quality (RADIO_STATUS); None = no radio reporting
+        self.radio_rssi = None
+        self.radio_remrssi = None
+        self.radio_noise = None
         # sensor health bitmasks (SYS_STATUS)
         self.sensors_present = 0
         self.sensors_enabled = 0
@@ -132,6 +136,11 @@ class Vehicle(QObject):
     def _moved(a, b):
         return abs(a[0] - b[0]) > 2e-6 or abs(a[1] - b[1]) > 2e-6
 
+    def _on_radio_status(self, f):
+        self.radio_rssi = int(f.get("rssi", 0))
+        self.radio_remrssi = int(f.get("remrssi", 0))
+        self.radio_noise = int(f.get("noise", 0))
+
     def _on_altitude(self, f):
         self.alt_msl = f.get("altitude_amsl", self.alt_msl)
         self.alt_rel = f.get("altitude_relative", self.alt_rel)
@@ -193,6 +202,7 @@ class Vehicle(QObject):
         mavlink.ALTITUDE: _on_altitude,
         mavlink.VIBRATION: _on_vibration,
         mavlink.BATTERY_STATUS: _on_battery_status,
+        mavlink.RADIO_STATUS: _on_radio_status,
         mavlink.GPS_RAW_INT: _on_gps_raw,
         mavlink.VFR_HUD: _on_vfr_hud,
         mavlink.STATUSTEXT: _on_statustext,

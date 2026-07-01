@@ -505,6 +505,14 @@ class SystemsPanel(QWidget):
         af.addRow("Above home", self.a_rel)
         af.addRow("Above terrain", self.a_terr)
         lay.addWidget(alt)
+
+        radio = QGroupBox("Radio link")
+        rf = QFormLayout(radio)
+        self.r_rssi = QLabel("--"); self.r_remrssi = QLabel("--"); self.r_noise = QLabel("--")
+        rf.addRow("RSSI (local)", self.r_rssi)
+        rf.addRow("RSSI (remote)", self.r_remrssi)
+        rf.addRow("Noise", self.r_noise)
+        lay.addWidget(radio)
         lay.addStretch(1)
 
     def update_from(self, ve):
@@ -521,3 +529,6 @@ class SystemsPanel(QWidget):
         self.a_amsl.setText(f"{ve.alt_msl:.1f} m")
         self.a_rel.setText(f"{ve.alt_rel:.1f} m")
         self.a_terr.setText("--" if ve.alt_terrain is None else f"{ve.alt_terrain:.1f} m")
+        self.r_rssi.setText("--" if ve.radio_rssi is None else str(ve.radio_rssi))
+        self.r_remrssi.setText("--" if ve.radio_remrssi is None else str(ve.radio_remrssi))
+        self.r_noise.setText("--" if ve.radio_noise is None else str(ve.radio_noise))

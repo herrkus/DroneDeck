@@ -32,6 +32,7 @@ def grab():
     snap["temp"] = ve.battery_temp
     snap["vibration"] = ve.vibration
     snap["alt_terrain"] = ve.alt_terrain
+    snap["radio_rssi"] = ve.radio_rssi
     snap["panel_volt"] = win.systems.b_volt.text()
     snap["panel_cells"] = win.systems.b_cells.text()
     app.quit()
@@ -60,6 +61,8 @@ if all(v == 0 for v in snap.get("vibration", (0, 0, 0))):
     fail.append("vibration not captured")
 if snap.get("alt_terrain") is None:
     fail.append("terrain clearance not captured")
+if snap.get("radio_rssi") is None:
+    fail.append("radio link RSSI not captured")
 if "V" not in snap.get("panel_volt", ""):
     fail.append("Systems panel voltage not updated")
 
