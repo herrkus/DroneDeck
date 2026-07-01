@@ -142,7 +142,9 @@ class WaypointEditor(QDialog):
         self.altmode = QComboBox()
         self.altmode.addItem("Relative (home)", mavlink.MAV_FRAME_GLOBAL_RELATIVE_ALT_INT)
         self.altmode.addItem("AMSL", mavlink.MAV_FRAME_GLOBAL_INT)
-        self.altmode.setCurrentIndex(1 if item.frame == mavlink.MAV_FRAME_GLOBAL_INT else 0)
+        self.altmode.addItem("Terrain (AGL)", mavlink.MAV_FRAME_GLOBAL_TERRAIN_ALT_INT)
+        _ai = self.altmode.findData(item.frame)
+        self.altmode.setCurrentIndex(_ai if _ai >= 0 else 0)
         form.addRow("Command", self.cmd)
         form.addRow("Altitude", self.alt)
         form.addRow("Altitude mode", self.altmode)
@@ -1305,7 +1307,8 @@ class DroneDeck(QMainWindow):
         elif it.command == 177:                       # DO_JUMP
             rep = "inf" if it.param2 < 0 else f"{it.param2:.0f}"
             extra = f"  -> WP{it.param1:.0f} x{rep}"
-        amode = " MSL" if it.frame == mavlink.MAV_FRAME_GLOBAL_INT else ""
+        amode = (" MSL" if it.frame == mavlink.MAV_FRAME_GLOBAL_INT else
+                 " AGL" if it.frame == mavlink.MAV_FRAME_GLOBAL_TERRAIN_ALT_INT else "")
         return (f"{it.seq:2d}  {it.cmd_name:9s} {it.lat:10.6f} {it.lon:11.6f}"
                 f"  {it.alt:5.0f} m{amode}{extra}")
 

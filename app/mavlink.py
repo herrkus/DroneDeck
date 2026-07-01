@@ -241,6 +241,7 @@ MAV_FRAME_GLOBAL = 0
 MAV_FRAME_GLOBAL_RELATIVE_ALT = 3
 MAV_FRAME_GLOBAL_INT = 5                 # AMSL altitude, lat/lon as int (MISSION_ITEM_INT)
 MAV_FRAME_GLOBAL_RELATIVE_ALT_INT = 6    # altitude above home, lat/lon as int
+MAV_FRAME_GLOBAL_TERRAIN_ALT_INT = 11    # altitude above terrain (AGL), lat/lon as int
 MAV_PARAM_TYPE_REAL32 = 9          # ArduPilot stores every parameter as REAL32
 MAV_MISSION_TYPE_MISSION = 0
 MAV_MISSION_TYPE_FENCE = 1
