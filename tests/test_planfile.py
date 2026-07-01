@@ -34,11 +34,20 @@ sample = {"fileType": "Plan", "version": 1, "mission": {"version": 2,
 loaded = planfile.plan_to_mission(sample)
 assert len(loaded) == 1 and loaded[0].command == 22 and loaded[0].param4 == 0.0
 
+# geoFence (inclusion polygon + circle) round-trips through the .plan too
+inc = [(47.0, 8.0), (47.001, 8.0), (47.001, 8.001), (47.0, 8.001)]
+circles = [{"lat": 47.002, "lon": 8.002, "radius": 50.0, "incl": True}]
+plan_f = planfile.mission_to_plan(items, fence=(inc, [], circles))
+assert len(plan_f["geoFence"]["polygons"]) == 1 and len(plan_f["geoFence"]["circles"]) == 1
+i2, e2, c2 = planfile.plan_to_fence(plan_f)
+assert i2 == inc and e2 == [] and len(c2) == 1 and abs(c2[0]["radius"] - 50.0) < 1e-9
+
 tmp = os.path.join(os.path.dirname(__file__), "_plan_tmp.plan")
 try:
-    planfile.save_plan(tmp, items)
-    rt = planfile.load_plan(tmp)
+    planfile.save_plan(tmp, items, fence=(inc, [], circles))
+    rt, (ri, re, rc) = planfile.read_plan(tmp)
     assert len(rt) == 4 and rt[2].command == 19 and rt[3].frame == 2
+    assert ri == inc and re == [] and len(rc) == 1 and rc[0]["incl"] is True
     print("PLANFILE PASSED")
 finally:
     if os.path.exists(tmp):

@@ -605,23 +605,27 @@ class DroneDeck(QMainWindow):
             return
         try:
             import planfile
-            items = planfile.load_plan(path)
+            items, (inc, exc, circles) = planfile.read_plan(path)
         except Exception as e:
             QMessageBox.warning(self, "Open Plan", f"Could not read plan:\n{e}")
             return
-        if not items:
-            self._on_info("plan has no mission items")
+        if not (items or inc or exc or circles):
+            self._on_info("plan has no mission items or fence")
             return
-        self.mission_items = items
-        self._renumber()
-        self._refresh_mission_view()
-        self.map.center = (items[0].lat, items[0].lon)
+        if items:
+            self.mission_items = items
+            self._renumber()
+            self._refresh_mission_view()
+            self.map.center = (items[0].lat, items[0].lon)
+        self.fence_inc, self.fence_exc, self.fence_circles = inc, exc, circles
+        self.map.set_fence_shapes(self.fence_inc, self.fence_exc, self.fence_circles)
         self.map.update()
-        self._on_info(f"loaded {len(items)} waypoints from {os.path.basename(path)}")
+        extra = " + fence" if (inc or exc or circles) else ""
+        self._on_info(f"loaded {len(items)} waypoints{extra} from {os.path.basename(path)}")
 
     def _save_plan(self):
-        if not self.mission_items:
-            QMessageBox.information(self, "Save Plan", "No waypoints to save.")
+        if not (self.mission_items or self.fence_inc or self.fence_exc or self.fence_circles):
+            QMessageBox.information(self, "Save Plan", "Nothing to save (no waypoints or fence).")
             return
         path, _ = QFileDialog.getSaveFileName(self, "Save mission plan",
                                               os.path.join(LOG_DIR, "mission.plan"),
@@ -634,6 +638,7 @@ class DroneDeck(QMainWindow):
             import planfile
             self._renumber()
             planfile.save_plan(path, self.mission_items,
+                               fence=(self.fence_inc, self.fence_exc, self.fence_circles),
                                home=self.vehicle.home if self.vehicle.home else None)
         except Exception as e:
             QMessageBox.warning(self, "Save Plan", f"Could not save plan:\n{e}")

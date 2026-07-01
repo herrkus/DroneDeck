@@ -14,8 +14,43 @@ def _f(v):
     return float(v) if v is not None else 0.0
 
 
-def mission_to_plan(items, home=None, cruise=15.0, hover=5.0, firmware=12, vehicle=2):
-    """list[MissionItem] -> a QGC .plan dict (fileType 'Plan', version 1)."""
+def fence_to_plan(fence_inc=None, fence_exc=None, fence_circles=None):
+    """DroneDeck fence shapes -> a QGC .plan geoFence dict."""
+    polygons = []
+    if fence_inc:
+        polygons.append({"inclusion": True, "version": 1,
+                         "polygon": [[la, lo] for la, lo in fence_inc]})
+    if fence_exc:
+        polygons.append({"inclusion": False, "version": 1,
+                         "polygon": [[la, lo] for la, lo in fence_exc]})
+    circles = [{"circle": {"center": [c["lat"], c["lon"]], "radius": c["radius"]},
+                "inclusion": bool(c.get("incl", True)), "version": 1}
+               for c in (fence_circles or [])]
+    return {"circles": circles, "polygons": polygons, "version": 2}
+
+
+def plan_to_fence(data):
+    """A QGC .plan dict -> (fence_inc, fence_exc, fence_circles) DroneDeck shapes."""
+    gf = data.get("geoFence", {})
+    inc, exc, circles = [], [], []
+    for poly in gf.get("polygons", []):
+        pts = [(float(p[0]), float(p[1])) for p in poly.get("polygon", [])]
+        if poly.get("inclusion", True):
+            inc = pts
+        else:
+            exc = pts
+    for c in gf.get("circles", []):
+        cir = c.get("circle", {})
+        ctr = (list(cir.get("center", [])) + [0.0, 0.0])[:2]
+        circles.append({"lat": float(ctr[0]), "lon": float(ctr[1]),
+                        "radius": float(cir.get("radius", 0.0)),
+                        "incl": bool(c.get("inclusion", True))})
+    return inc, exc, circles
+
+
+def mission_to_plan(items, home=None, fence=None, cruise=15.0, hover=5.0,
+                    firmware=12, vehicle=2):
+    """list[MissionItem] (+ optional fence=(inc, exc, circles)) -> a QGC .plan dict."""
     plan_items = []
     for i, it in enumerate(items):
         plan_items.append({
@@ -34,7 +69,7 @@ def mission_to_plan(items, home=None, cruise=15.0, hover=5.0, firmware=12, vehic
     home = list(home) + [0.0] * (3 - len(home))
     return {
         "fileType": "Plan",
-        "geoFence": {"circles": [], "polygons": [], "version": 2},
+        "geoFence": fence_to_plan(*fence) if fence else fence_to_plan(),
         "groundStation": "DroneDeck",
         "mission": {
             "cruiseSpeed": cruise,
@@ -80,3 +115,10 @@ def save_plan(path, items, **kw):
 def load_plan(path):
     with open(path) as f:
         return plan_to_mission(json.load(f))
+
+
+def read_plan(path):
+    """Read a .plan -> (list[MissionItem], (fence_inc, fence_exc, fence_circles))."""
+    with open(path) as f:
+        data = json.load(f)
+    return plan_to_mission(data), plan_to_fence(data)
