@@ -54,6 +54,14 @@ class Vehicle(QObject):
         self.sensors_present = 0
         self.sensors_enabled = 0
         self.sensors_health = 0
+        # estimator (EKF_STATUS_REPORT): variances (0 healthy .. >1 bad) + status flags
+        self.ekf_flags = 0
+        self.ekf_vel_var = 0.0
+        self.ekf_pos_horiz_var = 0.0
+        self.ekf_pos_vert_var = 0.0
+        self.ekf_compass_var = 0.0
+        self.ekf_terrain_var = 0.0
+        self.have_ekf = False               # True once a report has arrived
         # gps
         self.fix_type = 0
         self.satellites = 0
@@ -190,6 +198,38 @@ class Vehicle(QObject):
             return remaining_mah / (cur * 1000.0) * 3600.0
         return -1
 
+    def _on_ekf_status(self, f):
+        self.ekf_flags = int(f.get("flags", 0))
+        self.ekf_vel_var = float(f.get("velocity_variance", 0.0))
+        self.ekf_pos_horiz_var = float(f.get("pos_horiz_variance", 0.0))
+        self.ekf_pos_vert_var = float(f.get("pos_vert_variance", 0.0))
+        self.ekf_compass_var = float(f.get("compass_variance", 0.0))
+        self.ekf_terrain_var = float(f.get("terrain_alt_variance", 0.0))
+        self.have_ekf = True
+
+    def _on_estimator_status(self, f):
+        # PX4's ESTIMATOR_STATUS carries innovation test ratios (same 0-good..>1-bad scale
+        # and identical status-flag bits as ArduPilot's EKF_STATUS_REPORT), so it feeds the
+        # very same estimator-health fields.
+        self.ekf_flags = int(f.get("flags", 0))
+        self.ekf_vel_var = float(f.get("vel_ratio", 0.0))
+        self.ekf_pos_horiz_var = float(f.get("pos_horiz_ratio", 0.0))
+        self.ekf_pos_vert_var = float(f.get("pos_vert_ratio", 0.0))
+        self.ekf_compass_var = float(f.get("mag_ratio", 0.0))
+        self.ekf_terrain_var = float(f.get("hagl_ratio", 0.0))
+        self.have_ekf = True
+
+    def ekf_variance_max(self):
+        """Worst of the four core variances (0 good .. >1 bad); QGC colours from this."""
+        return max(self.ekf_vel_var, self.ekf_pos_horiz_var,
+                   self.ekf_pos_vert_var, self.ekf_compass_var)
+
+    def ekf_ok(self):
+        """Healthy when attitude + horizontal velocity + a horizontal position solution
+        are all flagged and no core variance is in the red (>= 1.0)."""
+        need = 1 | 2 | 16          # ATTITUDE | VELOCITY_HORIZ | POS_HORIZ_ABS
+        return (self.ekf_flags & need) == need and self.ekf_variance_max() < 1.0
+
     def _on_sys_status(self, f):
         self.voltage = f.get("voltage_battery", 0) / 1000.0
         self.current = f.get("current_battery", 0) / 100.0
@@ -220,6 +260,8 @@ class Vehicle(QObject):
         mavlink.SYS_STATUS: _on_sys_status,
         mavlink.ALTITUDE: _on_altitude,
         mavlink.VIBRATION: _on_vibration,
+        mavlink.EKF_STATUS_REPORT: _on_ekf_status,
+        mavlink.ESTIMATOR_STATUS: _on_estimator_status,
         mavlink.BATTERY_STATUS: _on_battery_status,
         mavlink.RADIO_STATUS: _on_radio_status,
         mavlink.GPS_RAW_INT: _on_gps_raw,

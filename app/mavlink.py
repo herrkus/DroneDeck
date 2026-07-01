@@ -20,6 +20,8 @@ REQUEST_DATA_STREAM = 66     # GCS->vehicle: legacy telemetry-stream request (Ar
 ALTITUDE = 141
 BATTERY_STATUS = 147
 VIBRATION = 241
+EKF_STATUS_REPORT = 193      # estimator health (ArduPilot): variances + status flags
+ESTIMATOR_STATUS = 230       # estimator health (PX4): innovation ratios + status flags
 MANUAL_CONTROL = 69
 VFR_HUD = 74
 COMMAND_INT = 75
@@ -69,6 +71,8 @@ MSG_NAME = {
     ALTITUDE: "ALTITUDE",
     BATTERY_STATUS: "BATTERY_STATUS",
     VIBRATION: "VIBRATION",
+    EKF_STATUS_REPORT: "EKF_STATUS_REPORT",
+    ESTIMATOR_STATUS: "ESTIMATOR_STATUS",
     MANUAL_CONTROL: "MANUAL_CONTROL",
     COMMAND_INT: "COMMAND_INT",
     COMMAND_LONG: "COMMAND_LONG",
@@ -106,7 +110,7 @@ CRC_EXTRA = {
     MISSION_CLEAR_ALL: 232, MISSION_ITEM_REACHED: 11, MISSION_ACK: 153,
     MISSION_REQUEST_INT: 196, MISSION_ITEM_INT: 38, MANUAL_CONTROL: 243, RC_CHANNELS: 118,
     ALTITUDE: 47, BATTERY_STATUS: 154, VIBRATION: 90, RADIO_STATUS: 185,
-    REQUEST_DATA_STREAM: 148,
+    EKF_STATUS_REPORT: 71, ESTIMATOR_STATUS: 163, REQUEST_DATA_STREAM: 148,
     LOG_REQUEST_LIST: 128, LOG_ENTRY: 56, LOG_REQUEST_DATA: 116,
     LOG_DATA: 134, LOG_REQUEST_END: 203, ADSB_VEHICLE: 184,
     SERIAL_CONTROL: 194,
@@ -128,6 +132,11 @@ FIELDS = {
                "altitude_relative", "altitude_terrain", "bottom_clearance"],
     VIBRATION: ["time_usec", "vibration_x", "vibration_y", "vibration_z",
                 "clipping_0", "clipping_1", "clipping_2"],
+    EKF_STATUS_REPORT: ["velocity_variance", "pos_horiz_variance", "pos_vert_variance",
+                        "compass_variance", "terrain_alt_variance", "flags"],
+    ESTIMATOR_STATUS: ["time_usec", "vel_ratio", "pos_horiz_ratio", "pos_vert_ratio",
+                       "mag_ratio", "hagl_ratio", "tas_ratio", "pos_horiz_accuracy",
+                       "pos_vert_accuracy", "flags"],
     BATTERY_STATUS: (["current_consumed", "energy_consumed", "temperature"]
                      + [f"voltage{i}" for i in range(1, 11)]
                      + ["current_battery", "id", "battery_function", "type", "battery_remaining"]),
@@ -681,6 +690,13 @@ _WIRE = {
     VIBRATION: ("<QfffIII",
                 ["time_usec", "vibration_x", "vibration_y", "vibration_z",
                  "clipping_0", "clipping_1", "clipping_2"], 32),
+    EKF_STATUS_REPORT: ("<5fH",
+                        ["velocity_variance", "pos_horiz_variance", "pos_vert_variance",
+                         "compass_variance", "terrain_alt_variance", "flags"], 22),
+    ESTIMATOR_STATUS: ("<Q8fH",
+                       ["time_usec", "vel_ratio", "pos_horiz_ratio", "pos_vert_ratio",
+                        "mag_ratio", "hagl_ratio", "tas_ratio", "pos_horiz_accuracy",
+                        "pos_vert_accuracy", "flags"], 42),
     BATTERY_STATUS: ("<iih10HhBBBb",
                      ["current_consumed", "energy_consumed", "temperature"]
                      + [f"voltage{i}" for i in range(1, 11)]

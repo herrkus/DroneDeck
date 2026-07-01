@@ -599,6 +599,18 @@ class SystemsPanel(QWidget):
         vv.addWidget(self.vib_clip)
         lay.addWidget(vib)
 
+        ekf = QGroupBox("Estimator (EKF)")
+        ef = QFormLayout(ekf)
+        self.e_status = QLabel("--")
+        self.e_vel = QLabel("--"); self.e_ph = QLabel("--")
+        self.e_pv = QLabel("--"); self.e_comp = QLabel("--")
+        ef.addRow("Status", self.e_status)
+        ef.addRow("Velocity var", self.e_vel)
+        ef.addRow("Pos horiz var", self.e_ph)
+        ef.addRow("Pos vert var", self.e_pv)
+        ef.addRow("Compass var", self.e_comp)
+        lay.addWidget(ekf)
+
         alt = QGroupBox("Altitude")
         af = QFormLayout(alt)
         self.a_amsl = QLabel("--"); self.a_rel = QLabel("--"); self.a_terr = QLabel("--")
@@ -633,6 +645,19 @@ class SystemsPanel(QWidget):
             self.b_time.setStyleSheet("color:#e05050;" if s < 120 else
                                       "color:#e0a030;" if s < 300 else "color:#37d67a;")
         self.b_temp.setText("--" if ve.battery_temp is None else f"{ve.battery_temp:.1f} C")
+        if ve.have_ekf:
+            def vcol(v):
+                return "#37d67a" if v < 0.5 else "#e0a030" if v < 0.8 else "#e05050"
+            for lbl, v in ((self.e_vel, ve.ekf_vel_var), (self.e_ph, ve.ekf_pos_horiz_var),
+                           (self.e_pv, ve.ekf_pos_vert_var), (self.e_comp, ve.ekf_compass_var)):
+                lbl.setText(f"{v:.2f}"); lbl.setStyleSheet(f"color:{vcol(v)};")
+            ok = ve.ekf_ok()
+            self.e_status.setText("OK" if ok else "CHECK")
+            self.e_status.setStyleSheet("color:#37d67a;" if ok else "color:#e05050;")
+        else:
+            for lbl in (self.e_vel, self.e_ph, self.e_pv, self.e_comp):
+                lbl.setText("--"); lbl.setStyleSheet("")
+            self.e_status.setText("--"); self.e_status.setStyleSheet("")
         self.b_cells.setText("  ".join(f"{c:.2f}" for c in ve.cells) if ve.cells else "--")
         self.vib_bars.set_values(ve.vibration)
         self.vib_clip.setText("clip {} / {} / {}".format(*ve.clipping))

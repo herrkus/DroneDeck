@@ -104,6 +104,8 @@ constexpr MsgInfo MSGS[] = {
     {141,  47, 32},  // ALTITUDE
     {147, 154, 36},  // BATTERY_STATUS
     {241,  90, 32},  // VIBRATION
+    {193,  71, 22},  // EKF_STATUS_REPORT
+    {230, 163, 42},  // ESTIMATOR_STATUS
     {246, 184, 38},  // ADSB_VEHICLE
     {126, 194, 79},  // SERIAL_CONTROL (PX4 nsh shell passthrough)
 };
@@ -180,6 +182,16 @@ void decode(uint32_t msgid, const uint8_t* pl, Decoded& d) {
         push(rd_u64(pl + 0));
         push(rd_f32(pl + 8)); push(rd_f32(pl + 12)); push(rd_f32(pl + 16));
         push(rd_u32(pl + 20)); push(rd_u32(pl + 24)); push(rd_u32(pl + 28));
+        break;
+    case 193: // EKF_STATUS_REPORT: velocity_var, pos_horiz_var, pos_vert_var, compass_var, terrain_var, flags
+        push(rd_f32(pl + 0)); push(rd_f32(pl + 4)); push(rd_f32(pl + 8));
+        push(rd_f32(pl + 12)); push(rd_f32(pl + 16)); push(rd_u16(pl + 20));
+        break;
+    case 230: // ESTIMATOR_STATUS: time_usec, vel/pos_h/pos_v/mag/hagl/tas ratios, pos_h/v accuracy, flags
+        push(rd_u64(pl + 0));
+        push(rd_f32(pl + 8)); push(rd_f32(pl + 12)); push(rd_f32(pl + 16));
+        push(rd_f32(pl + 20)); push(rd_f32(pl + 24)); push(rd_f32(pl + 28));
+        push(rd_f32(pl + 32)); push(rd_f32(pl + 36)); push(rd_u16(pl + 40));
         break;
     case 75: // COMMAND_INT: param1-4, x, y, z, command, target_sys, target_comp, frame, current, autocont
         push(rd_f32(pl + 0)); push(rd_f32(pl + 4)); push(rd_f32(pl + 8)); push(rd_f32(pl + 12));
