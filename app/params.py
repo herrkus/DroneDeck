@@ -9,10 +9,13 @@ ArduPilot stores every parameter as REAL32, so the editor treats values as float
 """
 from __future__ import annotations
 
+import os
+
 from PySide6.QtCore import QObject, Signal, QTimer, Qt
 from PySide6.QtGui import QFont, QColor
 from PySide6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLineEdit, QPushButton,
-                               QLabel, QTableWidget, QTableWidgetItem, QHeaderView, QProgressBar)
+                               QLabel, QTableWidget, QTableWidgetItem, QHeaderView, QProgressBar,
+                               QFileDialog)
 
 import mavlink
 
@@ -199,9 +202,17 @@ class ParamDialog(QDialog):
         self.btn_refresh.clicked.connect(self.mgr.download)
         self.btn_write = QPushButton("Write changed")
         self.btn_write.clicked.connect(self._write)
+        self.btn_save = QPushButton("Save...")
+        self.btn_save.setToolTip("Save all parameters to a .params file")
+        self.btn_save.clicked.connect(self._save_file)
+        self.btn_load = QPushButton("Load...")
+        self.btn_load.setToolTip("Load a .params file and write changed values to the vehicle")
+        self.btn_load.clicked.connect(self._load_file)
         top.addWidget(self.search, 1)
         top.addWidget(self.btn_refresh)
         top.addWidget(self.btn_write)
+        top.addWidget(self.btn_save)
+        top.addWidget(self.btn_load)
         lay.addLayout(top)
 
         self.table = QTableWidget(0, 2)
@@ -284,6 +295,85 @@ class ParamDialog(QDialog):
         for name, val in list(self.edited.items()):
             self.mgr.set(name, val)
         self.status.setText(f"writing {len(self.edited)} parameter(s)...")
+
+    # -- file save / load (QGC-compatible .params) ---------------------------
+    def save_params_to(self, path):
+        """Write all downloaded parameters to `path` in QGC's tab-separated .params format.
+        Returns the number of parameters written."""
+        try:
+            sysid = int(self.mgr._target())
+        except Exception:
+            sysid = 1
+        lines = ["# Onboard parameters saved by DroneDeck",
+                 "# MAV ID\tCOMPONENT ID\tNAME\tVALUE\tTYPE"]
+        for name in sorted(self.mgr.values):
+            ptype = int(self.mgr.type_of.get(name, mavlink.MAV_PARAM_TYPE_REAL32))
+            v = self.mgr.values[name]
+            # integer types must be written exactly (a large bitmask would lose digits in %g);
+            # real types get 9 sig figs, which round-trips a float32 exactly
+            vtxt = f"{int(round(v))}" if ptype in (1, 2, 3, 4, 5, 6, 7, 8) else f"{v:.9g}"
+            lines.append(f"{sysid}\t1\t{name}\t{vtxt}\t{ptype}")
+        with open(path, "w") as f:
+            f.write("\n".join(lines) + "\n")
+        return len(self.mgr.values)
+
+    @staticmethod
+    def load_params_from(path):
+        """Parse a .params file -> {name: float}. Accepts QGC tab format (sysid comp name value
+        type) and a plain 'name,value' CSV; '#' comment lines and blanks are ignored."""
+        out = {}
+        with open(path) as f:
+            for line in f:
+                line = line.strip()
+                if not line or line.startswith("#"):
+                    continue
+                parts = [p for p in (line.split("\t") if "\t" in line else line.split(","))
+                         if p.strip() != ""]
+                if len(parts) >= 5:                 # QGC: sysid comp NAME VALUE TYPE
+                    name, val = parts[2].strip(), parts[3].strip()
+                elif len(parts) == 2:               # NAME,VALUE
+                    name, val = parts[0].strip(), parts[1].strip()
+                else:
+                    continue
+                try:
+                    out[name] = float(val)
+                except ValueError:
+                    continue
+        return out
+
+    def _save_file(self):
+        if not self.mgr.values:
+            self.status.setText("no parameters loaded -- Refresh first")
+            return
+        path, _ = QFileDialog.getSaveFileName(self, "Save parameters",
+                                              os.path.expanduser("~/vehicle.params"),
+                                              "Parameters (*.params)")
+        if not path:
+            return
+        if not path.endswith(".params"):
+            path += ".params"
+        n = self.save_params_to(path)
+        self.status.setText(f"saved {n} parameters to {os.path.basename(path)}")
+
+    def _load_file(self):
+        path, _ = QFileDialog.getOpenFileName(self, "Load parameters", os.path.expanduser("~"),
+                                              "Parameters (*.params);;All files (*)")
+        if not path:
+            return
+        loaded = self.load_params_from(path)
+        if not loaded:
+            self.status.setText("no parameters found in that file")
+            return
+        if not self.mgr._ready():
+            self.status.setText(f"parsed {len(loaded)} params -- connect a vehicle to write them")
+            return
+        changed = 0
+        for name, val in loaded.items():           # write only params the vehicle has that differ
+            if name in self.mgr.values and not ParamManager._values_match(
+                    self.mgr.values[name], val, self.mgr.type_of.get(name, mavlink.MAV_PARAM_TYPE_REAL32)):
+                self.mgr.set(name, val)
+                changed += 1
+        self.status.setText(f"loaded {len(loaded)} params from file; writing {changed} changed")
 
     def _filter(self, _text):
         for row in range(self.table.rowCount()):
