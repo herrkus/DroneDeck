@@ -244,6 +244,12 @@ _PX4_MAIN = {1: "MANUAL", 2: "ALTCTL", 3: "POSCTL", 5: "ACRO", 6: "OFFBOARD",
              7: "STABILIZED", 8: "RATTITUDE", 4: "AUTO"}
 _PX4_AUTO_SUB = {1: "READY", 2: "TAKEOFF", 3: "LOITER", 4: "MISSION", 5: "RTL",
                  6: "LAND", 7: "RTGS", 8: "FOLLOW", 10: "PRECLAND"}
+# Forward map for SETTING PX4 modes: label -> (main_mode, sub_mode).
+_PX4_MODE_SET = {
+    "MANUAL": (1, 0), "ALTCTL": (2, 0), "POSCTL": (3, 0), "ACRO": (5, 0),
+    "OFFBOARD": (6, 0), "STABILIZED": (7, 0), "AUTO.TAKEOFF": (4, 2),
+    "AUTO.LOITER": (4, 3), "AUTO.MISSION": (4, 4), "AUTO.RTL": (4, 5), "AUTO.LAND": (4, 6),
+}
 
 
 def mode_table(autopilot, mav_type):
@@ -661,6 +667,24 @@ def mode_number(autopilot, mav_type, name):
         if nm == name:
             return num
     return None
+
+
+def mode_names(autopilot, mav_type):
+    """Ordered list of settable mode labels for this vehicle's autopilot."""
+    if int(autopilot) == MAV_AUTOPILOT_PX4:
+        return list(_PX4_MODE_SET.keys())
+    t = mode_table(autopilot, mav_type)
+    return [t[k] for k in sorted(t)]
+
+
+def mode_command(autopilot, mav_type, name):
+    """DO_SET_MODE (param2, param3) for a mode label, or None if unavailable.
+    PX4 takes (main_mode, sub_mode); ArduPilot takes (custom_mode, 0)."""
+    if int(autopilot) == MAV_AUTOPILOT_PX4:
+        ms = _PX4_MODE_SET.get(name)
+        return (float(ms[0]), float(ms[1])) if ms else None
+    num = mode_number(autopilot, mav_type, name)
+    return (float(num), 0.0) if num is not None else None
 
 
 class PyParser:

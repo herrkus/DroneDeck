@@ -127,9 +127,11 @@ class Link(QObject):
         self.send_command_long(target_sys, mavlink.MAV_CMD_COMPONENT_ARM_DISARM,
                                [1.0 if arm else 0.0, 0, 0, 0, 0, 0, 0])
 
-    def set_mode(self, target_sys: int, custom_mode: int):
+    def set_mode(self, target_sys: int, custom_mode, sub_mode=0):
+        # ArduPilot: custom_mode is the mode number (sub_mode 0). PX4: custom_mode is the
+        # main mode and sub_mode the sub mode -- both ride in DO_SET_MODE param2/param3.
         self.send_command_long(target_sys, mavlink.MAV_CMD_DO_SET_MODE,
-                               [mavlink.MAV_MODE_FLAG_CUSTOM_MODE_ENABLED, custom_mode, 0, 0, 0, 0, 0])
+                               [mavlink.MAV_MODE_FLAG_CUSTOM_MODE_ENABLED, custom_mode, sub_mode, 0, 0, 0, 0])
 
     def takeoff(self, target_sys: int, alt: float, lat: float = 0.0, lon: float = 0.0):
         # COMMAND_INT + GLOBAL_RELATIVE_ALT so `alt` is metres above the launch point.

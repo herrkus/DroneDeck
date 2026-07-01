@@ -611,6 +611,7 @@ class DroneDeck(QMainWindow):
                 # we know it exists (and its autopilot, for the right request dialect).
                 self.link.request_data_streams(sysid, veh.autopilot)
                 self._on_info(f"vehicle #{sysid} detected -- requesting telemetry streams")
+        self._sync_mode_combo()   # keep the mode selector matched to the autopilot
 
     def _ensure_vehicle(self, sysid):
         veh = self.vehicles.get(sysid)
@@ -793,12 +794,27 @@ class DroneDeck(QMainWindow):
         if not self._has_vehicle():
             return
         name = self.mode_combo.currentText()
-        num = mavlink.mode_number(self.vehicle.autopilot, self.vehicle.mav_type, name)
-        if num is None:
+        params = mavlink.mode_command(self.vehicle.autopilot, self.vehicle.mav_type, name)
+        if params is None:
             self._on_info(f"mode {name} not available for this vehicle")
             return
-        self.link.set_mode(self._sysid(), num)
+        self.link.set_mode(self._sysid(), params[0], params[1])
         self._on_info(f"set mode {name}")
+
+    def _sync_mode_combo(self):
+        # Show the mode list matching the connected autopilot (PX4 vs ArduPilot) so the
+        # selector never offers modes the vehicle can't accept. Rebuilds only on change.
+        key = (int(self.vehicle.autopilot), int(self.vehicle.mav_type))
+        if key == getattr(self, "_mode_combo_key", None):
+            return
+        self._mode_combo_key = key
+        self.mode_combo.blockSignals(True)
+        self.mode_combo.clear()
+        self.mode_combo.addItems(mavlink.mode_names(self.vehicle.autopilot, self.vehicle.mav_type))
+        idx = self.mode_combo.findText(self.vehicle.mode)
+        if idx >= 0:
+            self.mode_combo.setCurrentIndex(idx)
+        self.mode_combo.blockSignals(False)
 
     def _takeoff(self):
         if not self._has_vehicle():
