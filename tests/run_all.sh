@@ -74,6 +74,7 @@ check "flightchip"          ""                        tests/test_flightchip.py
 check "mapcenter"           ""                        tests/test_mapcenter.py
 check "cleartrail"          ""                        tests/test_cleartrail.py
 check "scalebar"            ""                        tests/test_scalebar.py
+check "fitmap"              ""                        tests/test_fitmap.py
 check "battwarn"            ""                        tests/test_battwarn.py
 check "msgunread"           ""                        tests/test_msgunread.py
 check "takeoffalt"          ""                        tests/test_takeoffalt.py

@@ -123,6 +123,31 @@ class MapView(QWidget):
             return True
         return False
 
+    def fit_bounds(self, points, pad_px=48):
+        """Centre + zoom to frame all (lat, lon) points within the widget (with padding).
+        A single point just recentres at the current zoom. Returns False if no valid points."""
+        pts = [(la, lo) for la, lo in points if abs(la) > 1e-9 or abs(lo) > 1e-9]
+        if not pts:
+            return False
+        lats = [p[0] for p in pts]
+        lons = [p[1] for p in pts]
+        min_lat, max_lat, min_lon, max_lon = min(lats), max(lats), min(lons), max(lons)
+        self.center = ((min_lat + max_lat) / 2.0, (min_lon + max_lon) / 2.0)
+        if max_lat - min_lat < 1e-7 and max_lon - min_lon < 1e-7:   # one point / coincident
+            self.update()
+            return True
+        avail_w = max(1, self.width() - 2 * pad_px)
+        avail_h = max(1, self.height() - 2 * pad_px)
+        best = 3
+        for z in range(19, 2, -1):                                  # tightest zoom that still fits
+            xl, yt = deg2num(max_lat, min_lon, z)                   # screen top-left
+            xr, yb = deg2num(min_lat, max_lon, z)                   # screen bottom-right
+            if abs(xr - xl) * TILE <= avail_w and abs(yb - yt) * TILE <= avail_h:
+                best = z
+                break
+        self.set_zoom(best)
+        return True
+
     def set_zoom(self, z):
         self.zoom = max(3, min(19, int(z)))
         self.update()

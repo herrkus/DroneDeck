@@ -350,6 +350,9 @@ class DroneDeck(QMainWindow):
         self.btn_center = QPushButton("Center")
         self.btn_center.clicked.connect(self._center_on_vehicle)
         tb.addWidget(self.btn_center)
+        self.btn_fit = QPushButton("Fit")
+        self.btn_fit.clicked.connect(self._fit_map)
+        tb.addWidget(self.btn_fit)
         self.chk_follow = QCheckBox("Follow")
         self.chk_follow.setChecked(True)
         self.chk_follow.toggled.connect(self._set_follow)
@@ -1795,6 +1798,19 @@ class DroneDeck(QMainWindow):
         if not self.map.center_on_vehicle():
             self.statusBar().showMessage("No position fix yet", 2000)
 
+    def _fit_map(self):
+        """Zoom + centre the map to frame the mission, vehicle and home together."""
+        pts = [(it.lat, it.lon) for it in self.mission_items]
+        ve = self.vehicle
+        if ve.have_position:
+            pts.append((ve.lat, ve.lon))
+        if ve.home:
+            pts.append((ve.home[0], ve.home[1]))
+        if self.map.fit_bounds(pts):
+            self.map.set_follow(False)      # a fixed frame -- detach follow so it isn't overridden
+        else:
+            self.statusBar().showMessage("Nothing to fit (no mission, vehicle or home)", 2500)
+
     def _on_new_message(self, sev, _text):
         """Count a STATUSTEXT as unread unless the Messages tab is the one on screen."""
         if not self.msg_dock.isVisible():
@@ -1980,6 +1996,7 @@ class DroneDeck(QMainWindow):
         self.btn_help.setToolTip("Keyboard shortcuts & quick help  (F1)")
         self.chk_follow.setToolTip("Keep the map centred on the vehicle  (F)")
         self.btn_center.setToolTip("Recentre the map on the vehicle once  (C)")
+        self.btn_fit.setToolTip("Zoom to frame the mission, vehicle and home")
         self.transport_combo.setToolTip("Link type: UDP / TCP / Serial / Replay a .tlog")
         self.link_edit.setToolTip("UDP port, TCP host:port, serial port:baud, or .tlog path")
         self.vehicle_combo.setToolTip("Select which vehicle to control")
