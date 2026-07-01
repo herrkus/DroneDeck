@@ -29,7 +29,7 @@ class TelemetryPanel(QWidget):
             "BATTERY": [("voltage", "Voltage"), ("current", "Current"), ("remaining", "Remaining")],
             "POSITION": [("lat", "Latitude"), ("lon", "Longitude"), ("alt_msl", "Alt MSL"), ("alt_rel", "Alt rel")],
             "MOTION": [("gspeed", "Ground spd"), ("aspeed", "Air spd"), ("climb", "Climb"),
-                       ("throttle", "Throttle"), ("hdg", "Heading")],
+                       ("throttle", "Throttle"), ("hdg", "Heading"), ("wind", "Wind")],
             "NAVIGATION": [("home_dist", "Dist to home"), ("flight_time", "Flight time"),
                            ("home_eta", "Home ETA"), ("wp_dist", "Dist to WP")],
             "GPS": [("fix", "Fix"), ("sats", "Satellites"), ("hdop", "HDOP"), ("pos_acc", "Pos acc")],
@@ -124,6 +124,10 @@ class TelemetryPanel(QWidget):
         self._set("climb", f"{ve.climb:+5.1f} m/s")
         self._set("throttle", f"{ve.throttle} %")
         self._set("hdg", f"{ve.heading:5.1f} deg")
+        if ve.have_wind:
+            self._set("wind", f"{ve.wind_speed():4.1f} m/s from {ve.wind_dir():3.0f} deg")
+        else:
+            self._set("wind", "--")
 
         self._set("fix", ve.fix_text, "#37d67a" if ve.fix_type >= 3 else "#e0a030")
         self._set("sats", str(ve.satellites))

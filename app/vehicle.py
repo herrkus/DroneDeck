@@ -62,6 +62,11 @@ class Vehicle(QObject):
         self.ekf_compass_var = 0.0
         self.ekf_terrain_var = 0.0
         self.have_ekf = False               # True once a report has arrived
+        # wind estimate (WIND_COV), NED m/s
+        self.wind_x = 0.0                    # north component
+        self.wind_y = 0.0                    # east component
+        self.wind_z = 0.0                    # down component
+        self.have_wind = False
         # gps
         self.fix_type = 0
         self.satellites = 0
@@ -224,6 +229,21 @@ class Vehicle(QObject):
         self.pos_vert_acc = float(f.get("pos_vert_accuracy", 0.0)) or None
         self.have_ekf = True
 
+    def _on_wind_cov(self, f):
+        self.wind_x = float(f.get("wind_x", 0.0))
+        self.wind_y = float(f.get("wind_y", 0.0))
+        self.wind_z = float(f.get("wind_z", 0.0))
+        self.have_wind = True
+
+    def wind_speed(self):
+        """Horizontal wind speed, m/s."""
+        return math.hypot(self.wind_x, self.wind_y)
+
+    def wind_dir(self):
+        """Compass bearing (deg) the wind blows FROM (meteorological convention). wind_x/y
+        is the vector the air moves TOWARD in NED (x=north, y=east); 'from' is the reverse."""
+        return math.degrees(math.atan2(-self.wind_y, -self.wind_x)) % 360.0
+
     def ekf_variance_max(self):
         """Worst of the four core variances (0 good .. >1 bad); QGC colours from this."""
         return max(self.ekf_vel_var, self.ekf_pos_horiz_var,
@@ -269,6 +289,7 @@ class Vehicle(QObject):
         mavlink.VIBRATION: _on_vibration,
         mavlink.EKF_STATUS_REPORT: _on_ekf_status,
         mavlink.ESTIMATOR_STATUS: _on_estimator_status,
+        mavlink.WIND_COV: _on_wind_cov,
         mavlink.BATTERY_STATUS: _on_battery_status,
         mavlink.RADIO_STATUS: _on_radio_status,
         mavlink.GPS_RAW_INT: _on_gps_raw,
