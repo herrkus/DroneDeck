@@ -552,6 +552,7 @@ class DroneDeck(QMainWindow):
         self.console.setMinimumHeight(70)
         self._msg_unread = 0        # STATUSTEXT arrived while the Messages tab wasn't visible
         self._msg_worst = 99        # worst (lowest) unread severity; 99 = none
+        self._takeoff_alt = 25.0    # remembered takeoff altitude (persisted across runs)
         # no maximum height -- drag the map/messages divider to grow the board freely
         msg_wrap = QWidget()
         mcl = QVBoxLayout(msg_wrap)
@@ -1241,8 +1242,10 @@ class DroneDeck(QMainWindow):
     def _takeoff(self):
         if not self._has_vehicle():
             return
-        alt, ok = QInputDialog.getDouble(self, "Takeoff", "Altitude (m):", 30.0, 1.0, 1000.0, 1)
+        alt, ok = QInputDialog.getDouble(self, "Takeoff", "Altitude (m):",
+                                         self._takeoff_alt, 1.0, 1000.0, 1)
         if ok:
+            self._takeoff_alt = alt          # remember it for next time (and persist on close)
             self.link.takeoff(self._sysid(), alt, self.vehicle.lat, self.vehicle.lon)
             self._on_info(f"takeoff to {alt:.0f} m")
 
@@ -2100,6 +2103,7 @@ class DroneDeck(QMainWindow):
         except (TypeError, ValueError):
             pass
         self.chk_follow.setChecked(s.value("map/follow", True, type=bool))
+        self._takeoff_alt = s.value("flight/takeoff_alt", 25.0, type=float)
         raw = s.value("links/configs")
         if raw:
             try:
@@ -2124,6 +2128,7 @@ class DroneDeck(QMainWindow):
         s.setValue("map/zoom", int(self.map.zoom))
         s.setValue("map/provider", self.map.provider)
         s.setValue("map/follow", bool(self.map.follow))
+        s.setValue("flight/takeoff_alt", float(self._takeoff_alt))
         s.setValue("links/configs", json.dumps(self.link_configs))
         s.setValue("telem/hidden", json.dumps(self.panel.hidden_groups()))
         s.sync()
