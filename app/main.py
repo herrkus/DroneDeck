@@ -92,7 +92,7 @@ class WaypointEditor(QDialog):
 
     CMDS = [("Waypoint", 16), ("Takeoff", 22), ("Loiter (time)", 19),
             ("Loiter (unlim)", 17), ("Land", 21), ("Return to launch", 20),
-            ("ROI (point camera)", 195)]
+            ("ROI (point camera)", 195), ("Change speed", 178)]
 
     def __init__(self, item, parent=None):
         super().__init__(parent)
@@ -120,26 +120,48 @@ class WaypointEditor(QDialog):
         self.p1 = dspin(-1e6, 1e6, item.param1)       # hold / loiter time (s)
         self.p3 = dspin(-1e6, 1e6, item.param3)       # loiter radius (m)
         self.p4 = dspin(-360, 360, item.param4, " deg")   # yaw
+        self.spd = dspin(0, 100, item.param2 if item.command == 178 else 5.0, " m/s")
         form.addRow("Command", self.cmd)
         form.addRow("Altitude", self.alt)
         form.addRow("Hold / loiter time (s)", self.p1)
         form.addRow("Loiter radius (m)", self.p3)
         form.addRow("Yaw", self.p4)
+        form.addRow("Speed", self.spd)
         bb = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         bb.accepted.connect(self.accept)
         bb.rejected.connect(self.reject)
         form.addRow(bb)
+        self.cmd.currentIndexChanged.connect(self._sync_fields)
+        self._sync_fields()
+
+    def _sync_fields(self):
+        """Grey out the fields that don't apply to the chosen command (QGC-style)."""
+        cmd = self.cmd.currentData()
+        has_pos = cmd not in (20, 178)                # RTL + change-speed carry no position
+        is_loiter = cmd in (17, 19)
+        self.alt.setEnabled(has_pos)
+        self.p1.setEnabled(is_loiter)
+        self.p3.setEnabled(is_loiter)
+        self.p4.setEnabled(has_pos)
+        self.spd.setEnabled(cmd == 178)
 
     def apply_to(self, item):
         cmd = self.cmd.currentData()
         item.command = cmd
-        item.alt = self.alt.value()
-        item.param1 = self.p1.value()
-        item.param3 = self.p3.value()
-        item.param4 = self.p4.value()
-        # RTL carries no position and must use the MISSION frame (2); PX4 rejects it
-        # when sent with a global frame. Everything else stays relative-alt georeferenced.
-        item.frame = 2 if cmd == 20 else mavlink.MAV_FRAME_GLOBAL_RELATIVE_ALT_INT
+        if cmd == 178:                                # DO_CHANGE_SPEED
+            item.param1 = 1.0                         # 1 = ground speed
+            item.param2 = self.spd.value()
+            item.param3 = -1.0                        # throttle: no change
+            item.param4 = 0.0
+            item.alt = 0.0
+        else:
+            item.alt = self.alt.value()
+            item.param1 = self.p1.value()
+            item.param3 = self.p3.value()
+            item.param4 = self.p4.value()
+        # RTL and DO_CHANGE_SPEED carry no position and must use the MISSION frame (2);
+        # PX4 rejects them with a global frame. Everything else stays georeferenced.
+        item.frame = 2 if cmd in (20, 178) else mavlink.MAV_FRAME_GLOBAL_RELATIVE_ALT_INT
 
 
 class DroneDeck(QMainWindow):
@@ -1185,6 +1207,8 @@ class DroneDeck(QMainWindow):
                 extra = f"  {it.param1:.0f}s"
             elif it.param3:
                 extra = f"  r{it.param3:.0f}"
+        elif it.command == 178:                       # DO_CHANGE_SPEED
+            extra = f"  {it.param2:.1f} m/s"
         return (f"{it.seq:2d}  {it.cmd_name:9s} {it.lat:10.6f} {it.lon:11.6f}"
                 f"  {it.alt:5.0f} m{extra}")
 
