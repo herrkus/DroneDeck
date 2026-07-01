@@ -62,6 +62,11 @@ def _load():
         ctypes.c_uint8, ctypes.c_uint8, ctypes.c_uint8, ctypes.c_uint8, ctypes.c_uint8,
         ctypes.c_uint16, ctypes.POINTER(ctypes.c_float), u8p, ctypes.c_int]
     lib.mav_encode_command_long.restype = ctypes.c_int
+    lib.mav_encode_command_int.argtypes = [
+        ctypes.c_uint8, ctypes.c_uint8, ctypes.c_uint8, ctypes.c_uint8, ctypes.c_uint8,
+        ctypes.c_uint8, ctypes.c_uint16, ctypes.POINTER(ctypes.c_float),
+        ctypes.c_int32, ctypes.c_int32, ctypes.c_float, u8p, ctypes.c_int]
+    lib.mav_encode_command_int.restype = ctypes.c_int
     return lib
 
 
@@ -158,3 +163,15 @@ def encode_command_long(sysid, compid, seq, tgt_sys, tgt_comp, command, params7)
         return bytes(out[:n]) if n > 0 else b""
     pl = mavlink.enc_command_long(command, params7, tgt_sys, tgt_comp)
     return mavlink.frame(mavlink.COMMAND_LONG, pl, seq, sysid, compid)
+
+
+def encode_command_int(sysid, compid, seq, tgt_sys, tgt_comp, frame, command,
+                       params4, x, y, z) -> bytes:
+    if NATIVE:
+        arr = (ctypes.c_float * 4)(*[float(v) for v in (list(params4) + [0] * 4)[:4]])
+        out = (ctypes.c_uint8 * 64)()
+        n = _lib.mav_encode_command_int(sysid, compid, seq & 0xFF, tgt_sys, tgt_comp,
+                                        frame, command, arr, int(x), int(y), float(z), out, 64)
+        return bytes(out[:n]) if n > 0 else b""
+    pl = mavlink.enc_command_int(command, params4, x, y, z, tgt_sys, tgt_comp, frame)
+    return mavlink.frame(mavlink.COMMAND_INT, pl, seq, sysid, compid)

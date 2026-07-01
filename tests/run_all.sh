@@ -49,6 +49,7 @@ check "multivehicle"        ""                        tests/test_multivehicle.py
 check "rc_calibration"      ""                        tests/test_rc_calibration.py
 check "sensor_calibration"  ""                        tests/test_sensor_calibration.py
 check "systems"             ""                        tests/test_systems.py
+check "guided"              ""                        tests/test_guided.py
 check "settings"            ""                        tests/test_settings.py
 check "links_manager"       ""                        tests/test_links_manager.py
 check "smoke (native)"      ""                        tests/smoke_gui.py

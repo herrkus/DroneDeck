@@ -104,6 +104,24 @@ class Link(QObject):
         self._send(core.encode_command_long(self.gcs_sysid, self.gcs_compid, self._next_seq(),
                                             target_sys, 1, command, params))
 
+    def send_command_int(self, target_sys, command, params4, x, y, z, frame=6):
+        # frame 6 = MAV_FRAME_GLOBAL_RELATIVE_ALT_INT; x/y are lat/lon * 1e7 (int, precise)
+        self._send(core.encode_command_int(self.gcs_sysid, self.gcs_compid, self._next_seq(),
+                                           target_sys, 1, frame, command, params4, x, y, z))
+
+    def orbit(self, target_sys, lat, lon, radius, alt):
+        self.send_command_int(target_sys, mavlink.MAV_CMD_DO_ORBIT,
+                              [radius, float("nan"), 0, float("nan")],
+                              int(lat * 1e7), int(lon * 1e7), alt)
+
+    def set_roi(self, target_sys, lat, lon, alt):
+        self.send_command_int(target_sys, mavlink.MAV_CMD_DO_SET_ROI_LOCATION,
+                              [0, 0, 0, 0], int(lat * 1e7), int(lon * 1e7), alt)
+
+    def set_home(self, target_sys, lat, lon, alt):
+        self.send_command_int(target_sys, mavlink.MAV_CMD_DO_SET_HOME,
+                              [0, 0, 0, 0], int(lat * 1e7), int(lon * 1e7), alt)
+
     # -- commands -------------------------------------------------------------
     def arm(self, target_sys: int, arm: bool = True):
         self.send_command_long(target_sys, mavlink.MAV_CMD_COMPONENT_ARM_DISARM,

@@ -12,7 +12,7 @@ import os
 from PySide6.QtCore import Qt, QRectF, QPointF, QUrl, Signal
 from PySide6.QtGui import (QPainter, QColor, QPen, QBrush, QPixmap, QPolygonF,
                            QFont, QPixmapCache)
-from PySide6.QtWidgets import QWidget
+from PySide6.QtWidgets import QWidget, QMenu
 
 try:
     from PySide6.QtNetwork import QNetworkAccessManager, QNetworkRequest, QNetworkReply
@@ -42,6 +42,7 @@ def num2deg(x, y, z):
 
 class MapView(QWidget):
     clicked = Signal(float, float)            # map click -> (lat, lon)
+    contextAction = Signal(str, float, float)  # right-click action -> (action, lat, lon)
     waypoint_selected = Signal(int)           # a planned waypoint was clicked
     waypoint_moved = Signal(int, float, float)  # waypoint dragged -> (index, lat, lon)
 
@@ -408,6 +409,15 @@ class MapView(QWidget):
         if was_click:
             la, lo = self._px_to_ll(self._press.x(), self._press.y())
             self.clicked.emit(la, lo)
+
+    def contextMenuEvent(self, e):
+        la, lo = self._px_to_ll(e.pos().x(), e.pos().y())
+        menu = QMenu(self)
+        for label, key in (("Go to here", "goto"), ("Orbit here", "orbit"),
+                           ("Point camera here (ROI)", "roi"), ("Set home here", "sethome")):
+            act = menu.addAction(label)
+            act.triggered.connect(lambda _=False, k=key: self.contextAction.emit(k, la, lo))
+        menu.exec(e.globalPos())
 
     def mouseDoubleClickEvent(self, _):
         self.follow = True

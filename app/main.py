@@ -443,6 +443,7 @@ class DroneDeck(QMainWindow):
         self.vehicle.status_text.connect(self.console.add_message)
         self.vehicle.command_ack.connect(self._on_command_ack)
         self.map.clicked.connect(self._on_map_click)
+        self.map.contextAction.connect(self._on_map_context)
         self.map.waypoint_selected.connect(self._wp_selected)
         self.map.waypoint_moved.connect(self._wp_moved)
         self.mission.progress.connect(self._on_mission_progress)
@@ -789,6 +790,25 @@ class DroneDeck(QMainWindow):
                                 ) == QMessageBox.StandardButton.Yes:
             self.link.goto(self._sysid(), lat, lon, alt)
             self._on_info(f"goto {lat:.5f}, {lon:.5f} @ {alt:.0f} m")
+
+    def _on_map_context(self, action, lat, lon):
+        if not self._has_vehicle():
+            QMessageBox.information(self, "No vehicle", "Connect to a vehicle first.")
+            return
+        alt = max(self.vehicle.alt_rel, 30.0)
+        sysid = self._sysid()
+        if action == "goto":
+            self.link.goto(sysid, lat, lon, alt)
+            self._on_info(f"goto {lat:.5f}, {lon:.5f} @ {alt:.0f} m")
+        elif action == "orbit":
+            self.link.orbit(sysid, lat, lon, 50.0, alt)
+            self._on_info(f"orbit {lat:.5f}, {lon:.5f} r=50 m @ {alt:.0f} m")
+        elif action == "roi":
+            self.link.set_roi(sysid, lat, lon, alt)
+            self._on_info(f"ROI {lat:.5f}, {lon:.5f}")
+        elif action == "sethome":
+            self.link.set_home(sysid, lat, lon, alt)
+            self._on_info(f"set home {lat:.5f}, {lon:.5f}")
 
     # -- mission planning -----------------------------------------------------
     def _toggle_plan(self, on):

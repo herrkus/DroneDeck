@@ -133,6 +133,18 @@ def main():
             check(int(m.fields["battery_remaining"]) == 88, "battery remaining")
             check(int(m.fields["temperature"]) == 2600, "battery temperature")
 
+        m = roundtrip(mavlink.COMMAND_INT,
+                      mavlink.enc_command_int(mavlink.MAV_CMD_DO_ORBIT,
+                                              [50.0, float("nan"), 0, 0],
+                                              int(54.6872e7), int(25.2797e7), 30.0, frame=6), crc_fn)
+        if m:
+            check(int(m.fields["command"]) == mavlink.MAV_CMD_DO_ORBIT, "cmdint command")
+            check(int(m.fields["x"]) == int(54.6872e7), f"cmdint x {m.fields.get('x')}")
+            check(int(m.fields["y"]) == int(25.2797e7), f"cmdint y {m.fields.get('y')}")
+            check(approx(m.fields["z"], 30.0), "cmdint z")
+            check(int(m.fields["frame"]) == 6, "cmdint frame")
+            check(approx(m.fields["param1"], 50.0), "cmdint param1")
+
         m = roundtrip(mavlink.MANUAL_CONTROL,
                       mavlink.enc_manual_control(1, 500, -250, 800, -100, 3), crc_fn)
         if m:
@@ -221,6 +233,16 @@ def main():
         if m:
             check(m.fields.get("param_id") == "RTL_ALT", f"set id {m.fields.get('param_id')!r}")
             check(approx(m.fields["param_value"], 1500.0), f"set value {m.fields.get('param_value')}")
+
+    # The native COMMAND_INT encoder must round-trip through the parser.
+    raw = core.encode_command_int(3, 1, 9, 1, 1, 6, mavlink.MAV_CMD_DO_SET_HOME,
+                                  [0, 0, 0, 0], int(54.70e7), int(25.30e7), 20.0)
+    mm = core.Parser().feed(raw)
+    check(len(mm) == 1, f"native command_int: {len(mm)} msgs")
+    if mm:
+        check(int(mm[0].fields["command"]) == mavlink.MAV_CMD_DO_SET_HOME, "native command_int cmd")
+        check(int(mm[0].fields["x"]) == int(54.70e7), f"native command_int x {mm[0].fields.get('x')}")
+        check(approx(mm[0].fields["z"], 20.0), "native command_int z")
 
     # Assembly CRC must equal the independent Python CRC, byte-for-byte.
     sample = mavlink.enc_attitude(0.3, 0.4, 0.5, 7)

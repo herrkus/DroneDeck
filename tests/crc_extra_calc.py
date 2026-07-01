@@ -112,6 +112,12 @@ NEW = {
     "RC_CHANNELS": (118, [("uint32_t", "time_boot_ms", 0)]
                     + [("uint16_t", f"chan{i}_raw", 0) for i in range(1, 19)]
                     + [("uint8_t", "chancount", 0), ("uint8_t", "rssi", 0)]),
+    "COMMAND_INT": (158, [("float", "param1", 0), ("float", "param2", 0), ("float", "param3", 0),
+                          ("float", "param4", 0), ("int32_t", "x", 0), ("int32_t", "y", 0),
+                          ("float", "z", 0), ("uint16_t", "command", 0),
+                          ("uint8_t", "target_system", 0), ("uint8_t", "target_component", 0),
+                          ("uint8_t", "frame", 0), ("uint8_t", "current", 0),
+                          ("uint8_t", "autocontinue", 0)]),
     "ALTITUDE": (47, [("uint64_t", "time_usec", 0), ("float", "altitude_monotonic", 0),
                       ("float", "altitude_amsl", 0), ("float", "altitude_local", 0),
                       ("float", "altitude_relative", 0), ("float", "altitude_terrain", 0),

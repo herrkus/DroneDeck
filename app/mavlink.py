@@ -20,6 +20,7 @@ BATTERY_STATUS = 147
 VIBRATION = 241
 MANUAL_CONTROL = 69
 VFR_HUD = 74
+COMMAND_INT = 75
 COMMAND_LONG = 76
 COMMAND_ACK = 77
 SET_POSITION_TARGET_GLOBAL_INT = 86
@@ -58,6 +59,7 @@ MSG_NAME = {
     BATTERY_STATUS: "BATTERY_STATUS",
     VIBRATION: "VIBRATION",
     MANUAL_CONTROL: "MANUAL_CONTROL",
+    COMMAND_INT: "COMMAND_INT",
     COMMAND_LONG: "COMMAND_LONG",
     COMMAND_ACK: "COMMAND_ACK",
     SET_POSITION_TARGET_GLOBAL_INT: "SET_POSITION_TARGET_GLOBAL_INT",
@@ -85,7 +87,7 @@ MSG_NAME = {
 # Per-message CRC_EXTRA seed bytes (derived + validated in tests/crc_extra_calc.py).
 CRC_EXTRA = {
     HEARTBEAT: 50, SYS_STATUS: 124, GPS_RAW_INT: 24, ATTITUDE: 39,
-    GLOBAL_POSITION_INT: 104, VFR_HUD: 20, COMMAND_LONG: 152,
+    GLOBAL_POSITION_INT: 104, VFR_HUD: 20, COMMAND_INT: 158, COMMAND_LONG: 152,
     COMMAND_ACK: 143, STATUSTEXT: 83, SET_POSITION_TARGET_GLOBAL_INT: 5,
     PARAM_REQUEST_READ: 214, PARAM_REQUEST_LIST: 159, PARAM_VALUE: 220, PARAM_SET: 168,
     MISSION_CURRENT: 28, MISSION_REQUEST_LIST: 132, MISSION_COUNT: 221,
@@ -115,6 +117,8 @@ FIELDS = {
                      + [f"voltage{i}" for i in range(1, 11)]
                      + ["current_battery", "id", "battery_function", "type", "battery_remaining"]),
     MANUAL_CONTROL: ["x", "y", "z", "r", "buttons", "target"],
+    COMMAND_INT: ["param1", "param2", "param3", "param4", "x", "y", "z", "command",
+                  "target_system", "target_component", "frame", "current", "autocontinue"],
     COMMAND_LONG: ["command", "param1", "param2", "param3", "param4", "param5", "param6", "param7"],
     COMMAND_ACK: ["command", "result"],
     SET_POSITION_TARGET_GLOBAL_INT: ["lat_int", "lon_int", "alt", "type_mask"],
@@ -156,6 +160,9 @@ MAV_CMD_NAV_LAND = 21
 MAV_CMD_NAV_TAKEOFF = 22
 MAV_CMD_DO_SET_MODE = 176
 MAV_CMD_PREFLIGHT_CALIBRATION = 241     # param1 gyro, param2 mag, param5 accel(1)/level(2)
+MAV_CMD_DO_ORBIT = 34
+MAV_CMD_DO_SET_HOME = 179
+MAV_CMD_DO_SET_ROI_LOCATION = 195
 MAV_CMD_DO_REPOSITION = 192
 MAV_CMD_DO_PAUSE_CONTINUE = 193
 # camera + gimbal (all carried by COMMAND_LONG)
@@ -376,6 +383,13 @@ def enc_adsb_vehicle(icao, lat, lon, alt_mm, heading_cdeg, callsign="", emitter_
                        emitter_type & 0xFF, tslc & 0xFF)
 
 
+def enc_command_int(command, params4, x, y, z, target_system=1, target_component=1, frame=6):
+    p = [float(v) for v in (list(params4) + [0.0] * 4)[:4]]
+    return struct.pack("<ffffiifHBBBBB", p[0], p[1], p[2], p[3], int(x), int(y), float(z),
+                       int(command) & 0xFFFF, target_system & 0xFF, target_component & 0xFF,
+                       frame & 0xFF, 0, 0)
+
+
 def enc_command_long(command, params7, target_system=1, target_component=1, confirmation=0):
     p = [float(x) for x in (list(params7) + [0.0] * 7)[:7]]
     return struct.pack("<fffffffHBBB", *p, command & 0xFFFF,
@@ -564,6 +578,9 @@ _WIRE = {
                      + [f"voltage{i}" for i in range(1, 11)]
                      + ["current_battery", "id", "battery_function", "type", "battery_remaining"], 36),
     MANUAL_CONTROL: ("<hhhhHB", ["x", "y", "z", "r", "buttons", "target"], 11),
+    COMMAND_INT: ("<ffffiifHBBBBB",
+                  ["param1", "param2", "param3", "param4", "x", "y", "z", "command",
+                   "target_system", "target_component", "frame", "current", "autocontinue"], 35),
     COMMAND_LONG: ("<fffffffHBBB",
                    ["param1", "param2", "param3", "param4", "param5", "param6", "param7",
                     "command", "target_system", "target_component", "confirmation"], 33),

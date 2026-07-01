@@ -78,6 +78,7 @@ constexpr MsgInfo MSGS[] = {
     {65, 118, 42},   // RC_CHANNELS
     {69, 243, 11},   // MANUAL_CONTROL
     {74,  20, 20},   // VFR_HUD
+    {75, 158, 35},   // COMMAND_INT
     {76, 152, 33},   // COMMAND_LONG
     {77, 143,  3},   // COMMAND_ACK
     {86,   5, 53},   // SET_POSITION_TARGET_GLOBAL_INT
@@ -173,6 +174,11 @@ void decode(uint32_t msgid, const uint8_t* pl, Decoded& d) {
         push(rd_u64(pl + 0));
         push(rd_f32(pl + 8)); push(rd_f32(pl + 12)); push(rd_f32(pl + 16));
         push(rd_u32(pl + 20)); push(rd_u32(pl + 24)); push(rd_u32(pl + 28));
+        break;
+    case 75: // COMMAND_INT: param1-4, x, y, z, command, target_sys, target_comp, frame, current, autocont
+        push(rd_f32(pl + 0)); push(rd_f32(pl + 4)); push(rd_f32(pl + 8)); push(rd_f32(pl + 12));
+        push(rd_i32(pl + 16)); push(rd_i32(pl + 20)); push(rd_f32(pl + 24));
+        push(rd_u16(pl + 28)); push(pl[30]); push(pl[31]); push(pl[32]); push(pl[33]); push(pl[34]);
         break;
     case 69: // MANUAL_CONTROL: x, y, z, r, buttons, target
         push(rd_i16(pl + 0)); push(rd_i16(pl + 2)); push(rd_i16(pl + 4)); push(rd_i16(pl + 6));
@@ -422,6 +428,26 @@ int mav_encode_command_long(uint8_t sysid, uint8_t compid, uint8_t seq,
     pl[31] = tgt_comp;
     pl[32] = 0; // confirmation
     return build_v1(out, cap, seq, sysid, compid, 76, pl, 33, 152);
+}
+
+int mav_encode_command_int(uint8_t sysid, uint8_t compid, uint8_t seq,
+                           uint8_t tgt_sys, uint8_t tgt_comp, uint8_t frame,
+                           uint16_t command, const float* params4,
+                           int32_t x, int32_t y, float z, uint8_t* out, int cap) {
+    uint8_t pl[35];
+    std::memset(pl, 0, sizeof(pl));
+    for (int i = 0; i < 4; ++i) std::memcpy(pl + i * 4, &params4[i], 4);
+    std::memcpy(pl + 16, &x, 4);
+    std::memcpy(pl + 20, &y, 4);
+    std::memcpy(pl + 24, &z, 4);
+    pl[28] = uint8_t(command & 0xff);
+    pl[29] = uint8_t((command >> 8) & 0xff);
+    pl[30] = tgt_sys;
+    pl[31] = tgt_comp;
+    pl[32] = frame;
+    pl[33] = 0; // current
+    pl[34] = 0; // autocontinue
+    return build_v1(out, cap, seq, sysid, compid, 75, pl, 35, 158);
 }
 
 // Reference CRC in portable C++ for the build-time asm self-test.

@@ -394,6 +394,16 @@ def main():
                                                  float(m.fields.get("alt", CRUISE_ALT)))
                                 mode = GUIDED
                                 send(mavlink.STATUSTEXT, mavlink.enc_statustext(6, "Goto target set"))
+                            elif m.msgid == mavlink.COMMAND_INT:
+                                cmd = int(m.fields.get("command", 0))
+                                send(mavlink.COMMAND_ACK, mavlink.enc_command_ack(cmd, 0))
+                                if cmd == mavlink.MAV_CMD_DO_SET_HOME:
+                                    send(mavlink.STATUSTEXT, mavlink.enc_statustext(6, "Home position set"))
+                                elif cmd == mavlink.MAV_CMD_DO_ORBIT:
+                                    send(mavlink.STATUSTEXT, mavlink.enc_statustext(
+                                        6, f"Orbit radius {m.fields.get('param1', 0):.0f} m"))
+                                elif cmd == mavlink.MAV_CMD_DO_SET_ROI_LOCATION:
+                                    send(mavlink.STATUSTEXT, mavlink.enc_statustext(6, "ROI set"))
                             elif m.msgid == mavlink.MANUAL_CONTROL:
                                 man_x = float(m.fields.get("x", 0))
                                 man_y = float(m.fields.get("y", 0))
