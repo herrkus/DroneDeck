@@ -109,6 +109,9 @@ NEW = {
     "LOG_DATA": (120, [("uint32_t", "ofs", 0), ("uint16_t", "id", 0),
                        ("uint8_t", "count", 0), ("uint8_t", "data", 90)]),
     "LOG_REQUEST_END": (122, [("uint8_t", "target_system", 0), ("uint8_t", "target_component", 0)]),
+    "RC_CHANNELS": (118, [("uint32_t", "time_boot_ms", 0)]
+                    + [("uint16_t", f"chan{i}_raw", 0) for i in range(1, 19)]
+                    + [("uint8_t", "chancount", 0), ("uint8_t", "rssi", 0)]),
     "ADSB_VEHICLE": (246, [("uint32_t", "ICAO_address", 0), ("int32_t", "lat", 0),
                            ("int32_t", "lon", 0), ("int32_t", "altitude", 0),
                            ("uint16_t", "heading", 0), ("uint16_t", "hor_velocity", 0),

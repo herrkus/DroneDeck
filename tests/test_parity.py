@@ -97,6 +97,15 @@ def main():
             check(m.fields["heading"] == 270, "vfr heading")
             check(m.fields["throttle"] == 65, "vfr throttle")
 
+        m = roundtrip(mavlink.RC_CHANNELS,
+                      mavlink.enc_rc_channels([1100, 1500, 1900, 1000], rssi=180), crc_fn)
+        if m:
+            check(int(m.fields["chan1_raw"]) == 1100, "rc chan1")
+            check(int(m.fields["chan3_raw"]) == 1900, "rc chan3")
+            check(int(m.fields["chancount"]) == 4, "rc chancount")
+            check(int(m.fields["chan5_raw"]) == 65535, "rc unused chan")
+            check(int(m.fields["rssi"]) == 180, "rc rssi")
+
         m = roundtrip(mavlink.MANUAL_CONTROL,
                       mavlink.enc_manual_control(1, 500, -250, 800, -100, 3), crc_fn)
         if m:

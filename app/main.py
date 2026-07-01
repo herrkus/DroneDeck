@@ -35,6 +35,7 @@ from charts import ChartPanel
 from joystick import VirtualJoystick
 from video import VideoPane
 from links_manager import LinksDialog
+from calibration import CalibrationDialog
 from instruments import AttitudeIndicator, Compass
 
 LOG_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "logs")
@@ -165,6 +166,9 @@ class DroneDeck(QMainWindow):
         self.btn_links = QPushButton("Links…")
         self.btn_links.clicked.connect(self._open_links)
         tb.addWidget(self.btn_links)
+        self.btn_cal = QPushButton("Calibrate…")
+        self.btn_cal.clicked.connect(self._open_calibration)
+        tb.addWidget(self.btn_cal)
         tb.addSeparator()
         tb.addWidget(QLabel(" Vehicle "))
         self.vehicle_combo = QComboBox()
@@ -517,6 +521,28 @@ class DroneDeck(QMainWindow):
         self.link_edit.setText(cfg.get("target", ""))
         self._connect()
         self._on_info(f"connecting to '{cfg.get('name', '')}'")
+
+    # -- calibration (radio + sensors) ----------------------------------------
+    def _open_calibration(self):
+        dlg = CalibrationDialog(lambda: self.link, self)
+        dlg.radio.saveRequested.connect(self._cal_write_params)
+        dlg.sensor.calRequested.connect(self._cal_sensor)
+        dlg.exec()
+
+    def _cal_write_params(self, params):
+        if not self._has_vehicle():
+            QMessageBox.information(self, "No vehicle", "Connect to a vehicle first.")
+            return
+        for name, value in params.items():
+            self.params.set(name, value)
+        self._on_info(f"wrote {len(params)} RC calibration parameters")
+
+    def _cal_sensor(self, kind):
+        if not self._has_vehicle():
+            QMessageBox.information(self, "No vehicle", "Connect to a vehicle first.")
+            return
+        self.link.calibrate(self._sysid(), kind)
+        self._on_info(f"requested {kind} calibration")
 
     # -- multi-vehicle routing + ADSB traffic ---------------------------------
     def _route(self, batch):

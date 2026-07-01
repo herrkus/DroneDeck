@@ -150,6 +150,19 @@ class Link(QObject):
                                [float(pitch_deg), 0.0, float(yaw_deg), 0, 0, 0,
                                 mavlink.MAV_MOUNT_MODE_MAVLINK_TARGETING])
 
+    def calibrate(self, target_sys, kind):
+        """kind: 'gyro' | 'accel' | 'level' | 'compass' -> MAV_CMD_PREFLIGHT_CALIBRATION."""
+        p = [0, 0, 0, 0, 0, 0, 0]
+        if kind == "gyro":
+            p[0] = 1
+        elif kind == "compass":
+            p[1] = 1
+        elif kind == "accel":
+            p[4] = 1
+        elif kind == "level":
+            p[4] = 2
+        self.send_command_long(target_sys, mavlink.MAV_CMD_PREFLIGHT_CALIBRATION, p)
+
     # -- onboard log download -------------------------------------------------
     def request_log_list(self, target_sys, start=0, end=0xFFFF):
         self._send_msg(mavlink.LOG_REQUEST_LIST,

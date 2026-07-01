@@ -75,6 +75,7 @@ constexpr MsgInfo MSGS[] = {
     {24,  24, 30},   // GPS_RAW_INT
     {30,  39, 28},   // ATTITUDE
     {33, 104, 28},   // GLOBAL_POSITION_INT
+    {65, 118, 42},   // RC_CHANNELS
     {69, 243, 11},   // MANUAL_CONTROL
     {74,  20, 20},   // VFR_HUD
     {76, 152, 33},   // COMMAND_LONG
@@ -148,6 +149,11 @@ void decode(uint32_t msgid, const uint8_t* pl, Decoded& d) {
         push(rd_i32(pl + 4)); push(rd_i32(pl + 8)); push(rd_i32(pl + 12)); push(rd_i32(pl + 16));
         push(rd_i16(pl + 20)); push(rd_i16(pl + 22)); push(rd_i16(pl + 24)); push(rd_u16(pl + 26));
         push(rd_u32(pl + 0));
+        break;
+    case 65: // RC_CHANNELS: time_boot_ms, chan1..18_raw, chancount, rssi
+        push(rd_u32(pl + 0));
+        for (int i = 0; i < 18; ++i) push(rd_u16(pl + 4 + 2 * i));
+        push(pl[40]); push(pl[41]);
         break;
     case 69: // MANUAL_CONTROL: x, y, z, r, buttons, target
         push(rd_i16(pl + 0)); push(rd_i16(pl + 2)); push(rd_i16(pl + 4)); push(rd_i16(pl + 6));

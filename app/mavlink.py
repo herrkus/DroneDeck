@@ -14,6 +14,7 @@ SYS_STATUS = 1
 GPS_RAW_INT = 24
 ATTITUDE = 30
 GLOBAL_POSITION_INT = 33
+RC_CHANNELS = 65
 MANUAL_CONTROL = 69
 VFR_HUD = 74
 COMMAND_LONG = 76
@@ -49,6 +50,7 @@ MSG_NAME = {
     ATTITUDE: "ATTITUDE",
     GLOBAL_POSITION_INT: "GLOBAL_POSITION_INT",
     VFR_HUD: "VFR_HUD",
+    RC_CHANNELS: "RC_CHANNELS",
     MANUAL_CONTROL: "MANUAL_CONTROL",
     COMMAND_LONG: "COMMAND_LONG",
     COMMAND_ACK: "COMMAND_ACK",
@@ -82,7 +84,7 @@ CRC_EXTRA = {
     PARAM_REQUEST_READ: 214, PARAM_REQUEST_LIST: 159, PARAM_VALUE: 220, PARAM_SET: 168,
     MISSION_CURRENT: 28, MISSION_REQUEST_LIST: 132, MISSION_COUNT: 221,
     MISSION_CLEAR_ALL: 232, MISSION_ITEM_REACHED: 11, MISSION_ACK: 153,
-    MISSION_REQUEST_INT: 196, MISSION_ITEM_INT: 38, MANUAL_CONTROL: 243,
+    MISSION_REQUEST_INT: 196, MISSION_ITEM_INT: 38, MANUAL_CONTROL: 243, RC_CHANNELS: 118,
     LOG_REQUEST_LIST: 128, LOG_ENTRY: 56, LOG_REQUEST_DATA: 116,
     LOG_DATA: 134, LOG_REQUEST_END: 203, ADSB_VEHICLE: 184,
 }
@@ -96,6 +98,8 @@ FIELDS = {
     ATTITUDE: ["roll", "pitch", "yaw", "rollspeed", "pitchspeed", "yawspeed", "time_boot_ms"],
     GLOBAL_POSITION_INT: ["lat", "lon", "alt", "relative_alt", "vx", "vy", "vz", "hdg", "time_boot_ms"],
     VFR_HUD: ["airspeed", "groundspeed", "alt", "climb", "heading", "throttle"],
+    RC_CHANNELS: (["time_boot_ms"] + [f"chan{i}_raw" for i in range(1, 19)]
+                  + ["chancount", "rssi"]),
     MANUAL_CONTROL: ["x", "y", "z", "r", "buttons", "target"],
     COMMAND_LONG: ["command", "param1", "param2", "param3", "param4", "param5", "param6", "param7"],
     COMMAND_ACK: ["command", "result"],
@@ -137,6 +141,7 @@ MAV_CMD_NAV_RETURN_TO_LAUNCH = 20
 MAV_CMD_NAV_LAND = 21
 MAV_CMD_NAV_TAKEOFF = 22
 MAV_CMD_DO_SET_MODE = 176
+MAV_CMD_PREFLIGHT_CALIBRATION = 241     # param1 gyro, param2 mag, param5 accel(1)/level(2)
 MAV_CMD_DO_REPOSITION = 192
 MAV_CMD_DO_PAUSE_CONTINUE = 193
 # camera + gimbal (all carried by COMMAND_LONG)
@@ -283,6 +288,13 @@ def enc_global_position_int(lat, lon, alt_mm, rel_alt_mm, hdg_cdeg, t_ms, vx=0, 
 def enc_vfr_hud(airspeed, groundspeed, alt, climb, heading_deg, throttle_pct):
     return struct.pack("<ffffhH", airspeed, groundspeed, alt, climb,
                        int(heading_deg), int(throttle_pct))
+
+
+def enc_rc_channels(chans, rssi=200, time_boot_ms=0):
+    chans = [int(c) & 0xFFFF for c in list(chans)[:18]]
+    count = len(chans)
+    chans = chans + [65535] * (18 - count)     # UINT16_MAX = channel not used
+    return struct.pack("<I18HBB", int(time_boot_ms) & 0xFFFFFFFF, *chans, count, rssi & 0xFF)
 
 
 def enc_manual_control(target, x, y, z, r, buttons=0):
@@ -502,6 +514,9 @@ _WIRE = {
                            "vx", "vy", "vz", "hdg"], 28),
     VFR_HUD: ("<ffffhH",
               ["airspeed", "groundspeed", "alt", "climb", "heading", "throttle"], 20),
+    RC_CHANNELS: ("<I18HBB",
+                  ["time_boot_ms"] + [f"chan{i}_raw" for i in range(1, 19)]
+                  + ["chancount", "rssi"], 42),
     MANUAL_CONTROL: ("<hhhhHB", ["x", "y", "z", "r", "buttons", "target"], 11),
     COMMAND_LONG: ("<fffffffHBBB",
                    ["param1", "param2", "param3", "param4", "param5", "param6", "param7",

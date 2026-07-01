@@ -132,9 +132,9 @@ def main():
     send(mavlink.STATUSTEXT, mavlink.enc_statustext(6, "DroneDeck SITL: ready"))
 
     next_t = {"hb": 0.0, "att": 0.0, "pos": 0.0, "hud": 0.0, "sys": 0.0, "gps": 0.0,
-              "txt": 3.0, "adsb": 0.5}
+              "txt": 3.0, "adsb": 0.5, "rc": 0.0}
     period = {"hb": 0.25, "att": 0.04, "pos": 0.2, "hud": 0.2, "sys": 1.0, "gps": 1.0,
-              "txt": 9.0, "adsb": 1.0}
+              "txt": 9.0, "adsb": 1.0, "rc": 0.1}
 
     t0 = time.monotonic()
     last = t0
@@ -269,6 +269,15 @@ def main():
                 send(mavlink.GPS_RAW_INT, mavlink.enc_gps_raw_int(
                     int(lat * 1e7), int(lon * 1e7), int(alt * 1000), fix=3, sats=14,
                     vel_cms=int(groundspeed * 100), cog_cdeg=int(heading * 100)))
+            if t >= next_t["rc"]:
+                next_t["rc"] += period["rc"]
+                # synthetic transmitter: each channel sweeps its full range at its
+                # own rate so RC calibration has real min/max to capture
+                chans = []
+                for ch in range(8):
+                    span = 380 + 20 * ch
+                    chans.append(int(1500 + span * math.sin(t * (1.6 + 0.25 * ch) + ch)))
+                send(mavlink.RC_CHANNELS, mavlink.enc_rc_channels(chans, rssi=210))
             if t >= next_t["txt"]:
                 next_t["txt"] += period["txt"]
                 send(mavlink.STATUSTEXT, mavlink.enc_statustext(
@@ -342,6 +351,26 @@ def main():
                                     send(mavlink.STATUSTEXT, mavlink.enc_statustext(
                                         6, f"Gimbal pitch {m.fields.get('param1', 0):.0f} "
                                            f"yaw {m.fields.get('param3', 0):.0f}"))
+                                elif cmd == mavlink.MAV_CMD_PREFLIGHT_CALIBRATION:
+                                    if m.fields.get("param1", 0) >= 1:
+                                        cal_lines = ["Calibrating gyroscopes",
+                                                     "Gyro calibration successful"]
+                                    elif m.fields.get("param2", 0) >= 1:
+                                        cal_lines = ["Compass calibration: rotate through all orientations",
+                                                     "Compass calibration successful"]
+                                    elif m.fields.get("param5", 0) == 2:
+                                        cal_lines = ["Calibrating level horizon",
+                                                     "Level calibration successful"]
+                                    else:
+                                        cal_lines = ["Place vehicle level and press OK",
+                                                     "Place vehicle on its LEFT side",
+                                                     "Place vehicle on its RIGHT side",
+                                                     "Place vehicle nose DOWN",
+                                                     "Place vehicle nose UP",
+                                                     "Place vehicle on its BACK",
+                                                     "Calibration successful"]
+                                    for cal_line in cal_lines:
+                                        send(mavlink.STATUSTEXT, mavlink.enc_statustext(6, cal_line))
                             elif m.msgid == mavlink.SET_POSITION_TARGET_GLOBAL_INT:
                                 guided_target = (m.fields.get("lat_int", 0) / 1e7,
                                                  m.fields.get("lon_int", 0) / 1e7,
