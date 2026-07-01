@@ -54,6 +54,7 @@ check "rc"                  ""                        tests/test_rc.py
 check "rc (python)"         "DRONEDECK_FORCE_PYTHON=1" tests/test_rc.py
 check "gimbal"              ""                        tests/test_gimbal.py
 check "gimbal (python)"     "DRONEDECK_FORCE_PYTHON=1" tests/test_gimbal.py
+check "windcompass"         ""                        tests/test_windcompass.py
 check "manual"              ""                        tests/test_manual.py
 check "camera"              ""                        tests/test_camera.py
 check "logs"                ""                        tests/test_logs.py

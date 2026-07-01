@@ -202,6 +202,9 @@ class Compass(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.heading = 0.0
+        self.wind_speed = 0.0
+        self.wind_dir = 0.0            # compass bearing the wind blows FROM
+        self.have_wind = False
         self.setMinimumSize(130, 130)
 
     def sizeHint(self):
@@ -209,6 +212,12 @@ class Compass(QWidget):
 
     def set_heading(self, hdg):
         self.heading = hdg % 360.0
+        self.update()
+
+    def set_wind(self, speed, direction, have=True):
+        self.wind_speed = speed
+        self.wind_dir = direction % 360.0
+        self.have_wind = have
         self.update()
 
     def paintEvent(self, _):
@@ -248,6 +257,20 @@ class Compass(QWidget):
             p.restore()
         p.restore()
 
+        # wind-from arrow: rotates with the card to the bearing the wind blows from, points
+        # inward (toward centre) to read as "wind coming from here"
+        if self.have_wind:
+            wcol = QColor(90, 200, 255)
+            p.save()
+            p.rotate(-self.heading)
+            p.rotate(self.wind_dir)
+            outer, inner, apex, hw = -R * 0.66, -R * 0.42, -R * 0.30, R * 0.07
+            p.setPen(QPen(wcol, max(2.0, R * 0.03)))
+            p.setBrush(QBrush(wcol))
+            p.drawLine(QPointF(0, outer), QPointF(0, inner))
+            p.drawPolygon(QPolygonF([QPointF(0, apex), QPointF(-hw, inner), QPointF(hw, inner)]))
+            p.restore()
+
         # fixed lubber index
         p.setPen(Qt.NoPen)
         p.setBrush(QBrush(YELLOW))
@@ -263,4 +286,10 @@ class Compass(QWidget):
         p.setPen(QColor(0, 230, 120))
         p.setFont(QFont("DejaVu Sans Mono", int(R * 0.22), QFont.Bold))
         p.drawText(box, Qt.AlignCenter, f"{int(round(self.heading)) % 360:03d}")
+
+        if self.have_wind:
+            p.setPen(QColor(90, 200, 255))
+            p.setFont(QFont("DejaVu Sans Mono", int(R * 0.12), QFont.Bold))
+            p.drawText(QRectF(-R * 0.5, R * 0.24, R, R * 0.22), Qt.AlignCenter,
+                       f"W {self.wind_speed:.1f} m/s")
         p.end()

@@ -1765,6 +1765,7 @@ class DroneDeck(QMainWindow):
         self.adi.set_data(ve.roll, ve.pitch, ve.airspeed or ve.groundspeed,
                           ve.alt_rel, ve.heading, ve.climb)
         self.compass.set_heading(ve.heading)
+        self.compass.set_wind(ve.wind_speed(), ve.wind_dir(), ve.have_wind)
         self.health.set_health(ve.sensors_present, ve.sensors_enabled, ve.sensors_health)
         self.systems.update_from(ve)
         if ve.have_position:
