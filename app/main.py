@@ -1034,10 +1034,26 @@ class DroneDeck(QMainWindow):
     def _sysid(self):
         return self.vehicle.sysid or 1
 
+    def _confirm(self, title, text):
+        """Yes/No guard for destructive flight actions; defaults to No (safe)."""
+        return QMessageBox.question(
+            self, title, text,
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        ) == QMessageBox.StandardButton.Yes
+
     def _arm(self, arm):
         if not self._has_vehicle():
             QMessageBox.information(self, "No vehicle", "No telemetry source connected yet.")
             return
+        if arm:
+            if not self._confirm("Arm", "Arm the vehicle?\nPropellers may spin up immediately."):
+                return
+        elif self.vehicle.armed:
+            if not self._confirm("Disarm",
+                                 "The vehicle is ARMED.\n\nDisarming now cuts the motors -- if it "
+                                 "is airborne this WILL crash it.\n\nDisarm anyway?"):
+                return
         self.link.arm(self._sysid(), arm)
         self._on_info(f"sent {'ARM' if arm else 'DISARM'} to system {self._sysid()}")
 
@@ -1194,11 +1210,16 @@ class DroneDeck(QMainWindow):
 
     def _land(self):
         if self._has_vehicle():
+            if not self._confirm("Land", "Command the vehicle to LAND at its current position?"):
+                return
             self.link.land(self._sysid())
             self._on_info("land")
 
     def _rtl(self):
         if self._has_vehicle():
+            if not self._confirm("Return to Launch",
+                                 "Return to launch?\nThe vehicle will fly to home and land."):
+                return
             self.link.rtl(self._sysid())
             self._on_info("return to launch")
 
