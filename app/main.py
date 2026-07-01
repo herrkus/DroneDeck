@@ -237,6 +237,10 @@ class DroneDeck(QMainWindow):
         tb2.addWidget(self.mode_combo)
         tb2.addSeparator()
         self._flight_btns = []
+        # _needs: "armed" buttons only make sense while the vehicle is armed/flying;
+        # the rest just need a live connection (Takeoff arms-if-needed itself).
+        needs = {"Land": "armed", "RTL": "armed", "Pause": "armed",
+                 "Alt": "armed", "Speed": "armed"}
         for label, slot, tip in (
                 ("Takeoff", self._takeoff, "Arm if needed and climb to a set altitude  (Ctrl+T)"),
                 ("Land", self._land, "Land at the current position  (Ctrl+L)"),
@@ -247,12 +251,14 @@ class DroneDeck(QMainWindow):
             b = QPushButton(label)
             b.clicked.connect(slot)
             b.setToolTip(tip)
+            b._needs = needs.get(label, "conn")
             tb2.addWidget(b)
             self._flight_btns.append(b)
         tb2.addSeparator()
         self.btn_joystick = QPushButton("Joystick")
         self.btn_joystick.setCheckable(True)
         self.btn_joystick.toggled.connect(self._toggle_manual)
+        self.btn_joystick._needs = "conn"
         tb2.addWidget(self.btn_joystick)
         self._flight_btns.append(self.btn_joystick)
         tb2.addSeparator()
@@ -706,6 +712,21 @@ class DroneDeck(QMainWindow):
 
     def _has_vehicle(self):
         return self.link is not None and self.link.is_open and self.link.remote is not None
+
+    def _update_button_states(self):
+        """Grey out actions that can't be used right now: everything needs a live
+        link; Arm only when disarmed, Disarm only when armed, and the flight actions
+        tagged _needs=='armed' (Land/RTL/Pause/Alt/Speed) only while armed."""
+        ve = self.vehicle
+        connected = self._has_vehicle()
+        armed = connected and ve.armed
+        self.btn_arm.setEnabled(connected and not armed)
+        self.btn_disarm.setEnabled(connected and armed)
+        self.mode_combo.setEnabled(connected)
+        for b in self._flight_btns:
+            b.setEnabled(connected and (armed if getattr(b, "_needs", "conn") == "armed" else True))
+        for label, b in self._mission_btns:
+            b.setEnabled(connected if label in ("Upload", "Download") else True)
 
     def _sysid(self):
         return self.vehicle.sysid or 1
@@ -1278,14 +1299,7 @@ class DroneDeck(QMainWindow):
         self._update_status_strip(ve, is_open, drop)
         self._update_link_banner(ve, is_open)
 
-        connected = self._has_vehicle()
-        self.btn_arm.setEnabled(connected)
-        self.btn_disarm.setEnabled(connected)
-        self.mode_combo.setEnabled(connected)
-        for b in self._flight_btns:
-            b.setEnabled(connected)
-        for label, b in self._mission_btns:
-            b.setEnabled(connected if label in ("Upload", "Download") else True)
+        self._update_button_states()
 
         self.inspector.refresh()
         self.charts.sample(ve)
