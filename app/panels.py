@@ -32,7 +32,7 @@ class TelemetryPanel(QWidget):
                        ("throttle", "Throttle"), ("hdg", "Heading")],
             "NAVIGATION": [("home_dist", "Dist to home"), ("flight_time", "Flight time"),
                            ("home_eta", "Home ETA"), ("wp_dist", "Dist to WP")],
-            "GPS": [("fix", "Fix"), ("sats", "Satellites")],
+            "GPS": [("fix", "Fix"), ("sats", "Satellites"), ("hdop", "HDOP"), ("pos_acc", "Pos acc")],
         }
         # Wide-and-short: this panel lives in a wide bottom dock, so the groups flow
         # across columns instead of one tall stack (kills the old cramped scroll).
@@ -127,6 +127,18 @@ class TelemetryPanel(QWidget):
 
         self._set("fix", ve.fix_text, "#37d67a" if ve.fix_type >= 3 else "#e0a030")
         self._set("sats", str(ve.satellites))
+        if ve.eph is not None:
+            hd = ve.eph / 100.0
+            self._set("hdop", f"{hd:.2f}",
+                      "#37d67a" if hd < 2 else "#e0a030" if hd < 5 else "#e05050")
+        else:
+            self._set("hdop", "--")
+        if ve.pos_horiz_acc is not None:
+            h, vv = ve.pos_horiz_acc, ve.pos_vert_acc or 0.0
+            self._set("pos_acc", f"H {h:.1f} / V {vv:.1f} m",
+                      "#37d67a" if h < 2 else "#e0a030" if h < 5 else "#e05050")
+        else:
+            self._set("pos_acc", "--")
 
         nav = nav or {}
         self._set("home_dist", nav.get("home_dist", "--"))

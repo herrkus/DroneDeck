@@ -65,6 +65,9 @@ class Vehicle(QObject):
         # gps
         self.fix_type = 0
         self.satellites = 0
+        self.eph = None                     # HDOP*100 from GPS_RAW_INT (None = unknown)
+        self.pos_horiz_acc = None           # m, from ESTIMATOR_STATUS
+        self.pos_vert_acc = None
         self.current_wp = -1        # active mission waypoint seq (from MISSION_CURRENT)
         # status
         self.sysid = 0
@@ -217,6 +220,8 @@ class Vehicle(QObject):
         self.ekf_pos_vert_var = float(f.get("pos_vert_ratio", 0.0))
         self.ekf_compass_var = float(f.get("mag_ratio", 0.0))
         self.ekf_terrain_var = float(f.get("hagl_ratio", 0.0))
+        self.pos_horiz_acc = float(f.get("pos_horiz_accuracy", 0.0)) or None
+        self.pos_vert_acc = float(f.get("pos_vert_accuracy", 0.0)) or None
         self.have_ekf = True
 
     def ekf_variance_max(self):
@@ -241,6 +246,8 @@ class Vehicle(QObject):
     def _on_gps_raw(self, f):
         self.fix_type = int(f.get("fix_type", 0))
         self.satellites = int(f.get("satellites_visible", 0))
+        eph = int(f.get("eph", 65535))
+        self.eph = None if eph in (65535, 0) else eph
 
     def _on_vfr_hud(self, f):
         self.airspeed = f.get("airspeed", 0.0)
