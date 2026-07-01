@@ -42,6 +42,7 @@ check "params"              ""                        tests/test_params.py
 check "tlog"                ""                        tests/test_tlog.py
 check "analyze"             ""                        tests/test_analyze.py
 check "planfile"            ""                        tests/test_planfile.py
+check "mission_validate"    ""                        tests/test_mission_validate.py
 check "manual"              ""                        tests/test_manual.py
 check "camera"              ""                        tests/test_camera.py
 check "logs"                ""                        tests/test_logs.py

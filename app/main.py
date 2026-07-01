@@ -29,7 +29,7 @@ import mavlink
 from vehicle import Vehicle
 from link import UdpLink, TcpLink, SerialLink, ReplayLink
 from mission import (MissionProtocol, MissionItem, survey_grid, corridor_scan,
-                     structure_scan, fence_from_mission)
+                     structure_scan, fence_from_mission, validate_mission)
 from params import ParamManager, ParamDialog
 from tlog import TlogWriter
 from logdownload import LogManager
@@ -1555,6 +1555,12 @@ class DroneDeck(QMainWindow):
                 QMessageBox.information(self, "Upload", "No waypoints to upload.")
                 return
             self._renumber()
+            warns = validate_mission(self.mission_items)
+            for w in warns:                              # advisory, non-blocking (QGC-style)
+                self.console.add_note(f"mission check: {w}", "#e0a030")
+            if warns:
+                self._notify(f"Mission check: {len(warns)} potential issue(s) -- see Messages",
+                             "#e0a030")
             self.mission.upload(self.mission_items, mavlink.MAV_MISSION_TYPE_MISSION)
 
     def _download_mission(self):

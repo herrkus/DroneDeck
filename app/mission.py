@@ -239,6 +239,36 @@ def fence_from_mission(points, margin_m=30.0):
     return [_m_to_ll(x, y, lat0, lon0) for x, y in hull_m]
 
 
+def validate_mission(items):
+    """Advisory pre-upload checks for common mission mistakes. Returns a list of
+    human-readable warning strings (empty == looks fine). The autopilot still has the
+    final say -- these just catch the errors that most often bite before flight."""
+    warns = []
+    if not items:
+        return warns
+    NAV_TAKEOFF, NAV_LAND, RTL, DO_JUMP = 22, 21, 20, 177
+    DO_CMDS = {177, 178, 195, 197}                  # jump, change-speed, ROI, clear-ROI
+    nav = [it for it in items if it.command not in DO_CMDS and it.command != RTL]
+
+    if nav and nav[0].command != NAV_TAKEOFF:
+        warns.append("Mission does not start with a Takeoff waypoint.")
+    if items[-1].command not in (NAV_LAND, RTL):
+        warns.append("Mission does not end with Land or Return-to-launch.")
+
+    n = len(items)
+    for it in items:
+        if it.command == DO_JUMP and not (0 <= int(it.param1) < n):
+            warns.append(f"WP {it.seq}: DO_JUMP target {int(it.param1)} is out of range (0..{n - 1}).")
+    airborne = [it for it in nav if it.command != NAV_LAND]   # land alt 0 is expected
+    for it in airborne:
+        if it.alt <= 0:
+            warns.append(f"WP {it.seq}: altitude is {it.alt:.0f} m (zero or negative).")
+    for a, b in zip(airborne, airborne[1:]):
+        if abs(b.alt - a.alt) > 120:
+            warns.append(f"WP {a.seq}->{b.seq}: large altitude change ({a.alt:.0f} -> {b.alt:.0f} m).")
+    return warns
+
+
 class MissionProtocol(QObject):
     progress = Signal(str)          # human-readable step
     finished = Signal(bool, str)    # ok, message
