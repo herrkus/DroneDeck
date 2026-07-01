@@ -323,6 +323,38 @@ class FlightModesWidget(ParamPage):
     ]
 
 
+class TuningWidget(ParamPage):
+    NOUN = "tuning / rate-gain"
+    LEGEND = ("Rate-controller gains -- change in small steps and test in a safe, "
+              "hover-capable mode. Higher P is snappier but can oscillate.")
+    PARAMS = [
+        ("MC_ROLLRATE_P",   "PX4: roll rate P"),
+        ("MC_ROLLRATE_I",   "PX4: roll rate I"),
+        ("MC_ROLLRATE_D",   "PX4: roll rate D"),
+        ("MC_PITCHRATE_P",  "PX4: pitch rate P"),
+        ("MC_PITCHRATE_I",  "PX4: pitch rate I"),
+        ("MC_PITCHRATE_D",  "PX4: pitch rate D"),
+        ("MC_YAWRATE_P",    "PX4: yaw rate P"),
+        ("MC_YAWRATE_I",    "PX4: yaw rate I"),
+        ("MC_YAWRATE_D",    "PX4: yaw rate D"),
+        ("MC_ROLL_P",       "PX4: roll attitude P"),
+        ("MC_PITCH_P",      "PX4: pitch attitude P"),
+        ("MC_YAW_P",        "PX4: yaw attitude P"),
+        ("MPC_XY_CRUISE",   "PX4: horizontal cruise speed (m/s)"),
+        ("MPC_XY_VEL_MAX",  "PX4: max horizontal speed (m/s)"),
+        ("MPC_TILTMAX_AIR", "PX4: max tilt in air (deg)"),
+        ("ATC_RAT_RLL_P",   "APM: roll rate P"),
+        ("ATC_RAT_RLL_I",   "APM: roll rate I"),
+        ("ATC_RAT_RLL_D",   "APM: roll rate D"),
+        ("ATC_RAT_PIT_P",   "APM: pitch rate P"),
+        ("ATC_RAT_PIT_I",   "APM: pitch rate I"),
+        ("ATC_RAT_PIT_D",   "APM: pitch rate D"),
+        ("ATC_RAT_YAW_P",   "APM: yaw rate P"),
+        ("ATC_RAT_YAW_I",   "APM: yaw rate I"),
+        ("ATC_RAT_YAW_D",   "APM: yaw rate D"),
+    ]
+
+
 class CalibrationDialog(QDialog):
     """Setup view: Radio + Sensors tabs, fed live from the link while open."""
 
@@ -343,9 +375,12 @@ class CalibrationDialog(QDialog):
             tabs.addTab(self.power, "Power")
             self.flightmodes = FlightModesWidget(param_mgr)
             tabs.addTab(self.flightmodes, "Flight Modes")
+            self.tuning = TuningWidget(param_mgr)
+            tabs.addTab(self.tuning, "Tuning")
             self.safety.refresh()          # auto-request params on open
             self.power.refresh()
             self.flightmodes.refresh()
+            self.tuning.refresh()
         lay = QVBoxLayout(self)
         lay.addWidget(tabs)
         link = self._link()
