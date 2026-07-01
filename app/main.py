@@ -85,6 +85,16 @@ def trail_to_gpx(points, name="DroneDeck flight track"):
     return head + body + '  </trkseg></trk>\n</gpx>\n'
 
 
+def _parse_port(text, default):
+    """Parse a user-typed TCP/UDP port to a valid 1..65535 int, or raise ValueError. A port outside
+    that range reaches Qt's socket bind/connect as an out-of-uint16 value and raises OverflowError
+    (not ValueError), which would escape _connect's handler and crash the Connect action."""
+    n = int(text) if str(text).strip() else default
+    if not 0 < n <= 65535:
+        raise ValueError(f"port {n} out of range 1-65535")
+    return n
+
+
 def _point_in_poly(pt, poly):
     """Ray-casting point-in-polygon. pt=(lat, lon), poly=[(lat, lon), ...]. Treats lat/lon
     as planar, which is fine over geofence-sized areas."""
@@ -970,7 +980,7 @@ class DroneDeck(QMainWindow):
         try:
             if t == "TCP":
                 host, _, port = p.partition(":")
-                self.link.open(host=host or "127.0.0.1", port=int(port or 5760))
+                self.link.open(host=host or "127.0.0.1", port=_parse_port(port, 5760))
             elif t == "Serial":
                 port, _, baud = p.partition(":")
                 self.link.open(port=port, baud=int(baud or 57600))
@@ -978,8 +988,8 @@ class DroneDeck(QMainWindow):
                 path, _, sp = p.partition("@")
                 self.link.open(path=path.strip(), speed=float(sp or 1.0))
             else:
-                self.link.open(port=int(p or self.default_port))
-        except ValueError:
+                self.link.open(port=_parse_port(p, self.default_port))
+        except (ValueError, OverflowError):
             self._on_info(f"invalid {t} parameters: {p!r}")
 
     def _toggle_conn(self):
