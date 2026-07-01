@@ -34,6 +34,8 @@ check "parity (native)"     ""                        tests/test_parity.py
 check "parity (python)"     "DRONEDECK_FORCE_PYTHON=1" tests/test_parity.py
 check "parserfuzz (native)" ""                        tests/test_parserfuzz.py
 check "parserfuzz (python)" "DRONEDECK_FORCE_PYTHON=1" tests/test_parserfuzz.py
+check "parserfuzz2 (native)" ""                        tests/test_parserfuzz2.py
+check "parserfuzz2 (python)" "DRONEDECK_FORCE_PYTHON=1" tests/test_parserfuzz2.py
 check "links"               ""                        tests/test_links.py
 check "mission"             ""                        tests/test_mission.py
 check "mission_gui"         ""                        tests/test_mission_gui.py
