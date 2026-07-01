@@ -16,6 +16,7 @@ ATTITUDE = 30
 GLOBAL_POSITION_INT = 33
 RC_CHANNELS = 65
 RADIO_STATUS = 109
+REQUEST_DATA_STREAM = 66     # GCS->vehicle: legacy telemetry-stream request (ArduPilot)
 ALTITUDE = 141
 BATTERY_STATUS = 147
 VIBRATION = 241
@@ -57,6 +58,7 @@ MSG_NAME = {
     VFR_HUD: "VFR_HUD",
     RC_CHANNELS: "RC_CHANNELS",
     RADIO_STATUS: "RADIO_STATUS",
+    REQUEST_DATA_STREAM: "REQUEST_DATA_STREAM",
     ALTITUDE: "ALTITUDE",
     BATTERY_STATUS: "BATTERY_STATUS",
     VIBRATION: "VIBRATION",
@@ -96,6 +98,7 @@ CRC_EXTRA = {
     MISSION_CLEAR_ALL: 232, MISSION_ITEM_REACHED: 11, MISSION_ACK: 153,
     MISSION_REQUEST_INT: 196, MISSION_ITEM_INT: 38, MANUAL_CONTROL: 243, RC_CHANNELS: 118,
     ALTITUDE: 47, BATTERY_STATUS: 154, VIBRATION: 90, RADIO_STATUS: 185,
+    REQUEST_DATA_STREAM: 148,
     LOG_REQUEST_LIST: 128, LOG_ENTRY: 56, LOG_REQUEST_DATA: 116,
     LOG_DATA: 134, LOG_REQUEST_END: 203, ADSB_VEHICLE: 184,
 }
@@ -175,6 +178,18 @@ MAV_CMD_DO_DIGICAM_CONTROL = 203        # param5=1 -> trigger one shot
 MAV_CMD_IMAGE_START_CAPTURE = 2000      # param3=count (1 = single)
 MAV_CMD_VIDEO_START_CAPTURE = 2500
 MAV_CMD_VIDEO_STOP_CAPTURE = 2501
+MAV_CMD_SET_MESSAGE_INTERVAL = 511      # param1=msgid, param2=interval us (-1 off, 0 default)
+MAV_CMD_REQUEST_MESSAGE = 512           # param1=msgid -- one-shot request (e.g. AUTOPILOT_VERSION)
+
+# Legacy REQUEST_DATA_STREAM req_stream_id values (ArduPilot honours these).
+MAV_DATA_STREAM_ALL = 0
+MAV_DATA_STREAM_RAW_SENSORS = 1
+MAV_DATA_STREAM_EXTENDED_STATUS = 2
+MAV_DATA_STREAM_RC_CHANNELS = 3
+MAV_DATA_STREAM_POSITION = 6
+MAV_DATA_STREAM_EXTRA1 = 10
+MAV_DATA_STREAM_EXTRA2 = 11
+MAV_DATA_STREAM_EXTRA3 = 12
 MAV_MOUNT_MODE_MAVLINK_TARGETING = 2
 MAV_FRAME_GLOBAL = 0
 MAV_FRAME_GLOBAL_RELATIVE_ALT = 3
@@ -354,6 +369,14 @@ def enc_manual_control(target, x, y, z, r, buttons=0):
     clamp = lambda v: max(-1000, min(1000, int(v)))
     return struct.pack("<hhhhHB", clamp(x), clamp(y), clamp(z), clamp(r),
                        buttons & 0xFFFF, target & 0xFF)
+
+
+def enc_request_data_stream(target_system, req_stream_id, req_message_rate, start_stop,
+                            target_component=1):
+    # wire order (size desc): req_message_rate(u16), then the u8 fields
+    return struct.pack("<HBBBB", int(req_message_rate) & 0xFFFF,
+                       int(target_system) & 0xFF, int(target_component) & 0xFF,
+                       int(req_stream_id) & 0xFF, 1 if start_stop else 0)
 
 
 def enc_log_request_list(start=0, end=0xFFFF, target_system=1, target_component=1):

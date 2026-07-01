@@ -603,7 +603,14 @@ class DroneDeck(QMainWindow):
                 continue
             bysys.setdefault(m.sysid, []).append(m)
         for sysid, msgs in bysys.items():
-            self._ensure_vehicle(sysid).consume(msgs)
+            is_new = sysid not in self.vehicles
+            veh = self._ensure_vehicle(sysid)
+            veh.consume(msgs)
+            if is_new and self.link is not None:
+                # A real drone streams little until asked -- request telemetry now that
+                # we know it exists (and its autopilot, for the right request dialect).
+                self.link.request_data_streams(sysid, veh.autopilot)
+                self._on_info(f"vehicle #{sysid} detected -- requesting telemetry streams")
 
     def _ensure_vehicle(self, sysid):
         veh = self.vehicles.get(sysid)

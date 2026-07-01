@@ -148,6 +148,27 @@ class Link(QObject):
         self.send_command_long(target_sys, mavlink.MAV_CMD_DO_PAUSE_CONTINUE,
                                [1 if cont else 0, 0, 0, 0, 0, 0, 0])
 
+    def request_data_streams(self, target_sys: int, autopilot: int = 0):
+        """Ask the vehicle to stream telemetry. Real autopilots (ArduPilot especially)
+        send almost nothing until requested, so this is what makes a freshly-connected
+        drone actually show data. Sends the legacy REQUEST_DATA_STREAM (ArduPilot) and,
+        for PX4, the modern SET_MESSAGE_INTERVAL for the key messages."""
+        for stream_id, hz in ((mavlink.MAV_DATA_STREAM_EXTENDED_STATUS, 2),  # SYS_STATUS/GPS/batt
+                              (mavlink.MAV_DATA_STREAM_POSITION, 3),         # GLOBAL_POSITION_INT
+                              (mavlink.MAV_DATA_STREAM_EXTRA1, 10),          # ATTITUDE
+                              (mavlink.MAV_DATA_STREAM_EXTRA2, 5),           # VFR_HUD
+                              (mavlink.MAV_DATA_STREAM_EXTRA3, 2),
+                              (mavlink.MAV_DATA_STREAM_RC_CHANNELS, 3),
+                              (mavlink.MAV_DATA_STREAM_RAW_SENSORS, 2)):
+            self._send_msg(mavlink.REQUEST_DATA_STREAM,
+                           mavlink.enc_request_data_stream(target_sys, stream_id, hz, 1))
+        if int(autopilot) == mavlink.MAV_AUTOPILOT_PX4:
+            for msgid, hz in ((mavlink.ATTITUDE, 20), (mavlink.GLOBAL_POSITION_INT, 5),
+                              (mavlink.VFR_HUD, 5), (mavlink.SYS_STATUS, 2),
+                              (mavlink.GPS_RAW_INT, 2), (mavlink.ALTITUDE, 5)):
+                self.send_command_long(target_sys, mavlink.MAV_CMD_SET_MESSAGE_INTERVAL,
+                                       [float(msgid), 1_000_000.0 / hz, 0, 0, 0, 0, 0])
+
     def send_manual_control(self, target_sys, x, y, z, r, buttons=0):
         self._send_msg(mavlink.MANUAL_CONTROL,
                        mavlink.enc_manual_control(target_sys, x, y, z, r, buttons))
