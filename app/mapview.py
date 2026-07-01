@@ -21,6 +21,12 @@ except Exception:                       # pragma: no cover
     _HAVE_NET = False
 
 TILE = 256
+# Public tile sources (no API key). ESRI World Imagery uses {z}/{y}/{x} path order.
+PROVIDERS = {
+    "Street":    "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
+    "Satellite": "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+    "Topo":      "https://tile.opentopomap.org/{z}/{x}/{y}.png",
+}
 _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 _CACHE = os.path.join(_ROOT, "tiles_cache")
 
@@ -52,6 +58,7 @@ class MapView(QWidget):
         self.zoom = 16
         self.center = (54.6872, 25.2797)     # placeholder until first fix
         self.follow = True
+        self.provider = "Street"
         self.veh = None                       # (lat, lon, heading) or None
         self.home = None
         self.trail = []
@@ -86,6 +93,12 @@ class MapView(QWidget):
     def set_zoom(self, z):
         self.zoom = max(3, min(19, int(z)))
         self.update()
+
+    def set_provider(self, name):
+        if name in PROVIDERS and name != self.provider:
+            self.provider = name
+            self._pending.clear()      # re-fetch visible tiles from the new source
+            self.update()
 
     def set_mission(self, pts):
         self.mission = list(pts)
@@ -132,15 +145,15 @@ class MapView(QWidget):
         return best
 
     # -- tile cache -----------------------------------------------------------
-    def _tile_path(self, z, x, y):
-        return os.path.join(_CACHE, str(z), str(x), f"{y}.png")
+    def _tile_path(self, prov, z, x, y):
+        return os.path.join(_CACHE, prov, str(z), str(x), f"{y}.png")
 
     def _tile_pixmap(self, z, x, y):
-        key = f"{z}/{x}/{y}"
+        key = f"{self.provider}/{z}/{x}/{y}"
         pm = QPixmapCache.find(key)
         if pm:
             return pm
-        path = self._tile_path(z, x, y)
+        path = self._tile_path(self.provider, z, x, y)
         if os.path.exists(path):
             pm = QPixmap(path)
             if not pm.isNull():
@@ -156,16 +169,17 @@ class MapView(QWidget):
         if not (0 <= x < n and 0 <= y < n):
             return
         self._pending.add((z, x, y))
-        url = QUrl(f"https://tile.openstreetmap.org/{z}/{x}/{y}.png")
+        url = QUrl(PROVIDERS[self.provider].format(z=z, x=x, y=y))
         req = QNetworkRequest(url)
         req.setHeader(QNetworkRequest.KnownHeaders.UserAgentHeader, "DroneDeck/1.0 (local GCS demo)")
-        req.setAttribute(QNetworkRequest.Attribute.User, f"{z}/{x}/{y}")
+        req.setAttribute(QNetworkRequest.Attribute.User, f"{self.provider}/{z}/{x}/{y}")
         self.net.get(req)
 
     def _on_tile(self, reply):
         key = reply.request().attribute(QNetworkRequest.Attribute.User)
         try:
-            z, x, y = (int(v) for v in key.split("/"))
+            prov, zs, xs, ys = key.split("/")
+            z, x, y = int(zs), int(xs), int(ys)
         except Exception:
             reply.deleteLater()
             return
@@ -176,8 +190,8 @@ class MapView(QWidget):
             if pm.loadFromData(data):
                 QPixmapCache.insert(key, pm)
                 try:
-                    os.makedirs(os.path.dirname(self._tile_path(z, x, y)), exist_ok=True)
-                    with open(self._tile_path(z, x, y), "wb") as fh:
+                    os.makedirs(os.path.dirname(self._tile_path(prov, z, x, y)), exist_ok=True)
+                    with open(self._tile_path(prov, z, x, y), "wb") as fh:
                         fh.write(data)
                 except OSError:
                     pass

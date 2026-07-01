@@ -210,6 +210,13 @@ class DroneDeck(QMainWindow):
         zin.setToolTip("Zoom in  (+)")
         zout.setToolTip("Zoom out  (-)")
         tb.addWidget(zout); tb.addWidget(zin)
+        self.map_provider = QComboBox()
+        self.map_provider.blockSignals(True)
+        self.map_provider.addItems(["Street", "Satellite", "Topo"])
+        self.map_provider.blockSignals(False)
+        self.map_provider.currentTextChanged.connect(lambda n: self.map.set_provider(n))
+        self.map_provider.setToolTip("Map imagery: street / satellite / topographic")
+        tb.addWidget(self.map_provider)
         tb.addSeparator()
         self.btn_help = QPushButton("?")
         self.btn_help.setFixedWidth(30)
@@ -1358,6 +1365,10 @@ class DroneDeck(QMainWindow):
             z = s.value("map/zoom", type=int)
             if z:
                 self.map.set_zoom(z)
+            prov = s.value("map/provider")
+            if prov in ("Street", "Satellite", "Topo"):
+                self.map.set_provider(prov)
+                self.map_provider.setCurrentText(prov)
         except (TypeError, ValueError):
             pass
         self.chk_follow.setChecked(s.value("map/follow", True, type=bool))
@@ -1377,6 +1388,7 @@ class DroneDeck(QMainWindow):
         s.setValue("map/lat", float(self.map.center[0]))
         s.setValue("map/lon", float(self.map.center[1]))
         s.setValue("map/zoom", int(self.map.zoom))
+        s.setValue("map/provider", self.map.provider)
         s.setValue("map/follow", bool(self.map.follow))
         s.setValue("links/configs", json.dumps(self.link_configs))
         s.sync()
