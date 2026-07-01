@@ -35,6 +35,8 @@ class Link(QObject):
         self.gcs_compid = gcs_compid
         self.seq = 0
         self.rx_bytes = 0
+        self.rx_mav_v2 = False     # a v2 (0xFD) frame has been received
+        self.rx_mav_v1 = False     # a v1 (0xFE) frame has been received
         self._open = False
         self.recorder = None       # TlogWriter while recording, else None
         self.hb = QTimer(self)
@@ -59,8 +61,38 @@ class Link(QObject):
     def _begin(self):
         self.parser = core.Parser()
         self.rx_bytes = 0
+        self.rx_mav_v2 = self.rx_mav_v1 = False
         self._open = True
         self.hb.start()
+
+    def _note_framing(self, data):
+        """Record the wire protocol version of the first complete frame in `data` (0xFD=v2,
+        0xFE=v1), reusing the proven frame_total scanner. Cheap: usually resolves at index 0,
+        and short-circuits once both versions have been seen."""
+        if self.rx_mav_v2 and self.rx_mav_v1:
+            return
+        n = len(data)
+        i = 0
+        while i < n:
+            b = data[i]
+            if (b == 0xFD or b == 0xFE) and mavlink.frame_total(data, i) is not None:
+                if b == 0xFD:
+                    self.rx_mav_v2 = True
+                else:
+                    self.rx_mav_v1 = True
+                return
+            i += 1
+
+    @property
+    def mavlink_version_str(self):
+        """Human-readable negotiated MAVLink wire version, or None until a frame arrives."""
+        if self.rx_mav_v2 and self.rx_mav_v1:
+            return "2.0 (1.0 also seen)"
+        if self.rx_mav_v2:
+            return "2.0"
+        if self.rx_mav_v1:
+            return "1.0"
+        return None
 
     def close(self):
         self.hb.stop()
@@ -79,6 +111,7 @@ class Link(QObject):
             return
         self.rx_bytes += len(data)
         self._record(data)
+        self._note_framing(data)
         batch = self.parser.feed(data)
         if batch:
             self.messages.emit(batch)
@@ -330,6 +363,7 @@ class UdpLink(Link):
             data = bytes(dg.data())
             self.rx_bytes += len(data)
             self._record(data)
+            self._note_framing(data)
             if self.remote is None:
                 self.remote = (dg.senderAddress(), dg.senderPort())
                 self.info.emit(f"telemetry from {dg.senderAddress().toString()}:{dg.senderPort()}")

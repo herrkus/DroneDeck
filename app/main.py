@@ -2021,6 +2021,8 @@ class DroneDeck(QMainWindow):
                 f"<tr><td><b>Board version</b></td><td>{ve.board_version}</td></tr>"
                 f"<tr><td><b>Vendor / Product</b></td>"
                 f"<td>0x{ve.vendor_id:04x} / 0x{ve.product_id:04x}</td></tr>"
+                f"<tr><td><b>MAVLink</b></td>"
+                f"<td>{(self.link.mavlink_version_str if self.link else None) or 'unknown'}</td></tr>"
                 "</table>"
                 f"<p><b>Capabilities</b> (0x{ve.capabilities:x}):</p><ul>{caps_html}</ul>")
         QMessageBox.information(self, "Vehicle Info", html)
