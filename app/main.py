@@ -1809,11 +1809,24 @@ class DroneDeck(QMainWindow):
             nav["home_dist"] = _fmt_dist(d)
             nav["home_eta"] = _fmt_mmss(d / ve.groundspeed) if ve.groundspeed > 0.4 else "--"
         if ve.have_position and self.mission_items:
-            wps = [it for it in self.mission_items
-                   if not (abs(it.lat) < 1e-6 and abs(it.lon) < 1e-6)]
-            if wps:
-                nav["wp_dist"] = _fmt_dist(min(haversine(ve.lat, ve.lon, it.lat, it.lon)
-                                               for it in wps))
+            n = len(self.mission_items)
+            cw = ve.current_wp
+            act = self.mission_items[cw] if 0 <= cw < n else None
+            if act is not None and not (abs(act.lat) < 1e-6 and abs(act.lon) < 1e-6):
+                # actively flying a mission: distance + ETA to the current waypoint
+                d_act = haversine(ve.lat, ve.lon, act.lat, act.lon)
+                nav["wp_num"] = f"{cw + 1} / {n}"
+                nav["wp_dist"] = _fmt_dist(d_act)
+                nav["wp_eta"] = _fmt_mmss(d_act / ve.groundspeed) if ve.groundspeed > 0.4 else "--"
+            else:
+                # not on an active georeferenced waypoint: distance to the nearest, for planning
+                wps = [it for it in self.mission_items
+                       if not (abs(it.lat) < 1e-6 and abs(it.lon) < 1e-6)]
+                if wps:
+                    nav["wp_dist"] = _fmt_dist(min(haversine(ve.lat, ve.lon, it.lat, it.lon)
+                                                   for it in wps))
+                if n and 0 <= cw < n:
+                    nav["wp_num"] = f"{cw + 1} / {n}"
         self.panel.update_all(ve, state, self._rate, ok, drop, nav)
         self._update_status_strip(ve, is_open, drop)
         self._update_link_banner(ve, is_open)
