@@ -9,6 +9,7 @@ ArduPilot stores every parameter as REAL32, so the editor treats values as float
 """
 from __future__ import annotations
 
+import math
 import os
 
 from PySide6.QtCore import QObject, Signal, QTimer, Qt
@@ -331,7 +332,11 @@ class ParamDialog(QDialog):
         """Parse a .params file -> {name: float}. Accepts QGC tab format (sysid comp name value
         type) and a plain 'name,value' CSV; '#' comment lines and blanks are ignored."""
         out = {}
-        with open(path) as f:
+        # errors='replace': a user can point the Load/Compare dialog at a non-text file, and the
+        # callers do NOT wrap this in try/except -- an undecodable byte would otherwise raise
+        # UnicodeDecodeError and crash the handler. Garbage bytes become replacement chars, whose
+        # lines simply fail to parse as params and are skipped (-> {} for a truly binary file).
+        with open(path, encoding="utf-8", errors="replace") as f:
             for line in f:
                 line = line.strip()
                 if not line or line.startswith("#"):
@@ -345,9 +350,15 @@ class ParamDialog(QDialog):
                 else:
                     continue
                 try:
-                    out[name] = float(val)
+                    fv = float(val)
                 except ValueError:
                     continue
+                # 'nan'/'inf'/'-inf'/'1e400' all parse without raising, but a non-finite value must
+                # never be written to a vehicle (the Load button pushes changed params to the
+                # autopilot, and NaN != anything so it would ALWAYS be written). Drop it like junk.
+                if not math.isfinite(fv):
+                    continue
+                out[name] = fv
         return out
 
     def _save_file(self):
