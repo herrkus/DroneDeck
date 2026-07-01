@@ -21,7 +21,8 @@ from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QHBoxLayout,
                                QVBoxLayout, QSplitter, QToolBar, QLineEdit,
                                QPushButton, QLabel, QCheckBox, QMessageBox, QScrollArea,
                                QDockWidget, QComboBox, QInputDialog, QListWidget,
-                               QGroupBox, QTabWidget, QSpinBox)
+                               QGroupBox, QTabWidget, QSpinBox, QDialog, QFormLayout,
+                               QDoubleSpinBox, QDialogButtonBox)
 
 import core
 import mavlink
@@ -83,6 +84,60 @@ QMainWindow::separator:hover { background:#3d7fb5; }
 QSplitter::handle:horizontal { width:4px; }
 QSplitter::handle:hover { background:#3d7fb5; }
 """
+
+
+class WaypointEditor(QDialog):
+    """Edit one mission item's command + altitude + the params that matter for it."""
+
+    CMDS = [("Waypoint", 16), ("Takeoff", 22), ("Loiter (time)", 19),
+            ("Loiter (unlim)", 17), ("Land", 21), ("Return to launch", 20)]
+
+    def __init__(self, item, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle(f"Edit WP {item.seq}")
+        form = QFormLayout(self)
+        self.cmd = QComboBox()
+        for name, cid in self.CMDS:
+            self.cmd.addItem(name, cid)
+        idx = next((i for i, (_, c) in enumerate(self.CMDS) if c == item.command), -1)
+        if idx < 0:                                   # unknown command -> keep it as an option
+            self.cmd.addItem(item.cmd_name, item.command)
+            idx = self.cmd.count() - 1
+        self.cmd.setCurrentIndex(idx)
+
+        def dspin(lo, hi, val, suf="", dec=1):
+            s = QDoubleSpinBox()
+            s.setRange(lo, hi)
+            s.setDecimals(dec)
+            s.setValue(val)
+            if suf:
+                s.setSuffix(suf)
+            return s
+
+        self.alt = dspin(-500, 10000, item.alt, " m")
+        self.p1 = dspin(-1e6, 1e6, item.param1)       # hold / loiter time (s)
+        self.p3 = dspin(-1e6, 1e6, item.param3)       # loiter radius (m)
+        self.p4 = dspin(-360, 360, item.param4, " deg")   # yaw
+        form.addRow("Command", self.cmd)
+        form.addRow("Altitude", self.alt)
+        form.addRow("Hold / loiter time (s)", self.p1)
+        form.addRow("Loiter radius (m)", self.p3)
+        form.addRow("Yaw", self.p4)
+        bb = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        bb.accepted.connect(self.accept)
+        bb.rejected.connect(self.reject)
+        form.addRow(bb)
+
+    def apply_to(self, item):
+        cmd = self.cmd.currentData()
+        item.command = cmd
+        item.alt = self.alt.value()
+        item.param1 = self.p1.value()
+        item.param3 = self.p3.value()
+        item.param4 = self.p4.value()
+        # RTL carries no position and must use the MISSION frame (2); PX4 rejects it
+        # when sent with a global frame. Everything else stays relative-alt georeferenced.
+        item.frame = 2 if cmd == 20 else mavlink.MAV_FRAME_GLOBAL_RELATIVE_ALT_INT
 
 
 class DroneDeck(QMainWindow):
@@ -391,7 +446,7 @@ class DroneDeck(QMainWindow):
         self.mission_list = QListWidget()
         self.mission_list.setFont(QFont("DejaVu Sans Mono", 9))
         self.mission_list.itemSelectionChanged.connect(self._wp_list_selected)
-        self.mission_list.itemDoubleClicked.connect(self._wp_edit_alt)
+        self.mission_list.itemDoubleClicked.connect(self._wp_edit)
         mwrap = QWidget()
         mv = QVBoxLayout(mwrap)
         mv.setContentsMargins(2, 2, 2, 2)
@@ -1042,11 +1097,20 @@ class DroneDeck(QMainWindow):
             self.mission_items.append(MissionItem(seq, lat, lon, alt))
             self._refresh_mission_view()
 
+    def _wp_row_text(self, it):
+        extra = ""
+        if it.command in (19, 17):                    # LOITER_TIME / LOITER_UNLIM
+            if it.param1:
+                extra = f"  {it.param1:.0f}s"
+            elif it.param3:
+                extra = f"  r{it.param3:.0f}"
+        return (f"{it.seq:2d}  {it.cmd_name:9s} {it.lat:10.6f} {it.lon:11.6f}"
+                f"  {it.alt:5.0f} m{extra}")
+
     def _refresh_mission_view(self):
         self.mission_list.clear()
         for it in self.mission_items:
-            self.mission_list.addItem(
-                f"{it.seq:2d}  {it.cmd_name:9s} {it.lat:10.6f} {it.lon:11.6f}  {it.alt:5.0f} m")
+            self.mission_list.addItem(self._wp_row_text(it))
         self.map.set_mission([(it.lat, it.lon) for it in self.mission_items])
         n = len(self.mission_items)
         self.mission_status.setText(f"{n} waypoint{'' if n == 1 else 's'}" if n else "no mission")
@@ -1082,7 +1146,7 @@ class DroneDeck(QMainWindow):
         it = self.mission_items[idx]
         item = self.mission_list.item(idx)
         if item:
-            item.setText(f"{it.seq:2d}  {it.cmd_name:9s} {it.lat:10.6f} {it.lon:11.6f}  {it.alt:5.0f} m")
+            item.setText(self._wp_row_text(it))
         self.mission_stats.setText(self._mission_stats_text())
 
     def _wp_selected(self, idx):
@@ -1124,15 +1188,14 @@ class DroneDeck(QMainWindow):
             self._refresh_mission_view()
             self.mission_list.setCurrentRow(i + 1)
 
-    def _wp_edit_alt(self, _item=None):
+    def _wp_edit(self, _item=None):
         i = self.mission_list.currentRow()
-        if 0 <= i < len(self.mission_items):
-            alt, ok = QInputDialog.getDouble(self, "Waypoint altitude",
-                                             f"Altitude for WP {i} (m):",
-                                             self.mission_items[i].alt, 0.0, 2000.0, 1)
-            if ok:
-                self.mission_items[i].alt = alt
-                self._update_wp_row(i)
+        if not (0 <= i < len(self.mission_items)):
+            return
+        dlg = WaypointEditor(self.mission_items[i], self)
+        if dlg.exec() == QDialog.Accepted:
+            dlg.apply_to(self.mission_items[i])
+            self._update_wp_row(i)
 
     def _survey(self):
         if len(self.mission_items) < 2:
