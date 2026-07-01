@@ -52,6 +52,10 @@ def _load():
     lib.mav_count_ok.restype = ctypes.c_ulong
     lib.mav_count_drop.argtypes = [ctypes.c_void_p]
     lib.mav_count_drop.restype = ctypes.c_ulong
+    lib.mav_count_frames.argtypes = [ctypes.c_void_p]
+    lib.mav_count_frames.restype = ctypes.c_ulong
+    lib.mav_count_lost.argtypes = [ctypes.c_void_p]
+    lib.mav_count_lost.restype = ctypes.c_ulong
     lib.mav_crc.argtypes = [u8p, ctypes.c_size_t]
     lib.mav_crc.restype = ctypes.c_uint16
     lib.mav_crc_extra.argtypes = [u8p, ctypes.c_size_t, ctypes.c_uint8]
@@ -127,6 +131,16 @@ class Parser:
         if self._py is not None:
             return self._py.ok, self._py.drop
         return int(_lib.mav_count_ok(self._p)), int(_lib.mav_count_drop(self._p))
+
+    @property
+    def loss(self) -> float:
+        """Rolling link packet-loss percentage from MAVLink seq gaps (0.0 on a clean link)."""
+        if self._py is not None:
+            f, l = self._py.frames, self._py.lost
+        else:
+            f = int(_lib.mav_count_frames(self._p))
+            l = int(_lib.mav_count_lost(self._p))
+        return (100.0 * l / (f + l)) if (f + l) else 0.0
 
 
 # --- CRC + encoders (native, with pure-Python fallback) ----------------------

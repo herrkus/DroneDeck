@@ -908,6 +908,24 @@ class PyParser:
         self.buf = bytearray()
         self.ok = 0
         self.drop = 0
+        self.frames = 0             # all valid frames seen (known+undecoded) -- loss% denominator
+        self.lost = 0               # frames missed, inferred from seq gaps
+        self._last_seq = {}         # (sysid<<8 | compid) -> last frame seq
+
+    def track_seq(self, sysid, compid, seq):
+        """Packet loss from per-component MAVLink seq gaps, counted over EVERY valid frame (see the
+        C++ core Parser::track_seq -- the two must stay in step)."""
+        self.frames += 1
+        key = (sysid << 8) | compid
+        prev = self._last_seq.get(key, -1)
+        if prev >= 0:
+            gap = (seq - prev - 1) & 0xFF
+            if gap <= 32:
+                self.lost += gap
+        self._last_seq[key] = seq
+        if self.frames + self.lost >= 8192:
+            self.frames >>= 1
+            self.lost >>= 1
 
     def feed(self, data: bytes):
         self.buf += data
@@ -947,7 +965,16 @@ class PyParser:
             spec = _WIRE.get(msgid)
             extra = CRC_EXTRA.get(msgid)
             if spec is None or extra is None:
-                pos += 1
+                # unknown msgid: skip the whole self-consistent frame (matching the C++ core) and
+                # count its seq for loss%, so undecoded traffic is not mistaken for lost packets.
+                if pos + total >= n or self.buf[pos + total] in (0xFE, 0xFD):
+                    if v2:
+                        self.track_seq(self.buf[pos + 5], self.buf[pos + 6], self.buf[pos + 4])
+                    else:
+                        self.track_seq(self.buf[pos + 3], self.buf[pos + 4], self.buf[pos + 2])
+                    pos += total
+                else:
+                    pos += 1
                 continue
             crc = crc16_mcrf4xx(bytes(self.buf[pos + 1: pos + hdr + payload]), extra)
             off = pos + hdr + payload
@@ -968,6 +995,7 @@ class PyParser:
                     fields[sk] = fields[sk].split(b"\x00")[0].decode("utf-8", "replace")
             out.append(Message(msgid, sysid, compid, seq, fields))
             self.ok += 1
+            self.track_seq(sysid, compid, seq)
             pos += total
             first_incomplete = -1
         keep = first_incomplete if first_incomplete >= 0 else pos

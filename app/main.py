@@ -1768,7 +1768,7 @@ class DroneDeck(QMainWindow):
             self.mission_items = list(items)
             self._refresh_mission_view()
 
-    def _update_status_strip(self, ve, is_open, drop):
+    def _update_status_strip(self, ve, is_open, drop, loss=None):
         GREEN, AMBER, RED = "#37d67a", "#e0a030", "#e05050"
         TEAL, GREY, LIGHT = "#39c0d0", "#9aa0ac", "#d6d9df"
         chips = []
@@ -1806,9 +1806,15 @@ class DroneDeck(QMainWindow):
             chips.append((f"FLT {_fmt_mmss(self._flight_time)}", GREY, LIGHT))
         else:
             chips.append(("NO TELEMETRY", AMBER if is_open else GREY, AMBER if is_open else GREY))
-        link_col = RED if drop else (TEAL if is_open else GREY)
-        chips.append((f"{self._rate:.0f} Hz" + (f" · {drop} drop" if drop else ""),
-                      link_col, RED if drop else LIGHT))
+        lp = loss or 0.0
+        link_txt = f"{self._rate:.0f} Hz"
+        if drop:
+            link_txt += f" · {drop} drop"
+        if lp >= 2.0:                                    # surface a degrading radio link
+            link_txt += f" · {lp:.0f}% loss"
+        bad = drop or lp >= 10.0
+        link_col = RED if bad else (AMBER if lp >= 2.0 else (TEAL if is_open else GREY))
+        chips.append((link_txt, link_col, RED if bad else (AMBER if lp >= 2.0 else LIGHT)))
         if self._msg_unread:
             mcol = RED if self._msg_worst <= 3 else AMBER if self._msg_worst == 4 else LIGHT
             chips.append((f"MSG {len(ve.messages)} (+{self._msg_unread})", mcol, mcol))
@@ -2002,6 +2008,7 @@ class DroneDeck(QMainWindow):
 
         link = self.link
         ok, drop = (link.parser.stats if (link and link.parser) else (0, 0))
+        loss = (link.parser.loss if (link and link.parser) else None)
         is_open = bool(link and link.is_open)
         state = "connected" if is_open else "disconnected"
         if is_open and not ve.link_alive and link.remote is None:
@@ -2046,8 +2053,8 @@ class DroneDeck(QMainWindow):
                                                    for it in wps))
                 if n and 0 <= cw < n:
                     nav["wp_num"] = f"{cw + 1} / {n}"
-        self.panel.update_all(ve, state, self._rate, ok, drop, nav)
-        self._update_status_strip(ve, is_open, drop)
+        self.panel.update_all(ve, state, self._rate, ok, drop, nav, loss=loss)
+        self._update_status_strip(ve, is_open, drop, loss)
         self._update_link_banner(ve, is_open)
 
         self._update_button_states()

@@ -56,7 +56,7 @@ class TelemetryPanel(QWidget):
         self.groups: dict[str, QGroupBox] = {}     # title -> box, for show/hide
         specs = {
             "LINK": [("link", "Status"), ("rate", "Msg rate"), ("counts", "OK / drop"),
-                     ("rc", "RC signal")],
+                     ("loss", "Packet loss"), ("rc", "RC signal")],
             "FLIGHT": [("mode", "Mode"), ("armed", "State"), ("status", "System"), ("type", "Airframe")],
             "BATTERY": [("voltage", "Voltage"), ("current", "Current"), ("remaining", "Remaining")],
             "POSITION": [("lat", "Latitude"), ("lon", "Longitude"), ("alt_msl", "Alt MSL"), ("alt_rel", "Alt rel")],
@@ -124,11 +124,16 @@ class TelemetryPanel(QWidget):
         lbl.setText(text)
         lbl.setStyleSheet(f"color:{color};" if color else "")
 
-    def update_all(self, ve, link_state: str, rate: float, ok: int, drop: int, nav=None):
+    def update_all(self, ve, link_state: str, rate: float, ok: int, drop: int, nav=None, loss=None):
         alive = ve.link_alive
         self._set("link", link_state, "#37d67a" if alive else "#e0a030")
         self._set("rate", f"{rate:5.1f} Hz")
         self._set("counts", f"{ok} / {drop}", "#e05050" if drop else None)
+        if loss is None:
+            self._set("loss", "--")
+        else:
+            self._set("loss", f"{loss:.1f} %",
+                      "#37d67a" if loss < 2.0 else "#e0a030" if loss < 10.0 else "#e05050")
         if ve.rc_rssi is None:
             self._set("rc", "--")
         else:

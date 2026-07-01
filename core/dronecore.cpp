@@ -360,6 +360,24 @@ struct Parser {
     std::vector<uint8_t> buf;
     std::deque<Decoded>  q;
     unsigned long ok = 0, drop = 0;
+    unsigned long frames = 0, lost = 0;     // all valid frames (known+unknown) + seq-gap losses
+    int16_t last_seq[65536];                // per (sysid<<8 | compid); -1 = not yet seen
+
+    Parser() { std::memset(last_seq, 0xFF, sizeof(last_seq)); }   // -1 everywhere
+
+    // Packet loss from the per-component MAVLink frame seq -- counted over EVERY valid frame
+    // (including message types we do not decode) so undecoded traffic is not mistaken for loss.
+    void track_seq(uint8_t sysid, uint8_t compid, uint8_t seq) {
+        ++frames;
+        uint16_t key = (uint16_t(sysid) << 8) | compid;
+        int prev = last_seq[key];
+        if (prev >= 0) {
+            int gap = (int(seq) - prev - 1) & 0xFF;
+            if (gap <= 32) lost += gap;     // realistic bursts count; a bigger jump = discontinuity
+        }
+        last_seq[key] = seq;
+        if (frames + lost >= 8192) { frames >>= 1; lost >>= 1; }   // decay -> recent-weighted
+    }
 
     void feed(const uint8_t* data, size_t len) {
         buf.insert(buf.end(), data, data + len);
@@ -408,9 +426,11 @@ struct Parser {
                 // frame ends (or it runs to the buffer edge), the framing is
                 // self-consistent -- skip the whole message rather than byte-scanning
                 // its payload (which used to spawn phantom frames counted as drops).
-                if (pos + total >= n || buf[pos + total] == 0xFE || buf[pos + total] == 0xFD)
+                if (pos + total >= n || buf[pos + total] == 0xFE || buf[pos + total] == 0xFD) {
+                    if (v2) track_seq(buf[pos + 5], buf[pos + 6], buf[pos + 4]);   // count for loss%
+                    else    track_seq(buf[pos + 3], buf[pos + 4], buf[pos + 2]);
                     pos += total;
-                else
+                } else
                     ++pos;
                 continue;
             }
@@ -435,6 +455,7 @@ struct Parser {
 
             q.push_back(d);
             ++ok;
+            track_seq(d.sysid, d.compid, d.seq);   // count this frame toward loss%
             pos += total;
             first_incomplete = -1;   // bytes before a valid frame are settled junk
         }
@@ -486,8 +507,10 @@ int mav_pop(void* p, Decoded* out) {
     return 1;
 }
 
-unsigned long mav_count_ok(void* p)   { return static_cast<Parser*>(p)->ok; }
-unsigned long mav_count_drop(void* p) { return static_cast<Parser*>(p)->drop; }
+unsigned long mav_count_ok(void* p)     { return static_cast<Parser*>(p)->ok; }
+unsigned long mav_count_drop(void* p)   { return static_cast<Parser*>(p)->drop; }
+unsigned long mav_count_frames(void* p) { return static_cast<Parser*>(p)->frames; }
+unsigned long mav_count_lost(void* p)   { return static_cast<Parser*>(p)->lost; }
 
 // CRC primitives (used by tests and the simulator's Python encoder).
 uint16_t mav_crc(const uint8_t* data, size_t len) {
