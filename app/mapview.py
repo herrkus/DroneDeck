@@ -549,7 +549,8 @@ class MapView(QWidget):
             la, lo = self._px_to_ll(e.pos().x(), e.pos().y())
             for label, key in (("Go to here", "goto"), ("Orbit here", "orbit"),
                                ("Point camera here (ROI)", "roi"),
-                               ("Add ROI waypoint here", "add_roi"), ("Set home here", "sethome")):
+                               ("Add ROI waypoint here", "add_roi"), ("Set home here", "sethome"),
+                               ("Copy coordinates", "copy_coords")):
                 act = menu.addAction(label)
                 act.triggered.connect(lambda _=False, k=key: self.contextAction.emit(k, la, lo))
             if self.trail:                         # view action -- clear the breadcrumb trail

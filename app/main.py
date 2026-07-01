@@ -1405,6 +1405,11 @@ class DroneDeck(QMainWindow):
             self.map.update()
             self._on_info("flight trail cleared")
             return
+        if action == "copy_coords":                # view action -- copy the point to the clipboard
+            text = f"{lat:.6f}, {lon:.6f}"
+            QApplication.clipboard().setText(text)
+            self._on_info(f"copied {text} to clipboard")
+            return
         if not self._has_vehicle():
             QMessageBox.information(self, "No vehicle", "Connect to a vehicle first.")
             return
