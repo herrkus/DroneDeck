@@ -79,6 +79,10 @@ the native core.
   to a file with a progress bar (`LOG_REQUEST_LIST`/`LOG_ENTRY`/`LOG_DATA`...).
 - **Multi-vehicle + ADSB** -- track several system IDs with a Vehicle selector;
   other vehicles and `ADSB_VEHICLE` traffic are drawn on the map.
+- **Calibration (Vehicle Setup)** -- **radio**: sweep the sticks and the GCS
+  captures per-channel min/max/trim from `RC_CHANNELS` and writes `RCn_MIN/MAX/
+  TRIM`; **sensors**: gyro / accel / level / compass via
+  `MAV_CMD_PREFLIGHT_CALIBRATION`, showing the vehicle's guided prompts.
 - **MAVLink inspector** -- a live table of every message type, its rate (Hz) and
   current field values (bottom "Inspector" tab).
 - **Parameter editor** -- "Params" downloads the autopilot's parameters into a
@@ -91,7 +95,7 @@ the native core.
 
 Supported messages: `HEARTBEAT`, `SYS_STATUS` (incl. sensor-health bitmasks),
 `GPS_RAW_INT`, `ATTITUDE`, `GLOBAL_POSITION_INT`, `VFR_HUD`, `MANUAL_CONTROL`,
-`COMMAND_LONG`, `COMMAND_ACK`, `STATUSTEXT`, `ADSB_VEHICLE`, the parameter set
+`COMMAND_LONG`, `COMMAND_ACK`, `STATUSTEXT`, `ADSB_VEHICLE`, `RC_CHANNELS`, the parameter set
 (`PARAM_*`), the log set (`LOG_REQUEST_LIST`/`LOG_ENTRY`/`LOG_REQUEST_DATA`/
 `LOG_DATA`/`LOG_REQUEST_END`), `SET_POSITION_TARGET_GLOBAL_INT`, and the mission
 set (`MISSION_COUNT`, `MISSION_ITEM_INT`, `MISSION_REQUEST_INT`,
@@ -203,6 +207,8 @@ python3 tests/test_video.py     # video pane builds + degrades gracefully
 python3 tests/test_fence_shapes.py   # exclusion polygon + inc/exc circles
 python3 tests/test_adsb.py      # ADSB_VEHICLE traffic tracked on the map
 python3 tests/test_multivehicle.py   # two sysids tracked + selector switch
+python3 tests/test_rc_calibration.py     # RC min/max captured + params written
+python3 tests/test_sensor_calibration.py # gyro/accel/level/compass prompt flow
 python3 tests/test_settings.py  # QSettings persistence round-trip
 python3 tests/test_links_manager.py  # saved link configs + connect signal
 python3 tests/smoke_gui.py      # headless end-to-end with the simulator + screenshot
