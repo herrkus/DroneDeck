@@ -92,6 +92,7 @@ class DroneDeck(QMainWindow):
         self.resize(1240, 770)
         # Floor the size so panes can never be squeezed into each other.
         self.setMinimumSize(1060, 660)
+        self._bottom_sized = False   # compact the bottom row once, after the WM maximizes
 
         self.vehicle = Vehicle()
         self.vehicles = {}                 # sysid -> Vehicle (multi-vehicle)
@@ -1168,13 +1169,27 @@ class DroneDeck(QMainWindow):
         self.charts.sample(ve)
 
     # -- settings persistence -------------------------------------------------
+    def resizeEvent(self, e):
+        super().resizeEvent(e)
+        # The window is shown small and the WM maximizes it a moment later, so wait for
+        # the real (tall) size before compacting the bottom row -- sizing against the
+        # pre-maximize height lets the docks balloon when the window then grows. Runs
+        # once; afterwards the dividers are the user's to drag freely.
+        if not self._bottom_sized and self.height() > 850:
+            self._bottom_sized = True
+            self._size_bottom_docks()
+
     def _size_bottom_docks(self):
-        # bottom row (Messages / Systems / Telemetry ...) ~= 24% of the window height;
-        # the rest goes to the map + PFD. Both bottom columns are sized together.
+        # Clean startup layout: a compact bottom row (~24% of the window height) so the
+        # map + PFD get the space, with Messages (left) and Systems (right) as the active
+        # tabs. Runs every launch so the app always opens in this known-good arrangement
+        # (the dividers stay draggable during the session for a temporary taller board).
         h = max(self.height(), 700)
         try:
             self.resizeDocks([self.msg_dock, self.sys_dock],
                              [int(h * 0.24), int(h * 0.24)], Qt.Vertical)
+            self.msg_dock.raise_()   # Messages up on the left
+            self.sys_dock.raise_()   # Systems up on the right
         except Exception:
             pass
 
@@ -1186,11 +1201,10 @@ class DroneDeck(QMainWindow):
         st = s.value("win/state")
         if st is not None:
             self.restoreState(st)
-        # First launch only (no saved layout): default to a compact bottom row so the
-        # map + PFD get the height. Once the user has dragged the dividers to their own
-        # taste, that layout is saved on close and restored above -- we leave it as set.
-        if st is None:
-            QTimer.singleShot(0, self._size_bottom_docks)
+        # Always open in the clean, compact layout (map big, Messages + Systems tabs up)
+        # so the app looks the same every launch -- no stale/offset bottom row. The
+        # dividers stay draggable during the session for a temporary bigger board.
+        QTimer.singleShot(0, self._size_bottom_docks)
         tr = s.value("link/transport")
         if tr in ("UDP", "TCP", "Serial", "Replay"):
             self.transport_combo.setCurrentText(tr)
