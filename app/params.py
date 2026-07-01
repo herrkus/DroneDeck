@@ -12,12 +12,14 @@ from __future__ import annotations
 from PySide6.QtCore import QObject, Signal, QTimer, Qt
 from PySide6.QtGui import QFont, QColor
 from PySide6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLineEdit, QPushButton,
-                               QLabel, QTableWidget, QTableWidgetItem, QHeaderView)
+                               QLabel, QTableWidget, QTableWidgetItem, QHeaderView, QProgressBar)
 
 import mavlink
 
 TIMEOUT_MS = 1500
 MAX_RETRIES = 6
+SET_TIMEOUT_MS = 1000
+SET_RETRIES = 5
 
 
 class ParamManager(QObject):
@@ -25,6 +27,8 @@ class ParamManager(QObject):
     finished = Signal(bool, str)
     param = Signal(str, float, int, int)    # name, value, index, count
     updated = Signal(str, float)            # name, value (any PARAM_VALUE)
+    set_result = Signal(str, bool, str)     # PARAM_SET readback: name, confirmed, message
+    download_progress = Signal(int, int)    # received, total
 
     def __init__(self, link_getter, target_getter, parent=None):
         super().__init__(parent)
@@ -36,9 +40,14 @@ class ParamManager(QObject):
         self.received = set()
         self.state = "idle"
         self.retries = 0
+        self.type_of = {}                   # name -> MAV_PARAM_TYPE (for a correctly-typed PARAM_SET)
+        self.pending = {}                   # name -> {value,type,tries} awaiting SET readback
         self.timer = QTimer(self)
         self.timer.setSingleShot(True)
         self.timer.timeout.connect(self._on_timeout)
+        self.set_timer = QTimer(self)
+        self.set_timer.setSingleShot(True)
+        self.set_timer.timeout.connect(self._on_set_timeout)
 
     def _ready(self):
         link = self._link()
@@ -60,8 +69,44 @@ class ParamManager(QObject):
         if not self._ready():
             self.finished.emit(False, "no vehicle connected")
             return
-        self._link().set_param(self._target(), name, float(value))
-        self.progress.emit(f"set {name} = {value:g}")
+        value = float(value)
+        ptype = self.type_of.get(name, mavlink.MAV_PARAM_TYPE_REAL32)
+        self.pending[name] = {"value": value, "type": ptype, "tries": 1}
+        self._link().set_param(self._target(), name, value, ptype)
+        self.progress.emit(f"set {name} = {value:g} ...")
+        if not self.set_timer.isActive():
+            self.set_timer.start(SET_TIMEOUT_MS)
+
+    @staticmethod
+    def _values_match(a, b, ptype):
+        # integer param types must land exactly; floats within a small tolerance
+        if ptype in (1, 2, 3, 4, 5, 6, 7, 8):      # (U)INT8/16/32/64
+            return round(a) == round(b)
+        return abs(a - b) <= max(1e-4, abs(b) * 1e-3)
+
+    def _on_set_timeout(self):
+        # A PARAM_SET can be dropped on UDP/radio; re-send until the vehicle echoes
+        # the value back (QGC does the same), then give up loudly after SET_RETRIES.
+        if not self.pending:
+            return
+        if not self._ready():
+            for name in list(self.pending):
+                self.set_result.emit(name, False, f"{name}: set failed (disconnected)")
+            self.pending.clear()
+            return
+        link, tgt = self._link(), self._target()
+        for name in list(self.pending):
+            p = self.pending[name]
+            if p["tries"] >= SET_RETRIES:
+                self.set_result.emit(name, False,
+                                     f"{name}: set NOT confirmed after {SET_RETRIES} tries")
+                self.pending.pop(name, None)
+            else:
+                p["tries"] += 1
+                link.set_param(tgt, name, p["value"], p["type"])
+                self.progress.emit(f"re-sending {name} = {p['value']:g} (try {p['tries']})")
+        if self.pending:
+            self.set_timer.start(SET_TIMEOUT_MS)
 
     def handle_messages(self, batch):
         for m in batch:
@@ -77,12 +122,21 @@ class ParamManager(QObject):
         cnt = int(m.fields.get("param_count", 0))
         self.values[name] = val
         self.index_of[name] = idx
+        self.type_of[name] = int(m.fields.get("param_type", mavlink.MAV_PARAM_TYPE_REAL32))
         self.updated.emit(name, val)
+        # confirm a pending PARAM_SET once the vehicle echoes our value back
+        if name in self.pending:
+            if self._values_match(val, self.pending[name]["value"], self.type_of[name]):
+                self.pending.pop(name)
+                self.set_result.emit(name, True, f"{name} = {val:g} confirmed")
+                if not self.pending:
+                    self.set_timer.stop()
         if self.state == "download":
             self.expected = cnt
             self.received.add(idx)
             self.retries = 0
             self.param.emit(name, val, idx, cnt)
+            self.download_progress.emit(len(self.received), cnt)
             self.progress.emit(f"{len(self.received)}/{cnt} parameters")
             if cnt and len(self.received) >= cnt:
                 self.state = "idle"
@@ -148,6 +202,10 @@ class ParamDialog(QDialog):
         self.table.itemChanged.connect(self._item_changed)
         lay.addWidget(self.table, 1)
 
+        self.pbar = QProgressBar()
+        self.pbar.setTextVisible(True)
+        self.pbar.hide()
+        lay.addWidget(self.pbar)
         self.status = QLabel("no parameters loaded")
         self.status.setStyleSheet("color:#8a90a0;")
         lay.addWidget(self.status)
@@ -155,7 +213,9 @@ class ParamDialog(QDialog):
         self.mgr.param.connect(self._on_param)
         self.mgr.updated.connect(self._on_updated)
         self.mgr.progress.connect(self.status.setText)
-        self.mgr.finished.connect(lambda ok, msg: self.status.setText(msg))
+        self.mgr.download_progress.connect(self._on_dl_progress)
+        self.mgr.set_result.connect(self._on_set_result)
+        self.mgr.finished.connect(self._on_finished)
 
     def _on_param(self, name, value, index, count):
         self._loading = True
@@ -177,6 +237,24 @@ class ParamDialog(QDialog):
     def _on_updated(self, name, value):
         if name in self.rows:
             self._on_param(name, value, self.mgr.index_of.get(name, 0), len(self.mgr.values))
+
+    def _on_dl_progress(self, received, total):
+        if total:
+            self.pbar.setMaximum(total)
+            self.pbar.setValue(received)
+            self.pbar.setFormat("%v / %m parameters")
+            self.pbar.show()
+
+    def _on_set_result(self, name, ok, msg):
+        self.status.setText(msg)
+        if name in self.rows:
+            vitem = self.table.item(self.rows[name], 1)
+            if vitem:
+                vitem.setForeground(QColor("#37d67a" if ok else "#ff6b6b"))
+
+    def _on_finished(self, ok, msg):
+        self.status.setText(msg)
+        self.pbar.hide()
 
     def _item_changed(self, item):
         if self._loading or item.column() != 1:
