@@ -24,7 +24,8 @@ class TelemetryPanel(QWidget):
         self.v: dict[str, QLabel] = {}
         self.groups: dict[str, QGroupBox] = {}     # title -> box, for show/hide
         specs = {
-            "LINK": [("link", "Status"), ("rate", "Msg rate"), ("counts", "OK / drop")],
+            "LINK": [("link", "Status"), ("rate", "Msg rate"), ("counts", "OK / drop"),
+                     ("rc", "RC signal")],
             "FLIGHT": [("mode", "Mode"), ("armed", "State"), ("status", "System"), ("type", "Airframe")],
             "BATTERY": [("voltage", "Voltage"), ("current", "Current"), ("remaining", "Remaining")],
             "POSITION": [("lat", "Latitude"), ("lon", "Longitude"), ("alt_msl", "Alt MSL"), ("alt_rel", "Alt rel")],
@@ -94,6 +95,11 @@ class TelemetryPanel(QWidget):
         self._set("link", link_state, "#37d67a" if alive else "#e0a030")
         self._set("rate", f"{rate:5.1f} Hz")
         self._set("counts", f"{ok} / {drop}", "#e05050" if drop else None)
+        if ve.rc_rssi is None:
+            self._set("rc", "--")
+        else:
+            self._set("rc", f"{ve.rc_rssi} %",
+                      "#37d67a" if ve.rc_rssi >= 60 else "#e0a030" if ve.rc_rssi >= 30 else "#e05050")
 
         self._set("mode", ve.mode, "#8fd0ff")
         self._set("armed", "ARMED" if ve.armed else "DISARMED",

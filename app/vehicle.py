@@ -50,6 +50,8 @@ class Vehicle(QObject):
         self.radio_rssi = None
         self.radio_remrssi = None
         self.radio_noise = None
+        # RC transmitter signal (RC_CHANNELS.rssi), 0-100%; None = no RC reporting
+        self.rc_rssi = None
         # sensor health bitmasks (SYS_STATUS)
         self.sensors_present = 0
         self.sensors_enabled = 0
@@ -158,6 +160,11 @@ class Vehicle(QObject):
         self.radio_rssi = int(f.get("rssi", 0))
         self.radio_remrssi = int(f.get("remrssi", 0))
         self.radio_noise = int(f.get("noise", 0))
+
+    def _on_rc_channels(self, f):
+        # RC_CHANNELS.rssi is 0..254 (0 = no signal, 254 = full); 255 = unknown/not-reporting.
+        r = int(f.get("rssi", 255))
+        self.rc_rssi = None if r == 255 else round(r * 100.0 / 254.0)
 
     def _on_altitude(self, f):
         self.alt_msl = f.get("altitude_amsl", self.alt_msl)
@@ -292,6 +299,7 @@ class Vehicle(QObject):
         mavlink.WIND_COV: _on_wind_cov,
         mavlink.BATTERY_STATUS: _on_battery_status,
         mavlink.RADIO_STATUS: _on_radio_status,
+        mavlink.RC_CHANNELS: _on_rc_channels,
         mavlink.GPS_RAW_INT: _on_gps_raw,
         mavlink.VFR_HUD: _on_vfr_hud,
         mavlink.STATUSTEXT: _on_statustext,
