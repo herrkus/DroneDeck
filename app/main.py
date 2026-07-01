@@ -22,7 +22,7 @@ from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QHBoxLayout,
                                QPushButton, QLabel, QCheckBox, QMessageBox, QScrollArea,
                                QDockWidget, QComboBox, QInputDialog, QListWidget,
                                QGroupBox, QTabWidget, QSpinBox, QDialog, QFormLayout,
-                               QDoubleSpinBox, QDialogButtonBox, QFileDialog)
+                               QDoubleSpinBox, QDialogButtonBox, QFileDialog, QMenu)
 
 import core
 import mavlink
@@ -333,6 +333,17 @@ class DroneDeck(QMainWindow):
             b._needs = needs.get(label, "conn")
             tb2.addWidget(b)
             self._flight_btns.append(b)
+        # VTOL transition -- only shown for VTOL airframes (MAV_TYPE 19-22)
+        self.btn_vtol = QPushButton("VTOL")
+        self.btn_vtol.setToolTip("Command a VTOL transition (only while flying)")
+        self._vtol_menu = QMenu(self.btn_vtol)
+        self._vtol_menu.addAction("Transition to Fixed-wing").triggered.connect(
+            lambda: self._vtol_transition(mavlink.MAV_VTOL_STATE_FW))
+        self._vtol_menu.addAction("Transition to Multirotor").triggered.connect(
+            lambda: self._vtol_transition(mavlink.MAV_VTOL_STATE_MC))
+        self.btn_vtol.setMenu(self._vtol_menu)
+        self.btn_vtol.setVisible(False)
+        tb2.addWidget(self.btn_vtol)
         tb2.addSeparator()
         self.btn_joystick = QPushButton("Joystick")
         self.btn_joystick.setCheckable(True)
@@ -921,6 +932,10 @@ class DroneDeck(QMainWindow):
         self.mode_combo.setEnabled(connected)
         for b in self._flight_btns:
             b.setEnabled(connected and (armed if getattr(b, "_needs", "conn") == "armed" else True))
+        # VTOL transition button: shown only for VTOL airframes, active only while armed
+        is_vtol = connected and ve.mav_type in (19, 20, 21, 22)
+        self.btn_vtol.setVisible(is_vtol)
+        self.btn_vtol.setEnabled(is_vtol and armed)
         for label, b in self._mission_btns:
             b.setEnabled(connected if label in ("Upload", "Download") else True)
 
@@ -1119,6 +1134,13 @@ class DroneDeck(QMainWindow):
         if ok:
             self.link.change_speed(self._sysid(), spd)
             self._on_info(f"change speed to {spd:.1f} m/s")
+
+    def _vtol_transition(self, state):
+        if not self._has_vehicle():
+            return
+        name = "fixed-wing" if state == mavlink.MAV_VTOL_STATE_FW else "multirotor"
+        self.link.vtol_transition(self._sysid(), state)
+        self._on_info(f"VTOL transition to {name} requested")
 
     def _on_map_click(self, lat, lon):
         if self.plan_mode:

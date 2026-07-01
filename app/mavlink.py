@@ -182,6 +182,9 @@ MAV_CMD_DO_SET_ROI_LOCATION = 195
 MAV_CMD_DO_REPOSITION = 192
 MAV_CMD_DO_CHANGE_SPEED = 178           # param1=type (0 air / 1 ground), param2=speed m/s
 MAV_CMD_DO_PAUSE_CONTINUE = 193
+MAV_CMD_DO_VTOL_TRANSITION = 3000       # param1 = MAV_VTOL_STATE (3 = MC, 4 = FW)
+MAV_VTOL_STATE_MC = 3                    # multicopter / hover
+MAV_VTOL_STATE_FW = 4                    # fixed-wing / forward flight
 # camera + gimbal (all carried by COMMAND_LONG)
 MAV_CMD_DO_MOUNT_CONTROL = 205          # gimbal: param1=pitch, param2=roll, param3=yaw
 MAV_CMD_DO_SET_CAM_TRIGG_DIST = 206     # param1=distance m (0 = off)

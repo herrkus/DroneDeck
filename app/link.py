@@ -163,6 +163,12 @@ class Link(QObject):
         self.send_command_long(target_sys, mavlink.MAV_CMD_DO_CHANGE_SPEED,
                                [float(speed_type), float(speed), -1.0, 0, 0, 0, 0])
 
+    def vtol_transition(self, target_sys: int, state: int):
+        # DO_VTOL_TRANSITION: param1 = MAV_VTOL_STATE (3 = multicopter, 4 = fixed-wing).
+        # param2 = 0 -> normal (non-immediate) transition.
+        self.send_command_long(target_sys, mavlink.MAV_CMD_DO_VTOL_TRANSITION,
+                               [float(state), 0, 0, 0, 0, 0, 0])
+
     def request_data_streams(self, target_sys: int, autopilot: int = 0):
         """Ask the vehicle to stream telemetry. Real autopilots (ArduPilot especially)
         send almost nothing until requested, so this is what makes a freshly-connected
