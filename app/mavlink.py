@@ -74,6 +74,7 @@ SERIAL_CONTROL_FLAG_MULTI = 16
 ADSB_VEHICLE = 246
 HOME_POSITION = 242          # authoritative home the autopilot uses for RTL (+ altitude)
 MOUNT_ORIENTATION = 265      # gimbal attitude report (roll/pitch/yaw deg)
+ESC_STATUS = 291             # per-ESC rpm / voltage / current (banks of 4 from 'index')
 
 MSG_NAME = {
     HEARTBEAT: "HEARTBEAT",
@@ -94,6 +95,7 @@ MSG_NAME = {
     WIND_COV: "WIND_COV",
     MOUNT_ORIENTATION: "MOUNT_ORIENTATION",
     HOME_POSITION: "HOME_POSITION",
+    ESC_STATUS: "ESC_STATUS",
     MANUAL_CONTROL: "MANUAL_CONTROL",
     COMMAND_INT: "COMMAND_INT",
     COMMAND_LONG: "COMMAND_LONG",
@@ -133,7 +135,7 @@ CRC_EXTRA = {
     MISSION_REQUEST_INT: 196, MISSION_ITEM_INT: 38, MANUAL_CONTROL: 243, RC_CHANNELS: 118,
     ALTITUDE: 47, BATTERY_STATUS: 154, VIBRATION: 90, RADIO_STATUS: 185,
     EKF_STATUS_REPORT: 71, ESTIMATOR_STATUS: 163, WIND_COV: 105, MOUNT_ORIENTATION: 26,
-    HOME_POSITION: 104, REQUEST_DATA_STREAM: 148,
+    HOME_POSITION: 104, ESC_STATUS: 10, REQUEST_DATA_STREAM: 148,
     LOG_REQUEST_LIST: 128, LOG_ENTRY: 56, LOG_REQUEST_DATA: 116,
     LOG_DATA: 134, LOG_REQUEST_END: 203, ADSB_VEHICLE: 184,
     SERIAL_CONTROL: 194,
@@ -166,6 +168,9 @@ FIELDS = {
     MOUNT_ORIENTATION: ["time_boot_ms", "roll", "pitch", "yaw", "yaw_absolute"],
     HOME_POSITION: ["latitude", "longitude", "altitude", "x", "y", "z",
                     "q0", "q1", "q2", "q3", "approach_x", "approach_y", "approach_z"],
+    ESC_STATUS: (["time_usec"] + [f"rpm{i}" for i in range(1, 5)]
+                 + [f"voltage{i}" for i in range(1, 5)]
+                 + [f"current{i}" for i in range(1, 5)] + ["index"]),
     BATTERY_STATUS: (["current_consumed", "energy_consumed", "temperature"]
                      + [f"voltage{i}" for i in range(1, 11)]
                      + ["current_battery", "id", "battery_function", "type", "battery_remaining"]),
@@ -737,6 +742,10 @@ _WIRE = {
     HOME_POSITION: ("<3i10f",
                     ["latitude", "longitude", "altitude", "x", "y", "z",
                      "q0", "q1", "q2", "q3", "approach_x", "approach_y", "approach_z"], 52),
+    ESC_STATUS: ("<Q4i4f4fB",
+                 ["time_usec"] + [f"rpm{i}" for i in range(1, 5)]
+                 + [f"voltage{i}" for i in range(1, 5)]
+                 + [f"current{i}" for i in range(1, 5)] + ["index"], 57),
     BATTERY_STATUS: ("<iih10HhBBBb",
                      ["current_consumed", "energy_consumed", "temperature"]
                      + [f"voltage{i}" for i in range(1, 11)]

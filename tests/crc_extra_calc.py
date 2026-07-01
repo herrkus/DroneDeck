@@ -166,6 +166,11 @@ NEW = {
                             ("int32_t", "altitude", 0), ("float", "x", 0), ("float", "y", 0),
                             ("float", "z", 0), ("float", "q", 4), ("float", "approach_x", 0),
                             ("float", "approach_y", 0), ("float", "approach_z", 0)]),
+    # rpm/voltage/current are float/int32 arrays of 4 (their length byte enters the CRC);
+    # index (uint8) sorts last after the uint64 timestamp. Computes 10.
+    "ESC_STATUS": (291, [("uint64_t", "time_usec", 0), ("int32_t", "rpm", 4),
+                         ("float", "voltage", 4), ("float", "current", 4),
+                         ("uint8_t", "index", 0)]),
 }
 
 if __name__ == "__main__":

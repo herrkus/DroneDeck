@@ -87,6 +87,11 @@ class Vehicle(QObject):
         # actuator outputs (SERVO_OUTPUT_RAW), PWM microseconds servo1..8
         self.servo_raw = [0] * 8
         self.have_servo = False
+        # per-ESC status (ESC_STATUS), banks of 4 addressed by 'index'
+        self.esc_rpm = [0] * 8
+        self.esc_voltage = [0.0] * 8
+        self.esc_current = [0.0] * 8
+        self.have_esc = False
         # gps
         self.fix_type = 0
         self.satellites = 0
@@ -285,6 +290,16 @@ class Vehicle(QObject):
         self.servo_raw = [int(f.get(f"servo{i}_raw", 0)) for i in range(1, 9)]
         self.have_servo = True
 
+    def _on_esc_status(self, f):
+        idx = int(f.get("index", 0))                    # first ESC in this bank (0, 4, 8, ...)
+        for k in range(4):
+            slot = idx + k
+            if 0 <= slot < 8:
+                self.esc_rpm[slot] = int(f.get(f"rpm{k + 1}", 0))
+                self.esc_voltage[slot] = float(f.get(f"voltage{k + 1}", 0.0))
+                self.esc_current[slot] = float(f.get(f"current{k + 1}", 0.0))
+        self.have_esc = True
+
     def wind_speed(self):
         """Horizontal wind speed, m/s."""
         return math.hypot(self.wind_x, self.wind_y)
@@ -351,6 +366,7 @@ class Vehicle(QObject):
         mavlink.WIND_COV: _on_wind_cov,
         mavlink.MOUNT_ORIENTATION: _on_mount_orientation,
         mavlink.SERVO_OUTPUT_RAW: _on_servo_output_raw,
+        mavlink.ESC_STATUS: _on_esc_status,
         mavlink.HOME_POSITION: _on_home_position,
         mavlink.BATTERY_STATUS: _on_battery_status,
         mavlink.RADIO_STATUS: _on_radio_status,

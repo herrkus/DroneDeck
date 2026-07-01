@@ -810,6 +810,20 @@ class SystemsPanel(QWidget):
         av.addWidget(self.servo_bars)
         lay.addWidget(act)
 
+        escb = QGroupBox("ESC / motors")
+        ef = QFormLayout(escb)
+        ef.setContentsMargins(10, 6, 10, 6)
+        ef.setVerticalSpacing(3)
+        self._esc_rows = []                              # (label_widget, value_widget) per ESC
+        for i in range(8):
+            name = QLabel(f"M{i + 1}")
+            val = QLabel("--")
+            val.setFont(_MONO)
+            ef.addRow(name, val)
+            self._esc_rows.append((name, val))
+        self._esc_group = escb
+        lay.addWidget(escb)
+
         alt = QGroupBox("Altitude")
         af = QFormLayout(alt)
         self.a_amsl = QLabel("--"); self.a_rel = QLabel("--"); self.a_terr = QLabel("--")
@@ -869,6 +883,17 @@ class SystemsPanel(QWidget):
         self.b_cells.setText("  ".join(f"{c:.2f}" for c in ve.cells) if ve.cells else "--")
         self.cell_bars.set_cells(ve.cells)
         self.servo_bars.set_values(ve.servo_raw)
+        esc_active = [(ve.esc_rpm[i] != 0 or ve.esc_voltage[i] > 0.05) for i in range(8)]
+        if ve.have_esc and any(esc_active):     # only meaningful once motors are turning
+            self._esc_group.show()
+            for i, (name, val) in enumerate(self._esc_rows):
+                name.setVisible(esc_active[i])
+                val.setVisible(esc_active[i])
+                if esc_active[i]:
+                    val.setText(f"{ve.esc_rpm[i]:>6d} rpm  {ve.esc_voltage[i]:4.1f} V  "
+                                f"{ve.esc_current[i]:4.1f} A")
+        else:
+            self._esc_group.hide()
         self.vib_bars.set_values(ve.vibration)
         self.vib_clip.setText("clip {} / {} / {}".format(*ve.clipping))
         self.a_amsl.setText(f"{ve.alt_msl:.1f} m")

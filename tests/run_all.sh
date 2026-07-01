@@ -60,6 +60,8 @@ check "servo"               ""                        tests/test_servo.py
 check "servo (python)"      "DRONEDECK_FORCE_PYTHON=1" tests/test_servo.py
 check "home"                ""                        tests/test_home.py
 check "home (python)"       "DRONEDECK_FORCE_PYTHON=1" tests/test_home.py
+check "esc"                 ""                        tests/test_esc.py
+check "esc (python)"        "DRONEDECK_FORCE_PYTHON=1" tests/test_esc.py
 check "confirm"             ""                        tests/test_confirm.py
 check "windcompass"         ""                        tests/test_windcompass.py
 check "manual"              ""                        tests/test_manual.py
