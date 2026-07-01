@@ -127,6 +127,7 @@ check "reconnect"           ""                        tests/test_reconnect.py
 check "boundedgrowth"       ""                        tests/test_boundedgrowth.py
 check "settingsload"        ""                        tests/test_settingsload.py
 check "inputrobust"         ""                        tests/test_inputrobust.py
+check "numericedge"         ""                        tests/test_numericedge.py
 check "smoke (native)"      ""                        tests/smoke_gui.py
 check "smoke (python)"      "DRONEDECK_FORCE_PYTHON=1" tests/smoke_gui.py
 

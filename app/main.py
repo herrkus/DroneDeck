@@ -66,7 +66,10 @@ def bearing(lat1, lon1, lat2, lon2):
     dl = math.radians(lon2 - lon1)
     y = math.sin(dl) * math.cos(p2)
     x = math.cos(p1) * math.sin(p2) - math.sin(p1) * math.cos(p2) * math.cos(dl)
-    return math.degrees(math.atan2(y, x)) % 360.0
+    b = math.degrees(math.atan2(y, x)) % 360.0
+    # a tiny negative angle (e.g. bearing to a pole) yields -eps % 360 == 360.0 in float, which
+    # violates the documented [0, 360) range and would break a consumer like int(b / 45); pin it to 0
+    return b if b < 360.0 else 0.0
 
 
 def trail_to_gpx(points, name="DroneDeck flight track"):
