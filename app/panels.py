@@ -580,10 +580,12 @@ class SystemsPanel(QWidget):
         bf = QFormLayout(bat)
         self.b_volt = QLabel("--"); self.b_curr = QLabel("--"); self.b_used = QLabel("--")
         self.b_rem = QLabel("--"); self.b_temp = QLabel("--"); self.b_cells = QLabel("--")
+        self.b_time = QLabel("--")
         bf.addRow("Voltage", self.b_volt)
         bf.addRow("Current", self.b_curr)
         bf.addRow("Consumed", self.b_used)
         bf.addRow("Remaining", self.b_rem)
+        bf.addRow("Time left", self.b_time)
         bf.addRow("Temperature", self.b_temp)
         bf.addRow("Cells (V)", self.b_cells)
         lay.addWidget(bat)
@@ -621,6 +623,15 @@ class SystemsPanel(QWidget):
         self.b_curr.setText(f"{ve.current:.1f} A")
         self.b_used.setText("--" if ve.battery_consumed < 0 else f"{ve.battery_consumed} mAh")
         self.b_rem.setText("--" if ve.battery_remaining < 0 else f"{ve.battery_remaining}%")
+        est = ve.battery_time_estimate()
+        if est < 0:
+            self.b_time.setText("--"); self.b_time.setStyleSheet("")
+        else:
+            s = int(est)
+            self.b_time.setText(f"{s // 60}:{s % 60:02d}" if s < 3600
+                                else f"{s // 3600}h{(s % 3600) // 60:02d}")
+            self.b_time.setStyleSheet("color:#e05050;" if s < 120 else
+                                      "color:#e0a030;" if s < 300 else "color:#37d67a;")
         self.b_temp.setText("--" if ve.battery_temp is None else f"{ve.battery_temp:.1f} C")
         self.b_cells.setText("  ".join(f"{c:.2f}" for c in ve.cells) if ve.cells else "--")
         self.vib_bars.set_values(ve.vibration)

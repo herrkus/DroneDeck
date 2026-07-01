@@ -39,6 +39,7 @@ class Vehicle(QObject):
         self.current = 0.0
         self.battery_remaining = -1
         self.battery_consumed = -1          # mAh drawn (BATTERY_STATUS)
+        self.battery_time = -1              # s remaining, if the autopilot reports it
         self.battery_temp = None            # deg C (None = unknown)
         self.cells = []                     # per-cell voltages (V)
         # vibration + detailed altitude
@@ -174,6 +175,20 @@ class Vehicle(QObject):
             self.battery_remaining = rem
         temp = int(f.get("temperature", 32767))
         self.battery_temp = None if temp == 32767 else temp / 100.0
+        tr = int(f.get("time_remaining", 0))            # 0 == not provided (MAVLink)
+        self.battery_time = tr if tr > 0 else -1
+
+    def battery_time_estimate(self):
+        """Seconds of flight left. Prefer the autopilot's BATTERY_STATUS.time_remaining;
+        otherwise derive it from consumed mAh + remaining % + present current draw.
+        Returns -1 when it cannot be estimated."""
+        if self.battery_time > 0:
+            return self.battery_time
+        rem, cons, cur = self.battery_remaining, self.battery_consumed, self.current
+        if 0 < rem < 100 and cons > 0 and cur > 0.05:
+            remaining_mah = cons * rem / (100.0 - rem)  # derive pack size, then what's left
+            return remaining_mah / (cur * 1000.0) * 3600.0
+        return -1
 
     def _on_sys_status(self, f):
         self.voltage = f.get("voltage_battery", 0) / 1000.0
