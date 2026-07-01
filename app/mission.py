@@ -172,6 +172,72 @@ def structure_scan(points, radius_m=30.0, layers=3, layer_height_m=8.0,
     return items
 
 
+def _convex_hull(pts):
+    """Counter-clockwise convex hull (Andrew's monotone chain) of [(x, y)] points."""
+    pts = sorted(set(pts))
+    if len(pts) <= 2:
+        return pts
+
+    def cross(o, a, b):
+        return (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0])
+
+    lower = []
+    for p in pts:
+        while len(lower) >= 2 and cross(lower[-2], lower[-1], p) <= 0:
+            lower.pop()
+        lower.append(p)
+    upper = []
+    for p in reversed(pts):
+        while len(upper) >= 2 and cross(upper[-2], upper[-1], p) <= 0:
+            upper.pop()
+        upper.append(p)
+    return lower[:-1] + upper[:-1]
+
+
+def _inflate_convex(hull, margin):
+    """Offset each edge of a CCW convex polygon outward by `margin`; new vertices are
+    the intersections of consecutive offset edges."""
+    n = len(hull)
+    lines = []
+    for i in range(n):
+        a, b = hull[i], hull[(i + 1) % n]
+        dx, dy = b[0] - a[0], b[1] - a[1]
+        L = math.hypot(dx, dy) or 1.0
+        ux, uy = dx / L, dy / L
+        nx, ny = uy, -ux                           # outward normal (right of travel, CCW)
+        lines.append(((a[0] + nx * margin, a[1] + ny * margin), (ux, uy)))
+    out = []
+    for i in range(n):
+        (p1, d1), (p2, d2) = lines[(i - 1) % n], lines[i]
+        den = d1[0] * (-d2[1]) - d1[1] * (-d2[0])
+        if abs(den) < 1e-9:
+            out.append(p2)                         # parallel edges -> take the offset point
+        else:
+            t = ((p2[0] - p1[0]) * (-d2[1]) - (p2[1] - p1[1]) * (-d2[0])) / den
+            out.append((p1[0] + t * d1[0], p1[1] + t * d1[1]))
+    return out
+
+
+def fence_from_mission(points, margin_m=30.0):
+    """Inclusion geofence polygon around `points`: their convex hull inflated outward
+    by `margin_m` (a margin box when there are fewer than 3 non-collinear points). Every
+    point ends up inside with roughly margin_m of clearance -- a quick safety boundary."""
+    pts = [p for p in points if not (abs(p[0]) < 1e-9 and abs(p[1]) < 1e-9)]
+    if not pts:
+        return []
+    lat0, lon0 = pts[0]
+    pm = [_ll_to_m(la, lo, lat0, lon0) for la, lo in pts]
+    hull = _convex_hull(pm)
+    if len(hull) < 3:                              # 1-2 points or collinear -> margin box
+        xs = [x for x, _ in pm]
+        ys = [y for _, y in pm]
+        hull_m = [(min(xs) - margin_m, min(ys) - margin_m), (max(xs) + margin_m, min(ys) - margin_m),
+                  (max(xs) + margin_m, max(ys) + margin_m), (min(xs) - margin_m, max(ys) + margin_m)]
+    else:
+        hull_m = _inflate_convex(hull, margin_m)
+    return [_m_to_ll(x, y, lat0, lon0) for x, y in hull_m]
+
+
 class MissionProtocol(QObject):
     progress = Signal(str)          # human-readable step
     finished = Signal(bool, str)    # ok, message

@@ -28,7 +28,8 @@ import core
 import mavlink
 from vehicle import Vehicle
 from link import UdpLink, TcpLink, SerialLink, ReplayLink
-from mission import MissionProtocol, MissionItem, survey_grid, corridor_scan, structure_scan
+from mission import (MissionProtocol, MissionItem, survey_grid, corridor_scan,
+                     structure_scan, fence_from_mission)
 from params import ParamManager, ParamDialog
 from tlog import TlogWriter
 from logdownload import LogManager
@@ -587,10 +588,31 @@ class DroneDeck(QMainWindow):
         self._tools_menu = tools = self.menuBar().addMenu("&Tools")
         act_analyze = tools.addAction("Analyze Log...")
         act_analyze.triggered.connect(self._open_analyze)
+        act_fence = tools.addAction("Geofence from Mission")
+        act_fence.triggered.connect(self._fence_from_mission)
 
     def _open_analyze(self):
         from analyze import AnalyzeDialog
         AnalyzeDialog(self, LOG_DIR).exec()
+
+    def _fence_from_mission(self):
+        """Build an inclusion geofence (convex hull + margin) around the planned mission
+        and switch to Fence-incl mode so Upload sends it."""
+        pts = [(it.lat, it.lon) for it in self.mission_items
+               if not (abs(it.lat) < 1e-6 and abs(it.lon) < 1e-6)]
+        if len(pts) < 2:
+            QMessageBox.information(self, "Geofence from Mission",
+                                    "Plan at least 2 mission waypoints first.")
+            return
+        fence = fence_from_mission(pts, margin_m=float(self.fence_radius))
+        if len(fence) < 3:
+            return
+        self.fence_inc = fence
+        self.plan_type = "Fence incl"
+        self.plan_type_combo.setCurrentText("Fence incl")
+        self.map.set_fence_shapes(self.fence_inc, self.fence_exc, self.fence_circles)
+        self._on_info(f"geofence: {len(fence)}-vertex inclusion polygon "
+                      f"({self.fence_radius} m margin) -- press Upload to send")
 
     def _reset_layout(self):
         """Restore the default dock arrangement + the compact bottom row."""
