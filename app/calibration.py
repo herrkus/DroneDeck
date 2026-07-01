@@ -178,40 +178,26 @@ class SensorCalibrationWidget(QWidget):
         self.log.scrollToBottom()
 
 
-class SafetyWidget(QWidget):
-    """Vehicle-setup Safety page: reads + writes the autopilot's safety parameters
-    through the read-back-confirmed ParamManager. Autopilot-agnostic -- only the
-    parameters the vehicle actually reports are shown (PX4 and ArduPilot names)."""
+class ParamPage(QWidget):
+    """Base Vehicle-Setup page: reads + writes a fixed set of parameters through the
+    read-back-confirmed ParamManager. Autopilot-agnostic -- only the parameters the
+    vehicle actually reports are shown. Subclasses set PARAMS and NOUN."""
 
-    SAFETY_PARAMS = [
-        ("COM_DL_LOSS_T",   "PX4: datalink-loss timeout (s)"),
-        ("NAV_RCL_ACT",     "PX4: RC-loss action"),
-        ("NAV_DLL_ACT",     "PX4: datalink-loss action"),
-        ("COM_LOW_BAT_ACT", "PX4: low-battery action"),
-        ("GF_ACTION",       "PX4: geofence breach action"),
-        ("GF_MAX_HOR_DIST", "PX4: geofence max distance (m)"),
-        ("RTL_RETURN_ALT",  "PX4: RTL return altitude (m)"),
-        ("RTL_DESCEND_ALT", "PX4: RTL descend altitude (m)"),
-        ("COM_DISARM_LAND", "PX4: auto-disarm after land (s)"),
-        ("FS_THR_ENABLE",   "APM: throttle failsafe"),
-        ("FS_BATT_ENABLE",  "APM: battery failsafe"),
-        ("BATT_LOW_VOLT",   "APM: battery low voltage (V)"),
-        ("FENCE_ENABLE",    "APM: geofence enable"),
-        ("RTL_ALT",         "APM: RTL altitude (cm)"),
-    ]
+    PARAMS = []                           # [(param_name, label), ...]
+    NOUN = "parameters"
 
     def __init__(self, mgr, parent=None):
         super().__init__(parent)
         self.mgr = mgr
         self.rows = {}                    # name -> (QLabel, QLineEdit)
         lay = QVBoxLayout(self)
-        info = QLabel("Safety parameters the vehicle reports. Edit a value and Write; "
-                      "each write is confirmed by read-back (green = confirmed, red = failed).")
+        info = QLabel(f"{self.NOUN.capitalize()} parameters the vehicle reports. Edit a value "
+                      "and Write; each write is confirmed by read-back (green = ok, red = failed).")
         info.setWordWrap(True)
         info.setStyleSheet("color:#8a90a0;")
         lay.addWidget(info)
         self.form = QFormLayout()
-        for name, label in self.SAFETY_PARAMS:
+        for name, label in self.PARAMS:
             lbl, edit = QLabel(label), QLineEdit()
             edit.setPlaceholderText("—")
             self.form.addRow(lbl, edit)
@@ -234,8 +220,8 @@ class SafetyWidget(QWidget):
         self.mgr.set_result.connect(self._on_set_result)
 
     def refresh(self):
-        self.status.setText("requesting safety parameters...")
-        self.mgr.request([n for n, _ in self.SAFETY_PARAMS])
+        self.status.setText(f"requesting {self.NOUN} parameters...")
+        self.mgr.request([n for n, _ in self.PARAMS])
 
     def _on_value(self, name, val):
         if name in self.rows:
@@ -267,6 +253,46 @@ class SafetyWidget(QWidget):
             self.rows[name][1].setStyleSheet("color:#37d67a;" if ok else "color:#ff6b6b;")
 
 
+class SafetyWidget(ParamPage):
+    NOUN = "safety"
+    PARAMS = [
+        ("COM_DL_LOSS_T",   "PX4: datalink-loss timeout (s)"),
+        ("NAV_RCL_ACT",     "PX4: RC-loss action"),
+        ("NAV_DLL_ACT",     "PX4: datalink-loss action"),
+        ("COM_LOW_BAT_ACT", "PX4: low-battery action"),
+        ("GF_ACTION",       "PX4: geofence breach action"),
+        ("GF_MAX_HOR_DIST", "PX4: geofence max distance (m)"),
+        ("RTL_RETURN_ALT",  "PX4: RTL return altitude (m)"),
+        ("RTL_DESCEND_ALT", "PX4: RTL descend altitude (m)"),
+        ("COM_DISARM_LAND", "PX4: auto-disarm after land (s)"),
+        ("FS_THR_ENABLE",   "APM: throttle failsafe"),
+        ("FS_BATT_ENABLE",  "APM: battery failsafe"),
+        ("BATT_LOW_VOLT",   "APM: battery low voltage (V)"),
+        ("FENCE_ENABLE",    "APM: geofence enable"),
+        ("RTL_ALT",         "APM: RTL altitude (cm)"),
+    ]
+
+
+class PowerWidget(ParamPage):
+    NOUN = "power / battery"
+    PARAMS = [
+        ("BAT1_N_CELLS",     "PX4: battery cell count"),
+        ("BAT1_V_CHARGED",   "PX4: cell voltage full (V)"),
+        ("BAT1_V_EMPTY",     "PX4: cell voltage empty (V)"),
+        ("BAT1_CAPACITY",    "PX4: battery capacity (mAh)"),
+        ("BAT1_V_LOAD_DROP", "PX4: voltage drop per A (V)"),
+        ("BAT_N_CELLS",      "PX4: battery cell count"),
+        ("BAT_V_CHARGED",    "PX4: cell voltage full (V)"),
+        ("BAT_V_EMPTY",      "PX4: cell voltage empty (V)"),
+        ("BAT_CAPACITY",     "PX4: battery capacity (mAh)"),
+        ("BATT_MONITOR",     "APM: battery monitor type"),
+        ("BATT_CAPACITY",    "APM: battery capacity (mAh)"),
+        ("BATT_LOW_VOLT",    "APM: low battery voltage (V)"),
+        ("BATT_CRT_VOLT",    "APM: critical voltage (V)"),
+        ("BATT_NUM_CELLS",   "APM: cell count"),
+    ]
+
+
 class CalibrationDialog(QDialog):
     """Setup view: Radio + Sensors tabs, fed live from the link while open."""
 
@@ -283,7 +309,10 @@ class CalibrationDialog(QDialog):
         if param_mgr is not None:
             self.safety = SafetyWidget(param_mgr)
             tabs.addTab(self.safety, "Safety")
-            self.safety.refresh()          # auto-request the safety params on open
+            self.power = PowerWidget(param_mgr)
+            tabs.addTab(self.power, "Power")
+            self.safety.refresh()          # auto-request params on open
+            self.power.refresh()
         lay = QVBoxLayout(self)
         lay.addWidget(tabs)
         link = self._link()
