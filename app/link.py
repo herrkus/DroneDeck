@@ -150,6 +150,19 @@ class Link(QObject):
         self.send_command_long(target_sys, mavlink.MAV_CMD_DO_PAUSE_CONTINUE,
                                [1 if cont else 0, 0, 0, 0, 0, 0, 0])
 
+    def change_altitude(self, target_sys: int, lat: float, lon: float, alt: float):
+        # DO_REPOSITION to the current lat/lon at a new altitude above home. param2=1
+        # (MAV_DO_REPOSITION_FLAGS_CHANGE_MODE) tells PX4 to switch into guided
+        # reposition so it actually flies to the new altitude in place.
+        self.send_command_int(target_sys, mavlink.MAV_CMD_DO_REPOSITION,
+                              [-1.0, 1.0, 0.0, float("nan")],
+                              int(lat * 1e7), int(lon * 1e7), alt, frame=6)
+
+    def change_speed(self, target_sys: int, speed: float, speed_type: int = 1):
+        # DO_CHANGE_SPEED: type 1 = ground speed, param2 = m/s, param3 = -1 (no throttle change).
+        self.send_command_long(target_sys, mavlink.MAV_CMD_DO_CHANGE_SPEED,
+                               [float(speed_type), float(speed), -1.0, 0, 0, 0, 0])
+
     def request_data_streams(self, target_sys: int, autopilot: int = 0):
         """Ask the vehicle to stream telemetry. Real autopilots (ArduPilot especially)
         send almost nothing until requested, so this is what makes a freshly-connected

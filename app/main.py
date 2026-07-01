@@ -241,7 +241,9 @@ class DroneDeck(QMainWindow):
                 ("Takeoff", self._takeoff, "Arm if needed and climb to a set altitude  (Ctrl+T)"),
                 ("Land", self._land, "Land at the current position  (Ctrl+L)"),
                 ("RTL", self._rtl, "Return to launch and land  (Ctrl+R)"),
-                ("Pause", self._pause, "Hold / loiter in place  (Ctrl+Space)")):
+                ("Pause", self._pause, "Hold / loiter in place  (Ctrl+Space)"),
+                ("Alt", self._change_alt, "Fly to a new altitude at the current position"),
+                ("Speed", self._change_speed, "Set the cruise / ground speed (m/s)")):
             b = QPushButton(label)
             b.clicked.connect(slot)
             b.setToolTip(tip)
@@ -880,6 +882,26 @@ class DroneDeck(QMainWindow):
         if self._has_vehicle():
             self.link.pause(self._sysid(), cont=False)
             self._on_info("pause / hold position")
+
+    def _change_alt(self):
+        if not self._has_vehicle():
+            return
+        cur = round(self.vehicle.alt_rel) or 30
+        alt, ok = QInputDialog.getDouble(self, "Change Altitude",
+                                         "Altitude above home (m):", float(cur), 1.0, 1000.0, 1)
+        if ok:
+            self.link.change_altitude(self._sysid(), self.vehicle.lat, self.vehicle.lon, alt)
+            self._on_info(f"change altitude to {alt:.0f} m")
+
+    def _change_speed(self):
+        if not self._has_vehicle():
+            return
+        cur = round(self.vehicle.groundspeed, 1) or 5.0
+        spd, ok = QInputDialog.getDouble(self, "Change Speed",
+                                         "Ground speed (m/s):", float(cur), 0.5, 100.0, 1)
+        if ok:
+            self.link.change_speed(self._sysid(), spd)
+            self._on_info(f"change speed to {spd:.1f} m/s")
 
     def _on_map_click(self, lat, lon):
         if self.plan_mode:
