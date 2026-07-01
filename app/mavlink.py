@@ -650,12 +650,25 @@ def param_decode(raw_float, ptype):
     return raw_float
 
 
+def _int_range(fmt):
+    bits = struct.calcsize(fmt) * 8
+    if fmt[-1].isupper():                       # unsigned (B/H/I)
+        return 0, (1 << bits) - 1
+    return -(1 << (bits - 1)), (1 << (bits - 1)) - 1
+
+
 def param_encode(value, ptype):
     """Inverse of param_decode: pack an integer value's bits into the float32
     PARAM_SET slot (PX4). Floats pass straight through."""
     if ptype in _PARAM_INT_FMT:
         fmt, size = _PARAM_INT_FMT[ptype]
-        return struct.unpack("<f", (struct.pack(fmt, int(round(value))) + b"\x00" * 8)[:4])[0]
+        try:
+            iv = int(round(value))
+        except (ValueError, OverflowError, TypeError):
+            iv = 0                              # NaN/inf can't be an integer param -> 0
+        lo, hi = _int_range(fmt)
+        iv = max(lo, min(hi, iv))              # clamp so an out-of-range edit can't overflow struct.pack
+        return struct.unpack("<f", (struct.pack(fmt, iv) + b"\x00" * 8)[:4])[0]
     return float(value)
 
 
