@@ -527,6 +527,13 @@ class DroneDeck(QMainWindow):
         self._panels_menu = panels = view.addMenu("Panels")   # show/hide any dock (QGC-style)
         for d in self.findChildren(QDockWidget):
             panels.addAction(d.toggleViewAction())
+        self._tools_menu = tools = self.menuBar().addMenu("&Tools")
+        act_analyze = tools.addAction("Analyze Log...")
+        act_analyze.triggered.connect(self._open_analyze)
+
+    def _open_analyze(self):
+        from analyze import AnalyzeDialog
+        AnalyzeDialog(self, LOG_DIR).exec()
 
     def _reset_layout(self):
         """Restore the default dock arrangement + the compact bottom row."""
