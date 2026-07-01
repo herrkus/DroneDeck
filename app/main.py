@@ -329,7 +329,7 @@ class DroneDeck(QMainWindow):
         self.console = MessageConsole()
         self.console.setMinimumHeight(90)
         self.console.setMaximumHeight(170)
-        dock = QDockWidget("Messages", self)
+        self.msg_dock = dock = QDockWidget("Messages", self)
         dock.setObjectName("messages_dock")
         dock.setWidget(self.console)
         dock.setFeatures(QDockWidget.DockWidgetMovable | QDockWidget.DockWidgetFloatable)
@@ -410,9 +410,13 @@ class DroneDeck(QMainWindow):
 
         # detailed systems (battery / vibration / altitude), tabbed at the bottom
         self.systems = SystemsPanel()
-        sdock = QDockWidget("Systems", self)
+        sysscroll = QScrollArea()
+        sysscroll.setWidgetResizable(True)
+        sysscroll.setWidget(self.systems)
+        sysscroll.setFrameShape(QScrollArea.NoFrame)
+        self.sys_dock = sdock = QDockWidget("Systems", self)
         sdock.setObjectName("systems_dock")
-        sdock.setWidget(self.systems)
+        sdock.setWidget(sysscroll)
         sdock.setFeatures(QDockWidget.DockWidgetMovable | QDockWidget.DockWidgetFloatable)
         self.addDockWidget(Qt.BottomDockWidgetArea, sdock)
         self.tabifyDockWidget(ldock, sdock)
@@ -1158,6 +1162,16 @@ class DroneDeck(QMainWindow):
         self.charts.sample(ve)
 
     # -- settings persistence -------------------------------------------------
+    def _size_bottom_docks(self):
+        # bottom row (Messages / Systems / Telemetry ...) ~= 24% of the window height;
+        # the rest goes to the map + PFD. Both bottom columns are sized together.
+        h = max(self.height(), 700)
+        try:
+            self.resizeDocks([self.msg_dock, self.sys_dock],
+                             [int(h * 0.24), int(h * 0.24)], Qt.Vertical)
+        except Exception:
+            pass
+
     def load_settings(self):
         s = self.settings
         geo = s.value("win/geometry")
@@ -1166,6 +1180,9 @@ class DroneDeck(QMainWindow):
         st = s.value("win/state")
         if st is not None:
             self.restoreState(st)
+        # keep the bottom message/systems row compact so the map + instruments get the
+        # height; deferred so it runs after the window is shown (not undone by restore).
+        QTimer.singleShot(0, self._size_bottom_docks)
         tr = s.value("link/transport")
         if tr in ("UDP", "TCP", "Serial", "Replay"):
             self.transport_combo.setCurrentText(tr)
