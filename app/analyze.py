@@ -12,7 +12,7 @@ import bisect
 from PySide6.QtCore import Qt, QRectF, QPointF
 from PySide6.QtGui import QPainter, QColor, QPen, QFont, QPolygonF
 from PySide6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QPushButton, QLabel,
-                               QComboBox, QWidget, QFileDialog)
+                               QWidget, QFileDialog, QListWidget, QListWidgetItem)
 
 import mavlink
 import core
@@ -75,42 +75,50 @@ def series_to_csv(pts, label, unit):
     return "\n".join(rows) + "\n"
 
 
+_COLORS = ["#37c0ff", "#7CFC00", "#ffb000", "#ff7a50", "#c07cff", "#ff5db1", "#e8e8e8"]
+
+
 class LogPlot(QWidget):
-    """A single time-series plotted with axes, grid and min/max/last readouts."""
+    """One or more time-series over a shared time axis. A single series shows real Y
+    labels + a hover tooltip; multiple series are each normalised to 0..1 and drawn in
+    distinct colours with a legend whose values track the hover crosshair."""
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setMinimumHeight(260)
         self.setMouseTracking(True)                 # hover crosshair without a click
-        self.pts = []
-        self.label = ""
-        self.unit = ""
-        self.color = QColor("#37c0ff")
+        self.series = []                            # [(label, unit, [(t, v), ...])]
         self._cursor_t = None                       # time under the cursor, or None
         self._geo = None                            # (plot QRectF, t_lo, t_hi) for pixel<->time
 
-    def set_series(self, pts, label, unit):
-        self.pts = list(pts)
-        self.label = label
-        self.unit = unit
+    def set_series(self, pts, label, unit):         # single series (back-compat)
+        self.series = [(label, unit, list(pts))] if pts else []
         self._cursor_t = None
         self.update()
 
-    def value_at(self, t):
-        """Nearest (t, value) sample to time t, or None if empty."""
-        if not self.pts:
+    def set_multi(self, items):                     # items = [(label, unit, pts), ...]
+        self.series = [(l, u, list(p)) for (l, u, p) in items if p]
+        self._cursor_t = None
+        self.update()
+
+    @staticmethod
+    def _nearest(pts, t):
+        if not pts:
             return None
-        ts = [p[0] for p in self.pts]
+        ts = [p[0] for p in pts]
         i = bisect.bisect_left(ts, t)
         if i <= 0:
-            return self.pts[0]
-        if i >= len(self.pts):
-            return self.pts[-1]
-        a, b = self.pts[i - 1], self.pts[i]
+            return pts[0]
+        if i >= len(pts):
+            return pts[-1]
+        a, b = pts[i - 1], pts[i]
         return b if abs(b[0] - t) < abs(a[0] - t) else a
 
+    def value_at(self, t):                          # nearest sample of the first series
+        return self._nearest(self.series[0][2], t) if self.series else None
+
     def mouseMoveEvent(self, e):
-        if self._geo is None or len(self.pts) < 2:
+        if self._geo is None or not self.series:
             return
         plot, t_lo, t_hi = self._geo
         x = e.position().x()
@@ -122,6 +130,11 @@ class LogPlot(QWidget):
         self._cursor_t = None
         self.update()
 
+    def _time_span(self):
+        lo = min(s[2][0][0] for s in self.series)
+        hi = max(s[2][-1][0] for s in self.series)
+        return (lo, lo + 1.0) if hi - lo < 1e-6 else (lo, hi)
+
     def paintEvent(self, _):
         p = QPainter(self)
         p.setRenderHint(QPainter.Antialiasing)
@@ -132,26 +145,39 @@ class LogPlot(QWidget):
         plot = QRectF(L, T, max(1.0, w - L - R), max(1.0, h - T - B))
         p.setPen(QPen(QColor(60, 64, 72), 1))
         p.drawRect(plot)
-        if len(self.pts) < 2:
+        if not self.series or all(len(s[2]) < 2 for s in self.series):
             p.setPen(QColor(150, 156, 166))
-            p.drawText(self.rect(), Qt.AlignCenter, "open a .tlog and pick a field")
+            p.drawText(self.rect(), Qt.AlignCenter, "open a .tlog and tick one or more fields")
             p.end()
             return
-        ts = [t for t, _ in self.pts]
-        vs = [v for _, v in self.pts]
-        t_lo, t_hi = ts[0], ts[-1]
-        v_lo, v_hi = min(vs), max(vs)
-        if t_hi - t_lo < 1e-6:
-            t_hi = t_lo + 1.0
+        t_lo, t_hi = self._time_span()
         self._geo = (plot, t_lo, t_hi)              # let mouseMove map pixels back to time
+
+        def X(t):
+            return plot.left() + (t - t_lo) / (t_hi - t_lo) * plot.width()
+
+        for i in range(7):                          # vertical grid + time labels (shared)
+            gt = t_lo + (t_hi - t_lo) * i / 6.0
+            x = X(gt)
+            p.setPen(QPen(QColor(38, 41, 48), 1))
+            p.drawLine(int(x), int(plot.top()), int(x), int(plot.bottom()))
+            p.setPen(QColor(150, 156, 166))
+            p.drawText(QRectF(x - 26, plot.bottom() + 3, 52, 14), Qt.AlignCenter, f"{gt:.0f}s")
+        if len(self.series) == 1:
+            self._paint_single(p, plot, L, X)
+        else:
+            self._paint_multi(p, plot, L, X)
+        p.end()
+
+    def _paint_single(self, p, plot, L, X):
+        label, unit, pts = self.series[0]
+        vs = [v for _, v in pts]
+        v_lo, v_hi = min(vs), max(vs)
         if v_hi - v_lo < 1e-6:
             v_lo, v_hi = v_lo - 1.0, v_hi + 1.0
         pad = (v_hi - v_lo) * 0.08
         v_lo -= pad
         v_hi += pad
-
-        def X(t):
-            return plot.left() + (t - t_lo) / (t_hi - t_lo) * plot.width()
 
         def Y(v):
             return plot.bottom() - (v - v_lo) / (v_hi - v_lo) * plot.height()
@@ -163,25 +189,18 @@ class LogPlot(QWidget):
             p.drawLine(int(plot.left()), int(y), int(plot.right()), int(y))
             p.setPen(QColor(150, 156, 166))
             p.drawText(QRectF(0, y - 7, L - 6, 14), Qt.AlignRight | Qt.AlignVCenter, f"{gv:.6g}")
-        for i in range(7):                          # vertical grid + time labels
-            gt = t_lo + (t_hi - t_lo) * i / 6.0
-            x = X(gt)
-            p.setPen(QPen(QColor(38, 41, 48), 1))
-            p.drawLine(int(x), int(plot.top()), int(x), int(plot.bottom()))
-            p.setPen(QColor(150, 156, 166))
-            p.drawText(QRectF(x - 26, plot.bottom() + 3, 52, 14), Qt.AlignCenter, f"{gt:.0f}s")
         poly = QPolygonF()
-        for t, v in self.pts:
+        for t, v in pts:
             poly.append(QPointF(X(t), Y(v)))
-        p.setPen(QPen(self.color, 1.6))
+        p.setPen(QPen(QColor(_COLORS[0]), 1.6))
         p.drawPolyline(poly)
         p.setPen(QColor(210, 214, 220))
         p.drawText(QRectF(L, 2, plot.width(), 16), Qt.AlignLeft,
-                   f"{self.label}   min {min(vs):.6g}  max {max(vs):.6g}  last {vs[-1]:.6g} {self.unit}")
+                   f"{label}   min {min(vs):.6g}  max {max(vs):.6g}  last {vs[-1]:.6g} {unit}")
         p.setPen(QColor(120, 126, 136))
-        p.drawText(QRectF(L, 2, plot.width(), 16), Qt.AlignRight, f"{len(self.pts)} pts")
-        if self._cursor_t is not None:              # hover crosshair + value readout
-            samp = self.value_at(self._cursor_t)
+        p.drawText(QRectF(L, 2, plot.width(), 16), Qt.AlignRight, f"{len(pts)} pts")
+        if self._cursor_t is not None:              # hover crosshair + floating tooltip
+            samp = self._nearest(pts, self._cursor_t)
             if samp is not None:
                 cx, cy = X(samp[0]), Y(samp[1])
                 p.setPen(QPen(QColor(120, 126, 136), 1, Qt.DashLine))
@@ -189,27 +208,65 @@ class LogPlot(QWidget):
                 p.setPen(QPen(QColor(255, 210, 74), 1))
                 p.setBrush(QColor(255, 210, 74))
                 p.drawEllipse(QPointF(cx, cy), 3.0, 3.0)
-                txt = f"t={samp[0]:.2f}s  {samp[1]:.6g} {self.unit}"       # floating tooltip
+                txt = f"t={samp[0]:.2f}s  {samp[1]:.6g} {unit}"
                 tw = p.fontMetrics().horizontalAdvance(txt) + 10
                 tx = cx + 8 if cx < plot.right() - tw - 8 else cx - tw - 8
                 ty = max(plot.top() + 2.0, min(cy - 18.0, plot.bottom() - 18.0))
                 box = QRectF(tx, ty, tw, 15)
                 p.fillRect(box, QColor(20, 22, 27))
-                p.setBrush(Qt.NoBrush)                                     # else drawRect re-fills
+                p.setBrush(Qt.NoBrush)
                 p.setPen(QPen(QColor(90, 94, 102), 1))
                 p.drawRect(box)
                 p.setPen(QColor(255, 210, 74))
                 p.drawText(box.adjusted(5, 0, 0, 0), Qt.AlignVCenter | Qt.AlignLeft, txt)
-        p.end()
+
+    def _paint_multi(self, p, plot, L, X):
+        if self._cursor_t is not None:
+            cx = X(self._cursor_t)
+            p.setPen(QPen(QColor(120, 126, 136), 1, Qt.DashLine))
+            p.drawLine(int(cx), int(plot.top()), int(cx), int(plot.bottom()))
+        ly = 2                                        # legend rows stack down from the top
+        for k, (label, unit, pts) in enumerate(self.series):
+            col = QColor(_COLORS[k % len(_COLORS)])
+            vs = [v for _, v in pts]
+            lo, hi = min(vs), max(vs)
+            span = (hi - lo) or 1.0
+
+            def Y(v, lo=lo, span=span):               # normalise each series to ~0..1
+                return plot.bottom() - (0.02 + 0.96 * (v - lo) / span) * plot.height()
+
+            poly = QPolygonF()
+            for t, v in pts:
+                poly.append(QPointF(X(t), Y(v)))
+            p.setPen(QPen(col, 1.5))
+            p.drawPolyline(poly)
+            if self._cursor_t is not None:
+                samp = self._nearest(pts, self._cursor_t)
+                if samp is not None:
+                    p.setBrush(col)
+                    p.setPen(QPen(col, 1))
+                    p.drawEllipse(QPointF(X(samp[0]), Y(samp[1])), 3.0, 3.0)
+                    p.setBrush(Qt.NoBrush)
+                    txt = f"{label}: {samp[1]:.4g} {unit}"
+                else:
+                    txt = label
+            else:
+                txt = f"{label}: {lo:.4g}..{hi:.4g} {unit}"
+            p.fillRect(QRectF(L, ly + 3, 10, 8), col)   # colour swatch
+            p.setPen(QColor(210, 214, 220))
+            p.drawText(QRectF(L + 16, ly, plot.width() - 16, 14), Qt.AlignLeft, txt)
+            ly += 15
+        p.setPen(QColor(120, 126, 136))
+        p.drawText(QRectF(L, 2, plot.width(), 14), Qt.AlignRight, "each 0..1 normalised")
 
 
 class AnalyzeDialog(QDialog):
-    """Open a .tlog and plot a chosen numeric signal over the whole recording."""
+    """Open a .tlog and plot one or more numeric signals over the whole recording."""
 
     def __init__(self, parent=None, start_dir=None):
         super().__init__(parent)
         self.setWindowTitle("Analyze -- Log Plot")
-        self.resize(760, 460)
+        self.resize(820, 480)
         self._start_dir = start_dir or os.path.expanduser("~")
         self.series = {}
         self.units = {}
@@ -217,19 +274,22 @@ class AnalyzeDialog(QDialog):
         top = QHBoxLayout()
         self.btn_open = QPushButton("Open .tlog...")
         self.btn_open.clicked.connect(lambda: self.open_tlog())
-        self.combo = QComboBox()
-        self.combo.setMinimumWidth(200)
-        self.combo.currentTextChanged.connect(self._on_field)
         self.btn_csv = QPushButton("Export CSV...")
         self.btn_csv.clicked.connect(self._export_csv)
         top.addWidget(self.btn_open)
-        top.addWidget(QLabel("Field:"))
-        top.addWidget(self.combo, 1)
+        top.addWidget(QLabel("tick fields to overlay"))
+        top.addStretch(1)
         top.addWidget(self.btn_csv)
         lay.addLayout(top)
+        body = QHBoxLayout()
+        self.fieldlist = QListWidget()
+        self.fieldlist.setMaximumWidth(210)
+        self.fieldlist.itemChanged.connect(lambda _it: self._replot())
+        body.addWidget(self.fieldlist)
         self.plot = LogPlot()
-        lay.addWidget(self.plot, 1)
-        self.status = QLabel("open a recorded .tlog to plot a signal over time")
+        body.addWidget(self.plot, 1)
+        lay.addLayout(body, 1)
+        self.status = QLabel("open a recorded .tlog to plot signals over time")
         self.status.setStyleSheet("color:#8a90a0;")
         lay.addWidget(self.status)
 
@@ -247,27 +307,43 @@ class AnalyzeDialog(QDialog):
             return
         self.series, self.units = extract_series(records)
         ordered = [label for (_, _, label, _, _) in PLOTTABLE if self.series.get(label)]
-        self.combo.blockSignals(True)
-        self.combo.clear()
-        self.combo.addItems(ordered)
-        self.combo.blockSignals(False)
+        self.fieldlist.blockSignals(True)
+        self.fieldlist.clear()
+        for label in ordered:
+            it = QListWidgetItem(label)
+            it.setFlags(it.flags() | Qt.ItemIsUserCheckable)
+            it.setCheckState(Qt.Unchecked)
+            self.fieldlist.addItem(it)
+        if ordered:                                   # tick the first field by default
+            self.fieldlist.item(0).setCheckState(Qt.Checked)
+        self.fieldlist.blockSignals(False)
         base = os.path.basename(path)
         if ordered:
             self.status.setText(f"{base}: {len(records)} frames, {len(ordered)} plottable signals")
-            self.combo.setCurrentIndex(0)
-            self._on_field(ordered[0])
+            self._replot()
         else:
-            self.plot.set_series([], "", "")
+            self.plot.set_multi([])
             self.status.setText(f"{base}: {len(records)} frames, no plottable signals found")
 
-    def _on_field(self, label):
-        self.plot.set_series(self.series.get(label, []), label, self.units.get(label, ""))
+    def _checked(self):
+        return [self.fieldlist.item(i).text() for i in range(self.fieldlist.count())
+                if self.fieldlist.item(i).checkState() == Qt.Checked]
+
+    def _replot(self):
+        labels = self._checked()
+        self.plot.set_multi([(l, self.units.get(l, ""), self.series.get(l, [])) for l in labels])
+        if len(labels) > 1:
+            self.status.setText(f"overlaying {len(labels)} signals (each normalised 0..1)")
 
     def _export_csv(self):
-        label = self.combo.currentText()
+        labels = self._checked()
+        if not labels:
+            self.status.setText("tick a field to export")
+            return
+        label = labels[0]                             # export the first ticked signal
         pts = self.series.get(label)
         if not pts:
-            self.status.setText("no series selected to export")
+            self.status.setText("no data in the selected series")
             return
         stem = label.replace(" ", "_").replace("(", "").replace(")", "")
         default = os.path.join(self._start_dir, stem + ".csv")
