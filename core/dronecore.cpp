@@ -108,6 +108,7 @@ constexpr MsgInfo MSGS[] = {
     {230, 163, 42},  // ESTIMATOR_STATUS
     {231, 105, 40},  // WIND_COV
     { 36, 222, 21},  // SERVO_OUTPUT_RAW (servo9..16 are extensions: excluded from CRC)
+    {242, 104, 52},  // HOME_POSITION (time_usec is an extension: excluded from CRC)
     {265,  26, 20},  // MOUNT_ORIENTATION (yaw_absolute is an extension: excluded from CRC)
     {246, 184, 38},  // ADSB_VEHICLE
     {126, 194, 79},  // SERIAL_CONTROL (PX4 nsh shell passthrough)
@@ -207,6 +208,12 @@ void decode(uint32_t msgid, const uint8_t* pl, Decoded& d) {
         push(rd_u16(pl + 4)); push(rd_u16(pl + 6)); push(rd_u16(pl + 8)); push(rd_u16(pl + 10));
         push(rd_u16(pl + 12)); push(rd_u16(pl + 14)); push(rd_u16(pl + 16)); push(rd_u16(pl + 18));
         push(pl[20]);
+        break;
+    case 242: // HOME_POSITION: lat, lon, alt (int), x/y/z, q[4], approach_x/y/z (float)
+        push(rd_i32(pl + 0)); push(rd_i32(pl + 4)); push(rd_i32(pl + 8));
+        push(rd_f32(pl + 12)); push(rd_f32(pl + 16)); push(rd_f32(pl + 20));
+        push(rd_f32(pl + 24)); push(rd_f32(pl + 28)); push(rd_f32(pl + 32)); push(rd_f32(pl + 36));
+        push(rd_f32(pl + 40)); push(rd_f32(pl + 44)); push(rd_f32(pl + 48));
         break;
     case 265: // MOUNT_ORIENTATION: time_boot_ms, roll, pitch, yaw, yaw_absolute (deg)
         push(rd_u32(pl + 0));

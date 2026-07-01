@@ -160,6 +160,12 @@ NEW = {
     "SERVO_OUTPUT_RAW": (36, [("uint32_t", "time_usec", 0)]
                          + [("uint16_t", f"servo{i}_raw", 0) for i in range(1, 9)]
                          + [("uint8_t", "port", 0)]),
+    # time_usec is an extension -> excluded. q is float[4] (array length byte in the CRC).
+    # 3 int32 + 10 float base = 52 bytes. Computes 104.
+    "HOME_POSITION": (242, [("int32_t", "latitude", 0), ("int32_t", "longitude", 0),
+                            ("int32_t", "altitude", 0), ("float", "x", 0), ("float", "y", 0),
+                            ("float", "z", 0), ("float", "q", 4), ("float", "approach_x", 0),
+                            ("float", "approach_y", 0), ("float", "approach_z", 0)]),
 }
 
 if __name__ == "__main__":

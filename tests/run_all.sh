@@ -57,6 +57,8 @@ check "gimbal"              ""                        tests/test_gimbal.py
 check "gimbal (python)"     "DRONEDECK_FORCE_PYTHON=1" tests/test_gimbal.py
 check "servo"               ""                        tests/test_servo.py
 check "servo (python)"      "DRONEDECK_FORCE_PYTHON=1" tests/test_servo.py
+check "home"                ""                        tests/test_home.py
+check "home (python)"       "DRONEDECK_FORCE_PYTHON=1" tests/test_home.py
 check "windcompass"         ""                        tests/test_windcompass.py
 check "manual"              ""                        tests/test_manual.py
 check "camera"              ""                        tests/test_camera.py

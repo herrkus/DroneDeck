@@ -72,6 +72,7 @@ SERIAL_CONTROL_FLAG_RESPOND = 2
 SERIAL_CONTROL_FLAG_EXCLUSIVE = 4
 SERIAL_CONTROL_FLAG_MULTI = 16
 ADSB_VEHICLE = 246
+HOME_POSITION = 242          # authoritative home the autopilot uses for RTL (+ altitude)
 MOUNT_ORIENTATION = 265      # gimbal attitude report (roll/pitch/yaw deg)
 
 MSG_NAME = {
@@ -92,6 +93,7 @@ MSG_NAME = {
     ESTIMATOR_STATUS: "ESTIMATOR_STATUS",
     WIND_COV: "WIND_COV",
     MOUNT_ORIENTATION: "MOUNT_ORIENTATION",
+    HOME_POSITION: "HOME_POSITION",
     MANUAL_CONTROL: "MANUAL_CONTROL",
     COMMAND_INT: "COMMAND_INT",
     COMMAND_LONG: "COMMAND_LONG",
@@ -131,7 +133,7 @@ CRC_EXTRA = {
     MISSION_REQUEST_INT: 196, MISSION_ITEM_INT: 38, MANUAL_CONTROL: 243, RC_CHANNELS: 118,
     ALTITUDE: 47, BATTERY_STATUS: 154, VIBRATION: 90, RADIO_STATUS: 185,
     EKF_STATUS_REPORT: 71, ESTIMATOR_STATUS: 163, WIND_COV: 105, MOUNT_ORIENTATION: 26,
-    REQUEST_DATA_STREAM: 148,
+    HOME_POSITION: 104, REQUEST_DATA_STREAM: 148,
     LOG_REQUEST_LIST: 128, LOG_ENTRY: 56, LOG_REQUEST_DATA: 116,
     LOG_DATA: 134, LOG_REQUEST_END: 203, ADSB_VEHICLE: 184,
     SERIAL_CONTROL: 194,
@@ -162,6 +164,8 @@ FIELDS = {
     WIND_COV: ["time_usec", "wind_x", "wind_y", "wind_z", "var_horiz", "var_vert",
                "wind_alt", "horiz_accuracy", "vert_accuracy"],
     MOUNT_ORIENTATION: ["time_boot_ms", "roll", "pitch", "yaw", "yaw_absolute"],
+    HOME_POSITION: ["latitude", "longitude", "altitude", "x", "y", "z",
+                    "q0", "q1", "q2", "q3", "approach_x", "approach_y", "approach_z"],
     BATTERY_STATUS: (["current_consumed", "energy_consumed", "temperature"]
                      + [f"voltage{i}" for i in range(1, 11)]
                      + ["current_battery", "id", "battery_function", "type", "battery_remaining"]),
@@ -730,6 +734,9 @@ _WIRE = {
                 "wind_alt", "horiz_accuracy", "vert_accuracy"], 40),
     MOUNT_ORIENTATION: ("<I4f",
                         ["time_boot_ms", "roll", "pitch", "yaw", "yaw_absolute"], 20),
+    HOME_POSITION: ("<3i10f",
+                    ["latitude", "longitude", "altitude", "x", "y", "z",
+                     "q0", "q1", "q2", "q3", "approach_x", "approach_y", "approach_z"], 52),
     BATTERY_STATUS: ("<iih10HhBBBb",
                      ["current_consumed", "energy_consumed", "temperature"]
                      + [f"voltage{i}" for i in range(1, 11)]

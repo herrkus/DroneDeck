@@ -1808,6 +1808,8 @@ class DroneDeck(QMainWindow):
             d = haversine(ve.lat, ve.lon, ve.home[0], ve.home[1])
             nav["home_dist"] = _fmt_dist(d)
             nav["home_eta"] = _fmt_mmss(d / ve.groundspeed) if ve.groundspeed > 0.4 else "--"
+        if ve.home_alt is not None:
+            nav["home_alt"] = f"{ve.home_alt:.0f} m"
         if ve.have_position and self.mission_items:
             n = len(self.mission_items)
             cw = ve.current_wp

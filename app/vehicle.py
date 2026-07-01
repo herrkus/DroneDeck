@@ -107,7 +107,9 @@ class Vehicle(QObject):
         self.last_ack = None        # (command, result)
         # bookkeeping
         self.have_position = False
-        self.home = None            # (lat, lon)
+        self.home = None            # (lat, lon) -- first fix, or authoritative HOME_POSITION
+        self.home_alt = None        # m AMSL, from HOME_POSITION
+        self.have_home_position = False   # True once the autopilot reports HOME_POSITION
         self.trail = []             # [(lat, lon), ...]
         self.distance_traveled = 0.0   # m, cumulative ground track since connect (odometer)
         self._odo_pos = None           # last position counted toward the odometer
@@ -312,6 +314,14 @@ class Vehicle(QObject):
         self.sensors_enabled = int(f.get("onboard_enabled", 0))
         self.sensors_health = int(f.get("onboard_health", 0))
 
+    def _on_home_position(self, f):
+        lat = f.get("latitude", 0) / 1e7
+        lon = f.get("longitude", 0) / 1e7
+        if abs(lat) > 1e-6 or abs(lon) > 1e-6:
+            self.home = (lat, lon)              # authoritative RTL home overrides the first-fix guess
+        self.home_alt = f.get("altitude", 0) / 1000.0     # mm AMSL -> m
+        self.have_home_position = True
+
     def _on_gps_raw(self, f):
         self.fix_type = int(f.get("fix_type", 0))
         self.satellites = int(f.get("satellites_visible", 0))
@@ -341,6 +351,7 @@ class Vehicle(QObject):
         mavlink.WIND_COV: _on_wind_cov,
         mavlink.MOUNT_ORIENTATION: _on_mount_orientation,
         mavlink.SERVO_OUTPUT_RAW: _on_servo_output_raw,
+        mavlink.HOME_POSITION: _on_home_position,
         mavlink.BATTERY_STATUS: _on_battery_status,
         mavlink.RADIO_STATUS: _on_radio_status,
         mavlink.RC_CHANNELS: _on_rc_channels,
