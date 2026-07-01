@@ -207,7 +207,14 @@ class DroneDeck(QMainWindow):
         zout = QPushButton("-"); zout.setFixedWidth(32)
         zin.clicked.connect(lambda: self.map.set_zoom(self.map.zoom + 1))
         zout.clicked.connect(lambda: self.map.set_zoom(self.map.zoom - 1))
+        zin.setToolTip("Zoom in  (+)")
+        zout.setToolTip("Zoom out  (-)")
         tb.addWidget(zout); tb.addWidget(zin)
+        tb.addSeparator()
+        self.btn_help = QPushButton("?")
+        self.btn_help.setFixedWidth(30)
+        self.btn_help.clicked.connect(self._show_help)
+        tb.addWidget(self.btn_help)
 
         # second toolbar row: flight controls
         self.addToolBarBreak()
@@ -223,10 +230,14 @@ class DroneDeck(QMainWindow):
         tb2.addWidget(self.mode_combo)
         tb2.addSeparator()
         self._flight_btns = []
-        for label, slot in (("Takeoff", self._takeoff), ("Land", self._land),
-                            ("RTL", self._rtl), ("Pause", self._pause)):
+        for label, slot, tip in (
+                ("Takeoff", self._takeoff, "Arm if needed and climb to a set altitude  (Ctrl+T)"),
+                ("Land", self._land, "Land at the current position  (Ctrl+L)"),
+                ("RTL", self._rtl, "Return to launch and land  (Ctrl+R)"),
+                ("Pause", self._pause, "Hold / loiter in place  (Ctrl+Space)")):
             b = QPushButton(label)
             b.clicked.connect(slot)
+            b.setToolTip(tip)
             tb2.addWidget(b)
             self._flight_btns.append(b)
         tb2.addSeparator()
@@ -273,6 +284,8 @@ class DroneDeck(QMainWindow):
         self.mission_status = QLabel("no mission")
         self.mission_status.setStyleSheet("color:#8a90a0;")
         tb3.addWidget(self.mission_status)
+
+        self._setup_usability()   # tooltips + keyboard shortcuts (all toolbar widgets exist now)
 
         # central layout: map | (instruments over telemetry)
         self.map = MapView()
@@ -1169,6 +1182,64 @@ class DroneDeck(QMainWindow):
         self.charts.sample(ve)
 
     # -- settings persistence -------------------------------------------------
+    def _setup_usability(self):
+        # Tooltips: hover any control to learn what it does (and its shortcut).
+        self.btn_conn.setToolTip("Connect / disconnect the current link  (Ctrl+K)")
+        self.btn_links.setToolTip("Manage saved comm links (UDP / TCP / serial)")
+        self.btn_cal.setToolTip("Vehicle setup: radio + sensor calibration")
+        self.btn_arm.setToolTip("Arm the vehicle  (Ctrl+Shift+A)")
+        self.btn_disarm.setToolTip("Disarm the vehicle  (Ctrl+Shift+D)")
+        self.btn_params.setToolTip("Download, search and edit parameters  (Ctrl+P)")
+        self.btn_record.setToolTip("Record telemetry to a .tlog file for replay")
+        self.btn_help.setToolTip("Keyboard shortcuts & quick help  (F1)")
+        self.chk_follow.setToolTip("Keep the map centred on the vehicle  (F)")
+        self.transport_combo.setToolTip("Link type: UDP / TCP / Serial / Replay a .tlog")
+        self.link_edit.setToolTip("UDP port, TCP host:port, serial port:baud, or .tlog path")
+        self.vehicle_combo.setToolTip("Select which vehicle to control")
+        self.mode_combo.setToolTip("Set the flight mode")
+        self.btn_joystick.setToolTip("On-screen thumbsticks + WASD/arrows stream MANUAL_CONTROL  (J)")
+        self.btn_plan.setToolTip("Plan mode: click the map to add mission waypoints")
+        # Keyboard shortcuts for the common actions.
+        from PySide6.QtGui import QKeySequence, QShortcut
+        def sc(seq, fn):
+            s = QShortcut(QKeySequence(seq), self)
+            s.activated.connect(fn)
+        sc("Ctrl+K", self._toggle_conn)
+        sc("Ctrl+Shift+A", lambda: self._arm(True))
+        sc("Ctrl+Shift+D", lambda: self._arm(False))
+        sc("Ctrl+T", self._takeoff)
+        sc("Ctrl+L", self._land)
+        sc("Ctrl+R", self._rtl)
+        sc("Ctrl+Space", self._pause)
+        sc("Ctrl+P", self._open_params)
+        sc("F", self.chk_follow.toggle)
+        sc("J", self.btn_joystick.toggle)
+        sc("+", lambda: self.map.set_zoom(self.map.zoom + 1))
+        sc("=", lambda: self.map.set_zoom(self.map.zoom + 1))
+        sc("-", lambda: self.map.set_zoom(self.map.zoom - 1))
+        sc("F1", self._show_help)
+
+    def _show_help(self):
+        html = (
+            "<h3>DroneDeck &mdash; Quick Help</h3>"
+            "<p><b>Connect:</b> choose a Link type (UDP / TCP / Serial), set the target, "
+            "then Connect. A drone over Wi-Fi/UDP uses port 14550; a telemetry radio uses "
+            "Serial, e.g. <tt>/dev/ttyUSB0:57600</tt>.</p>"
+            "<p><b>Fly:</b> pick a Mode, Arm, then Takeoff. Click the map to Goto. "
+            "Use Land / RTL / Pause as needed.</p>"
+            "<table cellpadding='4'>"
+            "<tr><td><b>Ctrl+K</b></td><td>connect / disconnect</td>"
+            "<td><b>Ctrl+Shift+A/D</b></td><td>arm / disarm</td></tr>"
+            "<tr><td><b>Ctrl+T</b></td><td>takeoff</td><td><b>Ctrl+L</b></td><td>land</td></tr>"
+            "<tr><td><b>Ctrl+R</b></td><td>return to launch</td>"
+            "<td><b>Ctrl+Space</b></td><td>pause / hold</td></tr>"
+            "<tr><td><b>F</b></td><td>follow vehicle</td><td><b>J</b></td><td>joystick</td></tr>"
+            "<tr><td><b>+ / &minus;</b></td><td>zoom map</td>"
+            "<td><b>Ctrl+P</b></td><td>parameters</td></tr>"
+            "<tr><td><b>F1</b></td><td>this help</td><td></td><td></td></tr>"
+            "</table>")
+        QMessageBox.information(self, "DroneDeck Help", html)
+
     def resizeEvent(self, e):
         super().resizeEvent(e)
         # The window is shown small and the WM maximizes it a moment later, so wait for
