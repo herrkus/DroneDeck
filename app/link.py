@@ -463,7 +463,7 @@ class ReplayLink(Link):
 
     def open(self, path="", speed=1.0, **kw) -> bool:
         self.close()
-        from tlog import read_tlog
+        from tlog import read_tlog, replay_schedule
         try:
             self._records = read_tlog(str(path))
         except OSError as e:
@@ -479,7 +479,8 @@ class ReplayLink(Link):
         self._open = True
         self._speed = max(0.1, float(speed))
         self._i = 0
-        self._t0 = self._records[0][0]
+        # clamp non-monotonic / corrupt timestamps so a single bad frame can't stall playback
+        self._sched = replay_schedule(self._records)
         self._wall0 = time.monotonic()
         self._tick = QTimer(self)
         self._tick.setInterval(20)
@@ -493,8 +494,8 @@ class ReplayLink(Link):
         elapsed_us = (time.monotonic() - self._wall0) * 1e6 * self._speed
         batch = []
         while self._i < len(self._records):
-            t_us, fr = self._records[self._i]
-            if (t_us - self._t0) > elapsed_us:
+            _t_us, fr = self._records[self._i]
+            if self._sched[self._i] > elapsed_us:
                 break
             self.rx_bytes += len(fr)
             batch.extend(self.parser.feed(fr))

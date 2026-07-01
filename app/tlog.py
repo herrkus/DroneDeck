@@ -38,6 +38,26 @@ class TlogWriter:
             pass
 
 
+def replay_schedule(records, max_gap_us=10_000_000):
+    """Virtual playback offsets (microseconds from start) derived from a .tlog's raw timestamps,
+    made monotonic with each inter-frame gap clamped to [0, max_gap_us]. Recorded timestamps can be
+    non-monotonic or corrupt (a truncated/edited log can hold a backwards jump or an absurd value
+    like 1e18 us ~= 31000 years); scheduling playback directly off `t_us - t0` would then let a
+    single bad frame never come 'due', stalling replay forever. Clamping makes a bad timestamp cost
+    at most one `max_gap_us` hiccup while preserving the original cadence of well-formed logs."""
+    sched = []
+    virt = 0
+    prev = records[0][0] if records else 0
+    for t_us, _fr in records:
+        dt = t_us - prev
+        if dt < 0 or dt > max_gap_us:
+            dt = 0 if dt < 0 else max_gap_us
+        virt += dt
+        sched.append(virt)
+        prev = t_us
+    return sched
+
+
 def read_tlog(path):
     """Parse a .tlog into a list of (timestamp_us, frame_bytes), in file order."""
     with open(path, "rb") as f:

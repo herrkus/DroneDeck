@@ -44,6 +44,7 @@ check "fence_rally"         ""                        tests/test_fence_rally.py
 check "fence_shapes"        ""                        tests/test_fence_shapes.py
 check "params"              ""                        tests/test_params.py
 check "tlog"                ""                        tests/test_tlog.py
+check "tlogreplay"          ""                        tests/test_tlogreplay.py
 check "analyze"             ""                        tests/test_analyze.py
 check "planfile"            ""                        tests/test_planfile.py
 check "planload"            ""                        tests/test_planload.py
