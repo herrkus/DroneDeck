@@ -7,6 +7,7 @@ the GCS understands is available here too.
 """
 from __future__ import annotations
 import os
+import bisect
 
 from PySide6.QtCore import Qt, QRectF, QPointF
 from PySide6.QtGui import QPainter, QColor, QPen, QFont, QPolygonF
@@ -65,21 +66,60 @@ def extract_series(records):
     return series, units
 
 
+def series_to_csv(pts, label, unit):
+    """Render one (t, value) series as CSV text: a header row + time_s,value rows."""
+    head = f"time_s,{label} ({unit})" if unit else f"time_s,{label}"
+    rows = [head]
+    for t, v in pts:
+        rows.append(f"{t:.6f},{v:.9g}")
+    return "\n".join(rows) + "\n"
+
+
 class LogPlot(QWidget):
     """A single time-series plotted with axes, grid and min/max/last readouts."""
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setMinimumHeight(260)
+        self.setMouseTracking(True)                 # hover crosshair without a click
         self.pts = []
         self.label = ""
         self.unit = ""
         self.color = QColor("#37c0ff")
+        self._cursor_t = None                       # time under the cursor, or None
+        self._geo = None                            # (plot QRectF, t_lo, t_hi) for pixel<->time
 
     def set_series(self, pts, label, unit):
         self.pts = list(pts)
         self.label = label
         self.unit = unit
+        self._cursor_t = None
+        self.update()
+
+    def value_at(self, t):
+        """Nearest (t, value) sample to time t, or None if empty."""
+        if not self.pts:
+            return None
+        ts = [p[0] for p in self.pts]
+        i = bisect.bisect_left(ts, t)
+        if i <= 0:
+            return self.pts[0]
+        if i >= len(self.pts):
+            return self.pts[-1]
+        a, b = self.pts[i - 1], self.pts[i]
+        return b if abs(b[0] - t) < abs(a[0] - t) else a
+
+    def mouseMoveEvent(self, e):
+        if self._geo is None or len(self.pts) < 2:
+            return
+        plot, t_lo, t_hi = self._geo
+        x = e.position().x()
+        self._cursor_t = (t_lo + (x - plot.left()) / plot.width() * (t_hi - t_lo)
+                          if plot.left() <= x <= plot.right() else None)
+        self.update()
+
+    def leaveEvent(self, _):
+        self._cursor_t = None
         self.update()
 
     def paintEvent(self, _):
@@ -103,6 +143,7 @@ class LogPlot(QWidget):
         v_lo, v_hi = min(vs), max(vs)
         if t_hi - t_lo < 1e-6:
             t_hi = t_lo + 1.0
+        self._geo = (plot, t_lo, t_hi)              # let mouseMove map pixels back to time
         if v_hi - v_lo < 1e-6:
             v_lo, v_hi = v_lo - 1.0, v_hi + 1.0
         pad = (v_hi - v_lo) * 0.08
@@ -139,6 +180,26 @@ class LogPlot(QWidget):
                    f"{self.label}   min {min(vs):.6g}  max {max(vs):.6g}  last {vs[-1]:.6g} {self.unit}")
         p.setPen(QColor(120, 126, 136))
         p.drawText(QRectF(L, 2, plot.width(), 16), Qt.AlignRight, f"{len(self.pts)} pts")
+        if self._cursor_t is not None:              # hover crosshair + value readout
+            samp = self.value_at(self._cursor_t)
+            if samp is not None:
+                cx, cy = X(samp[0]), Y(samp[1])
+                p.setPen(QPen(QColor(120, 126, 136), 1, Qt.DashLine))
+                p.drawLine(int(cx), int(plot.top()), int(cx), int(plot.bottom()))
+                p.setPen(QPen(QColor(255, 210, 74), 1))
+                p.setBrush(QColor(255, 210, 74))
+                p.drawEllipse(QPointF(cx, cy), 3.0, 3.0)
+                txt = f"t={samp[0]:.2f}s  {samp[1]:.6g} {self.unit}"       # floating tooltip
+                tw = p.fontMetrics().horizontalAdvance(txt) + 10
+                tx = cx + 8 if cx < plot.right() - tw - 8 else cx - tw - 8
+                ty = max(plot.top() + 2.0, min(cy - 18.0, plot.bottom() - 18.0))
+                box = QRectF(tx, ty, tw, 15)
+                p.fillRect(box, QColor(20, 22, 27))
+                p.setBrush(Qt.NoBrush)                                     # else drawRect re-fills
+                p.setPen(QPen(QColor(90, 94, 102), 1))
+                p.drawRect(box)
+                p.setPen(QColor(255, 210, 74))
+                p.drawText(box.adjusted(5, 0, 0, 0), Qt.AlignVCenter | Qt.AlignLeft, txt)
         p.end()
 
 
@@ -159,9 +220,12 @@ class AnalyzeDialog(QDialog):
         self.combo = QComboBox()
         self.combo.setMinimumWidth(200)
         self.combo.currentTextChanged.connect(self._on_field)
+        self.btn_csv = QPushButton("Export CSV...")
+        self.btn_csv.clicked.connect(self._export_csv)
         top.addWidget(self.btn_open)
         top.addWidget(QLabel("Field:"))
         top.addWidget(self.combo, 1)
+        top.addWidget(self.btn_csv)
         lay.addLayout(top)
         self.plot = LogPlot()
         lay.addWidget(self.plot, 1)
@@ -198,3 +262,22 @@ class AnalyzeDialog(QDialog):
 
     def _on_field(self, label):
         self.plot.set_series(self.series.get(label, []), label, self.units.get(label, ""))
+
+    def _export_csv(self):
+        label = self.combo.currentText()
+        pts = self.series.get(label)
+        if not pts:
+            self.status.setText("no series selected to export")
+            return
+        stem = label.replace(" ", "_").replace("(", "").replace(")", "")
+        default = os.path.join(self._start_dir, stem + ".csv")
+        path, _ = QFileDialog.getSaveFileName(self, "Export series as CSV", default, "CSV (*.csv)")
+        if not path:
+            return
+        try:
+            with open(path, "w") as f:
+                f.write(series_to_csv(pts, label, self.units.get(label, "")))
+        except OSError as e:
+            self.status.setText(f"export failed: {e}")
+            return
+        self.status.setText(f"exported {len(pts)} rows to {os.path.basename(path)}")
