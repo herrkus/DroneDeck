@@ -778,7 +778,7 @@ class DroneDeck(QMainWindow):
             return
         alt, ok = QInputDialog.getDouble(self, "Takeoff", "Altitude (m):", 30.0, 1.0, 1000.0, 1)
         if ok:
-            self.link.takeoff(self._sysid(), alt)
+            self.link.takeoff(self._sysid(), alt, self.vehicle.lat, self.vehicle.lon)
             self._on_info(f"takeoff to {alt:.0f} m")
 
     def _land(self):

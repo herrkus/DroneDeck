@@ -404,7 +404,12 @@ def main():
                             elif m.msgid == mavlink.COMMAND_INT:
                                 cmd = int(m.fields.get("command", 0))
                                 send(mavlink.COMMAND_ACK, mavlink.enc_command_ack(cmd, 0))
-                                if cmd == mavlink.MAV_CMD_DO_SET_HOME:
+                                if cmd == mavlink.MAV_CMD_NAV_TAKEOFF:
+                                    armed = True
+                                    mode = GUIDED
+                                    guided_target = (lat, lon, float(m.fields.get("z", 30) or 30))
+                                    send(mavlink.STATUSTEXT, mavlink.enc_statustext(5, "Taking off"))
+                                elif cmd == mavlink.MAV_CMD_DO_SET_HOME:
                                     send(mavlink.STATUSTEXT, mavlink.enc_statustext(6, "Home position set"))
                                 elif cmd == mavlink.MAV_CMD_DO_ORBIT:
                                     send(mavlink.STATUSTEXT, mavlink.enc_statustext(

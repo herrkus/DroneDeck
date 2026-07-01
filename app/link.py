@@ -131,8 +131,12 @@ class Link(QObject):
         self.send_command_long(target_sys, mavlink.MAV_CMD_DO_SET_MODE,
                                [mavlink.MAV_MODE_FLAG_CUSTOM_MODE_ENABLED, custom_mode, 0, 0, 0, 0, 0])
 
-    def takeoff(self, target_sys: int, alt: float):
-        self.send_command_long(target_sys, mavlink.MAV_CMD_NAV_TAKEOFF, [0, 0, 0, 0, 0, 0, alt])
+    def takeoff(self, target_sys: int, alt: float, lat: float = 0.0, lon: float = 0.0):
+        # COMMAND_INT + GLOBAL_RELATIVE_ALT so `alt` is metres above the launch point.
+        # A COMMAND_LONG NAV_TAKEOFF carries absolute AMSL, which PX4 reads as below
+        # ground and refuses to climb -- verified against real PX4 SITL.
+        self.send_command_int(target_sys, mavlink.MAV_CMD_NAV_TAKEOFF, [0, 0, 0, 0],
+                              int(lat * 1e7), int(lon * 1e7), alt, frame=6)
 
     def land(self, target_sys: int):
         self.send_command_long(target_sys, mavlink.MAV_CMD_NAV_LAND, [0, 0, 0, 0, 0, 0, 0])
