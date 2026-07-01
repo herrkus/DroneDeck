@@ -6,7 +6,31 @@ it). It depends on nothing native, so it can be used as a reference encoder by
 the test telemetry source without the compiled core.
 """
 from __future__ import annotations
+import math
 import struct
+
+_I32_MIN, _I32_MAX = -2147483648, 2147483647
+
+
+def _deg_e7(deg):
+    """Degrees -> 1e7-scaled int32 for the wire (lat/lon fields). A hand-edited/corrupt .plan or a
+    generated mission can present a coordinate that is non-finite or out of range, and int(deg*1e7)
+    then either raises (NaN) or overflows struct's signed 'i' (|deg| > ~214.75 deg) -- crashing the
+    send. Sanitise NaN/Inf -> 0 and clamp to the int32 range (any real lat/lon is well inside)."""
+    if not math.isfinite(deg):
+        return 0
+    return max(_I32_MIN, min(_I32_MAX, int(deg * 1e7)))
+
+
+def _clamp_i32(v):
+    """Clamp an already-scaled integer coordinate to signed int32 (same overflow guard as _deg_e7,
+    for encoders handed a pre-scaled x/y)."""
+    try:
+        if not math.isfinite(v):        # int(inf) -> OverflowError, int(nan) -> ValueError
+            return 0
+        return max(_I32_MIN, min(_I32_MAX, int(v)))
+    except (ValueError, TypeError, OverflowError):
+        return 0
 
 # --- message ids ------------------------------------------------------------
 HEARTBEAT = 0
@@ -561,7 +585,7 @@ def enc_adsb_vehicle(icao, lat, lon, alt_mm, heading_cdeg, callsign="", emitter_
 
 def enc_command_int(command, params4, x, y, z, target_system=1, target_component=1, frame=6):
     p = [float(v) for v in (list(params4) + [0.0] * 4)[:4]]
-    return struct.pack("<ffffiifHBBBBB", p[0], p[1], p[2], p[3], int(x), int(y), float(z),
+    return struct.pack("<ffffiifHBBBBB", p[0], p[1], p[2], p[3], _clamp_i32(x), _clamp_i32(y), float(z),
                        int(command) & 0xFFFF, target_system & 0xFF, target_component & 0xFF,
                        frame & 0xFF, 0, 0)
 
@@ -585,7 +609,7 @@ def enc_set_position_target_global_int(lat_deg, lon_deg, alt_rel,
                                        frame=MAV_FRAME_GLOBAL_RELATIVE_ALT_INT,
                                        target_system=1, target_component=1, time_boot_ms=0):
     return struct.pack("<Iii" + "f" * 9 + "HBBB",
-                       time_boot_ms & 0xFFFFFFFF, int(lat_deg * 1e7), int(lon_deg * 1e7),
+                       time_boot_ms & 0xFFFFFFFF, _deg_e7(lat_deg), _deg_e7(lon_deg),
                        float(alt_rel), 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
                        type_mask & 0xFFFF, target_system & 0xFF, target_component & 0xFF,
                        frame & 0xFF)
@@ -683,7 +707,7 @@ def enc_mission_item_int(seq, lat_deg, lon_deg, alt, command=MAV_CMD_NAV_WAYPOIN
                          target_system=1, target_component=1, mission_type=0):
     return struct.pack("<ffffiifHHBBBBBB",
                        float(param1), float(param2), float(param3), float(param4),
-                       int(lat_deg * 1e7), int(lon_deg * 1e7), float(alt),
+                       _deg_e7(lat_deg), _deg_e7(lon_deg), float(alt),
                        int(seq) & 0xFFFF, int(command) & 0xFFFF,
                        target_system & 0xFF, target_component & 0xFF,
                        frame & 0xFF, current & 0xFF, autocontinue & 0xFF, mission_type & 0xFF)

@@ -103,6 +103,7 @@ check "missionack"          ""                        tests/test_missionack.py
 check "px4warn"             ""                        tests/test_px4warn.py
 check "about"               ""                        tests/test_about.py
 check "gpxexport"           ""                        tests/test_gpxexport.py
+check "exportfuzz"          ""                        tests/test_exportfuzz.py
 check "copycoords"          ""                        tests/test_copycoords.py
 check "confirm"             ""                        tests/test_confirm.py
 check "windcompass"         ""                        tests/test_windcompass.py

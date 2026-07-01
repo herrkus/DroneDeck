@@ -77,7 +77,11 @@ def trail_to_gpx(points, name="DroneDeck flight track"):
             '<gpx version="1.1" creator="DroneDeck" '
             'xmlns="http://www.topografix.com/GPX/1/1">\n'
             f'  <trk><name>{escape(str(name))}</name><trkseg>\n')
-    body = "".join(f'    <trkpt lat="{la:.7f}" lon="{lo:.7f}"></trkpt>\n' for la, lo in points)
+    # skip non-finite points: f"{nan:.7f}" == 'nan', which is not valid GPX decimal and makes mapping
+    # tools reject the whole file. The trail is normally int-derived (finite), but a replayed/edited
+    # source could carry NaN/Inf -- never emit a malformed track.
+    body = "".join(f'    <trkpt lat="{la:.7f}" lon="{lo:.7f}"></trkpt>\n'
+                   for la, lo in points if math.isfinite(la) and math.isfinite(lo))
     return head + body + '  </trkseg></trk>\n</gpx>\n'
 
 
