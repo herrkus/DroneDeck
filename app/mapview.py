@@ -48,7 +48,8 @@ def num2deg(x, y, z):
 
 class MapView(QWidget):
     clicked = Signal(float, float)            # map click -> (lat, lon)
-    contextAction = Signal(str, float, float)  # right-click action -> (action, lat, lon)
+    contextAction = Signal(str, float, float)  # right-click empty map -> (action, lat, lon)
+    wpAction = Signal(str, int)               # right-click a waypoint -> (action, wp_index)
     waypoint_selected = Signal(int)           # a planned waypoint was clicked
     waypoint_moved = Signal(int, float, float)  # waypoint dragged -> (index, lat, lon)
 
@@ -435,12 +436,20 @@ class MapView(QWidget):
             self.clicked.emit(la, lo)
 
     def contextMenuEvent(self, e):
-        la, lo = self._px_to_ll(e.pos().x(), e.pos().y())
         menu = QMenu(self)
-        for label, key in (("Go to here", "goto"), ("Orbit here", "orbit"),
-                           ("Point camera here (ROI)", "roi"), ("Set home here", "sethome")):
-            act = menu.addAction(label)
-            act.triggered.connect(lambda _=False, k=key: self.contextAction.emit(k, la, lo))
+        idx = self._nearest_wp(e.pos())
+        if idx >= 0:                           # right-clicked a planned waypoint -> edit it
+            for label, key in (("Edit waypoint...", "edit"),
+                               ("Insert waypoint before", "insert_before"),
+                               ("Delete waypoint", "delete")):
+                act = menu.addAction(label)
+                act.triggered.connect(lambda _=False, k=key, i=idx: self.wpAction.emit(k, i))
+        else:                                  # empty map -> guided/flight actions
+            la, lo = self._px_to_ll(e.pos().x(), e.pos().y())
+            for label, key in (("Go to here", "goto"), ("Orbit here", "orbit"),
+                               ("Point camera here (ROI)", "roi"), ("Set home here", "sethome")):
+                act = menu.addAction(label)
+                act.triggered.connect(lambda _=False, k=key: self.contextAction.emit(k, la, lo))
         menu.exec(e.globalPos())
 
     def mouseDoubleClickEvent(self, _):

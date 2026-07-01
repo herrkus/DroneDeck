@@ -608,6 +608,7 @@ class DroneDeck(QMainWindow):
         self.vehicle.command_ack.connect(self._on_command_ack)
         self.map.clicked.connect(self._on_map_click)
         self.map.contextAction.connect(self._on_map_context)
+        self.map.wpAction.connect(self._on_wp_action)
         self.map.waypoint_selected.connect(self._wp_selected)
         self.map.waypoint_moved.connect(self._wp_moved)
         self.mission.progress.connect(self._on_mission_progress)
@@ -1196,6 +1197,32 @@ class DroneDeck(QMainWindow):
         if dlg.exec() == QDialog.Accepted:
             dlg.apply_to(self.mission_items[i])
             self._update_wp_row(i)
+
+    def _on_wp_action(self, action, idx):
+        """Right-click-a-waypoint actions from the map: edit / insert-before / delete."""
+        if not (0 <= idx < len(self.mission_items)):
+            return
+        if action == "edit":
+            self.mission_list.setCurrentRow(idx)
+            self._wp_edit()
+        elif action == "delete":
+            del self.mission_items[idx]
+            self._renumber()
+            self._refresh_mission_view()
+            self.mission_list.setCurrentRow(min(idx, len(self.mission_items) - 1))
+            self._on_info(f"deleted WP {idx}")
+        elif action == "insert_before":
+            cur = self.mission_items[idx]
+            if idx > 0:                            # drop the new point on the mid of the leg
+                prev = self.mission_items[idx - 1]
+                la, lo = (prev.lat + cur.lat) / 2.0, (prev.lon + cur.lon) / 2.0
+            else:
+                la, lo = cur.lat, cur.lon
+            self.mission_items.insert(idx, MissionItem(idx, la, lo, cur.alt))
+            self._renumber()
+            self._refresh_mission_view()
+            self.mission_list.setCurrentRow(idx)
+            self._on_info(f"inserted WP before {idx + 1}")
 
     def _survey(self):
         if len(self.mission_items) < 2:
