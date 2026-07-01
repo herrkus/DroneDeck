@@ -47,7 +47,7 @@ class MissionItem:
         return {16: "WAYPOINT", 22: "TAKEOFF", 21: "LAND", 20: "RTL",
                 17: "LOITER_UNLIM", 19: "LOITER_TIME", 82: "SPLINE_WP",
                 195: "ROI", 197: "ROI_NONE", 178: "CHANGE_SPEED",
-                177: "JUMP"}.get(self.command,
+                177: "JUMP", 189: "LAND_START"}.get(self.command,
                                                                             f"CMD{self.command}")
 
 
@@ -247,7 +247,7 @@ def validate_mission(items):
     if not items:
         return warns
     NAV_TAKEOFF, NAV_LAND, RTL, DO_JUMP = 22, 21, 20, 177
-    DO_CMDS = {177, 178, 195, 197}                  # jump, change-speed, ROI, clear-ROI
+    DO_CMDS = {177, 178, 195, 197, 189}             # jump, speed, ROI, clear-ROI, land-start
     nav = [it for it in items if it.command not in DO_CMDS and it.command != RTL]
 
     if nav and nav[0].command != NAV_TAKEOFF:
