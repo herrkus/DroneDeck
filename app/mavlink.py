@@ -77,6 +77,7 @@ HOME_POSITION = 242          # authoritative home the autopilot uses for RTL (+ 
 EXTENDED_SYS_STATE = 245     # landed_state (ground/air/takeoff/landing) + vtol_state
 MOUNT_ORIENTATION = 265      # gimbal attitude report (roll/pitch/yaw deg)
 ESC_STATUS = 291             # per-ESC rpm / voltage / current (banks of 4 from 'index')
+TIME_ESTIMATE_TO_TARGET = 380  # autopilot's own time estimates: RTL / land / mission (s)
 
 MSG_NAME = {
     HEARTBEAT: "HEARTBEAT",
@@ -100,6 +101,7 @@ MSG_NAME = {
     EXTENDED_SYS_STATE: "EXTENDED_SYS_STATE",
     AUTOPILOT_VERSION: "AUTOPILOT_VERSION",
     ESC_STATUS: "ESC_STATUS",
+    TIME_ESTIMATE_TO_TARGET: "TIME_ESTIMATE_TO_TARGET",
     MANUAL_CONTROL: "MANUAL_CONTROL",
     COMMAND_INT: "COMMAND_INT",
     COMMAND_LONG: "COMMAND_LONG",
@@ -140,7 +142,7 @@ CRC_EXTRA = {
     ALTITUDE: 47, BATTERY_STATUS: 154, VIBRATION: 90, RADIO_STATUS: 185,
     EKF_STATUS_REPORT: 71, ESTIMATOR_STATUS: 163, WIND_COV: 105, MOUNT_ORIENTATION: 26,
     HOME_POSITION: 104, EXTENDED_SYS_STATE: 130, AUTOPILOT_VERSION: 178,
-    ESC_STATUS: 10, REQUEST_DATA_STREAM: 148,
+    ESC_STATUS: 10, TIME_ESTIMATE_TO_TARGET: 232, REQUEST_DATA_STREAM: 148,
     LOG_REQUEST_LIST: 128, LOG_ENTRY: 56, LOG_REQUEST_DATA: 116,
     LOG_DATA: 134, LOG_REQUEST_END: 203, ADSB_VEHICLE: 184,
     SERIAL_CONTROL: 194,
@@ -177,6 +179,8 @@ FIELDS = {
                  + [f"voltage{i}" for i in range(1, 5)]
                  + [f"current{i}" for i in range(1, 5)] + ["index"]),
     EXTENDED_SYS_STATE: ["vtol_state", "landed_state"],
+    TIME_ESTIMATE_TO_TARGET: ["safe_return", "land", "mission_next_item",
+                              "mission_end", "commanded_action"],
     AUTOPILOT_VERSION: (["capabilities", "flight_sw_version", "middleware_sw_version",
                          "os_sw_version", "board_version", "vendor_id", "product_id"]
                         + [f"fcv{i}" for i in range(8)]),
@@ -780,6 +784,8 @@ _WIRE = {
                  + [f"voltage{i}" for i in range(1, 5)]
                  + [f"current{i}" for i in range(1, 5)] + ["index"], 57),
     EXTENDED_SYS_STATE: ("<2B", ["vtol_state", "landed_state"], 2),
+    TIME_ESTIMATE_TO_TARGET: ("<5i", ["safe_return", "land", "mission_next_item",
+                                      "mission_end", "commanded_action"], 20),
     # uid (u64) + middleware/os custom versions skipped: uid loses precision as a double and
     # none are needed. CRC (178) is still over the full 60-byte payload.
     AUTOPILOT_VERSION: ("<Q8x4I2H8B16x",

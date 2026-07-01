@@ -173,6 +173,11 @@ NEW = {
                          ("uint8_t", "index", 0)]),
     # two uint8 in declaration order, no extensions. Computes 130.
     "EXTENDED_SYS_STATE": (245, [("uint8_t", "vtol_state", 0), ("uint8_t", "landed_state", 0)]),
+    # five int32 seconds, no extensions. Computes 232.
+    "TIME_ESTIMATE_TO_TARGET": (380, [("int32_t", "safe_return", 0), ("int32_t", "land", 0),
+                                      ("int32_t", "mission_next_item", 0),
+                                      ("int32_t", "mission_end", 0),
+                                      ("int32_t", "commanded_action", 0)]),
     # uid2 (uint8[18]) is an extension -> excluded. Three uint8[8] custom-version arrays keep
     # their length byte in the CRC. Computes 178.
     "AUTOPILOT_VERSION": (148, [("uint64_t", "capabilities", 0), ("uint64_t", "uid", 0),

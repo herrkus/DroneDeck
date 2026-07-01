@@ -1876,6 +1876,11 @@ class DroneDeck(QMainWindow):
             nav["home_eta"] = _fmt_mmss(d / ve.groundspeed) if ve.groundspeed > 0.4 else "--"
         if ve.home_alt is not None:
             nav["home_alt"] = f"{ve.home_alt:.0f} m"
+        if ve.have_time_estimate:                    # autopilot's own estimates (>=0 valid, -1 n/a)
+            if ve.eta_safe_return >= 0:
+                nav["rtl_time"] = _fmt_mmss(ve.eta_safe_return)
+            if ve.eta_mission_end >= 0:
+                nav["mission_eta"] = _fmt_mmss(ve.eta_mission_end)
         if ve.have_position and self.mission_items:
             n = len(self.mission_items)
             cw = ve.current_wp

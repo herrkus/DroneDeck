@@ -113,6 +113,7 @@ constexpr MsgInfo MSGS[] = {
     {148, 178, 60},  // AUTOPILOT_VERSION (uid + custom versions skipped; CRC over full 60)
     {265,  26, 20},  // MOUNT_ORIENTATION (yaw_absolute is an extension: excluded from CRC)
     {291,  10, 57},  // ESC_STATUS (rpm/voltage/current x4 + index)
+    {380, 232, 20},  // TIME_ESTIMATE_TO_TARGET (safe_return/land/mission_next/mission_end/cmd, s)
     {246, 184, 38},  // ADSB_VEHICLE
     {126, 194, 79},  // SERIAL_CONTROL (PX4 nsh shell passthrough)
 };
@@ -227,6 +228,10 @@ void decode(uint32_t msgid, const uint8_t* pl, Decoded& d) {
         push(rd_f32(pl + 12)); push(rd_f32(pl + 16)); push(rd_f32(pl + 20));
         push(rd_f32(pl + 24)); push(rd_f32(pl + 28)); push(rd_f32(pl + 32)); push(rd_f32(pl + 36));
         push(rd_f32(pl + 40)); push(rd_f32(pl + 44)); push(rd_f32(pl + 48));
+        break;
+    case 380: // TIME_ESTIMATE_TO_TARGET: safe_return, land, mission_next, mission_end, cmd (s)
+        push(rd_i32(pl + 0)); push(rd_i32(pl + 4)); push(rd_i32(pl + 8));
+        push(rd_i32(pl + 12)); push(rd_i32(pl + 16));
         break;
     case 291: // ESC_STATUS: time_usec, rpm[4], voltage[4], current[4], index
         push(rd_u64(pl + 0));

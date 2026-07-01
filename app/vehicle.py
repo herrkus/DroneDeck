@@ -95,6 +95,11 @@ class Vehicle(QObject):
         self.product_id = 0
         self.capabilities = 0
         self.have_autopilot_version = False
+        # autopilot time estimates (TIME_ESTIMATE_TO_TARGET), seconds; -1 = n/a
+        self.eta_safe_return = -1
+        self.eta_land = -1
+        self.eta_mission_end = -1
+        self.have_time_estimate = False
         # flight state (EXTENDED_SYS_STATE)
         self.landed_state = 0       # 1=on ground, 2=in air, 3=takeoff, 4=landing
         self.vtol_state = 0         # 1=->FW, 2=->MC, 3=MC, 4=FW
@@ -312,6 +317,12 @@ class Vehicle(QObject):
         self.fw_git = git.hex() if any(git) else ""
         self.have_autopilot_version = True
 
+    def _on_time_estimate(self, f):
+        self.eta_safe_return = int(f.get("safe_return", -1))
+        self.eta_land = int(f.get("land", -1))
+        self.eta_mission_end = int(f.get("mission_end", -1))
+        self.have_time_estimate = True
+
     def _on_extended_sys_state(self, f):
         self.landed_state = int(f.get("landed_state", 0))
         self.vtol_state = int(f.get("vtol_state", 0))
@@ -395,6 +406,7 @@ class Vehicle(QObject):
         mavlink.SERVO_OUTPUT_RAW: _on_servo_output_raw,
         mavlink.ESC_STATUS: _on_esc_status,
         mavlink.EXTENDED_SYS_STATE: _on_extended_sys_state,
+        mavlink.TIME_ESTIMATE_TO_TARGET: _on_time_estimate,
         mavlink.AUTOPILOT_VERSION: _on_autopilot_version,
         mavlink.HOME_POSITION: _on_home_position,
         mavlink.BATTERY_STATUS: _on_battery_status,
