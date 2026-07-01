@@ -78,4 +78,36 @@ notes.clear()
 at(48.0, 9.0)
 assert not notes
 
-print("GEOFENCE PASSED")
+# -- adversarial robustness (iter111): _check_geofence runs EVERY _refresh, so a crash here kills the
+# app mid-flight. The block above proves correctness; this proves it never crashes on junk input. -----
+import math
+import time
+
+# degenerate inclusion polygons (0 / 1 / 2 vertices) -> _point_in_poly returns False (n<3), no div0
+for f in ([], [(47.0, 8.0)], [(47.0, 8.0), (47.01, 8.01)]):
+    win.fence_inc, win.fence_exc, win.fence_circles = f, [], []
+    win._fence_breached = False
+    at(47.0, 8.0)                                             # must not raise
+
+# NaN/inf fence vertices and NaN/inf circle radius -> comparisons just evaluate False, no crash
+NAN, INF = float("nan"), float("inf")
+win.fence_inc = [(NAN, 8.0), (47.0, INF), (47.01, 8.01), (NAN, NAN)]
+win.fence_exc = []
+win.fence_circles = [{"lat": NAN, "lon": 8.0, "radius": INF, "incl": True},
+                     {"lat": 47.0, "lon": 8.0, "radius": NAN, "incl": False}]
+at(47.0, 8.0)                                                 # must not raise
+
+# NaN/inf vehicle position with a fence set -> no crash, no false breach
+win.fence_inc = [(46.99, 7.99), (46.99, 8.01), (47.01, 8.01), (47.01, 7.99)]
+win.fence_circles = []
+for bad in ((NAN, NAN), (INF, -INF)):
+    at(*bad)                                                  # must not raise
+
+# a 20k-vertex fence stays fast (linear) -- no pathological per-refresh cost
+big = [(47.0 + 0.01 * math.sin(t / 1000.0), 8.0 + 0.01 * math.cos(t / 1000.0)) for t in range(20000)]
+win.fence_inc, win.fence_circles = big, []
+t0 = time.monotonic()
+at(47.0, 8.0)
+assert time.monotonic() - t0 < 0.5, "20k-vertex fence check too slow"
+
+print("GEOFENCE PASSED (+ iter111: degenerate/NaN fences + NaN position safe, 20k-vertex fast)")
