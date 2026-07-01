@@ -66,6 +66,24 @@ def bearing(lat1, lon1, lat2, lon2):
     return math.degrees(math.atan2(y, x)) % 360.0
 
 
+def _point_in_poly(pt, poly):
+    """Ray-casting point-in-polygon. pt=(lat, lon), poly=[(lat, lon), ...]. Treats lat/lon
+    as planar, which is fine over geofence-sized areas."""
+    n = len(poly)
+    if n < 3:
+        return False
+    x, y = pt[1], pt[0]                 # lon = x, lat = y
+    inside = False
+    j = n - 1
+    for i in range(n):
+        xi, yi = poly[i][1], poly[i][0]
+        xj, yj = poly[j][1], poly[j][0]
+        if (yi > y) != (yj > y) and x < (xj - xi) * (y - yi) / (yj - yi) + xi:
+            inside = not inside
+        j = i
+    return inside
+
+
 def _fmt_dist(d):
     return f"{d:6.0f} m" if d < 10000 else f"{d / 1000:6.2f} km"
 
@@ -229,6 +247,7 @@ class DroneDeck(QMainWindow):
         self._arm_t0 = None
         self._flight_time = 0.0
         self._failsafe_prev = {}                # sysid -> last MAV_STATE (failsafe edge detect)
+        self._fence_breached = False            # geofence breach edge detect
 
         # mission planning state
         self.plan_mode = False
@@ -1700,6 +1719,29 @@ class DroneDeck(QMainWindow):
             rows.append((t.get("callsign") or "--", f"{icao:06X}", alt_s, dist_s, brg_s))
         self.traffic_panel.set_rows(rows)
 
+    def _check_geofence(self, ve):
+        """One-shot warning when the vehicle crosses OUT of an inclusion fence or INTO an
+        exclusion fence (polygon or circle). Edge-detected: fires once on breach and re-arms
+        when the vehicle returns to safe airspace."""
+        if not ve.have_position:
+            return
+        breaches = []
+        if self.fence_inc and not _point_in_poly((ve.lat, ve.lon), self.fence_inc):
+            breaches.append("left inclusion area")
+        if self.fence_exc and _point_in_poly((ve.lat, ve.lon), self.fence_exc):
+            breaches.append("entered exclusion area")
+        for c in self.fence_circles:
+            d = haversine(ve.lat, ve.lon, c["lat"], c["lon"])
+            if c.get("incl", True) and d > c["radius"]:
+                breaches.append(f"left inclusion circle ({d:.0f}>{c['radius']:.0f} m)")
+            elif not c.get("incl", True) and d < c["radius"]:
+                breaches.append(f"entered exclusion circle ({d:.0f}<{c['radius']:.0f} m)")
+        now = bool(breaches)
+        if now and not self._fence_breached:
+            self.console.add_note("GEOFENCE BREACH: " + "; ".join(breaches), "#e05050")
+            self._notify("GEOFENCE BREACH", "#e05050")
+        self._fence_breached = now
+
     def _check_failsafe(self, ve):
         """Raise a one-shot console note + toast when a vehicle transitions INTO a
         Critical/Emergency (or worse) MAV_STATE. Fires once per entry into the failsafe
@@ -1719,6 +1761,7 @@ class DroneDeck(QMainWindow):
     def _refresh(self):
         ve = self.vehicle
         self._check_failsafe(ve)
+        self._check_geofence(ve)
         self.adi.set_data(ve.roll, ve.pitch, ve.airspeed or ve.groundspeed,
                           ve.alt_rel, ve.heading, ve.climb)
         self.compass.set_heading(ve.heading)
