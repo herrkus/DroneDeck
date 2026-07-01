@@ -2270,7 +2270,7 @@ class DroneDeck(QMainWindow):
             self.link_edit.setText(str(tgt))
         try:
             lat, lon = s.value("map/lat", type=float), s.value("map/lon", type=float)
-            if lat and lon:
+            if lat and lon and math.isfinite(lat) and math.isfinite(lon):
                 self.map.center = (lat, lon)
             z = s.value("map/zoom", type=int)
             if z:
@@ -2282,7 +2282,11 @@ class DroneDeck(QMainWindow):
         except (TypeError, ValueError):
             pass
         self.chk_follow.setChecked(s.value("map/follow", True, type=bool))
-        self._takeoff_alt = s.value("flight/takeoff_alt", 25.0, type=float)
+        # validate the persisted takeoff altitude against the takeoff dialog's own 1..1000 m range:
+        # a corrupt setting coerces to nan/inf (type=float doesn't raise on 'nan') or to 0.0 (junk
+        # string) -- neither should seed the dialog default or be re-saved
+        ta = s.value("flight/takeoff_alt", 25.0, type=float)
+        self._takeoff_alt = ta if (math.isfinite(ta) and 1.0 <= ta <= 1000.0) else 25.0
         raw = s.value("links/configs")
         if raw:
             try:
