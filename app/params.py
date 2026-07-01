@@ -15,7 +15,7 @@ from PySide6.QtCore import QObject, Signal, QTimer, Qt
 from PySide6.QtGui import QFont, QColor
 from PySide6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLineEdit, QPushButton,
                                QLabel, QTableWidget, QTableWidgetItem, QHeaderView, QProgressBar,
-                               QFileDialog)
+                               QFileDialog, QMessageBox)
 
 import mavlink
 
@@ -208,11 +208,16 @@ class ParamDialog(QDialog):
         self.btn_load = QPushButton("Load...")
         self.btn_load.setToolTip("Load a .params file and write changed values to the vehicle")
         self.btn_load.clicked.connect(self._load_file)
+        self.btn_compare = QPushButton("Compare...")
+        self.btn_compare.setToolTip("Compare a .params file against the vehicle -- shows "
+                                    "differences without writing anything")
+        self.btn_compare.clicked.connect(self._compare_file)
         top.addWidget(self.search, 1)
         top.addWidget(self.btn_refresh)
         top.addWidget(self.btn_write)
         top.addWidget(self.btn_save)
         top.addWidget(self.btn_load)
+        top.addWidget(self.btn_compare)
         lay.addLayout(top)
 
         self.table = QTableWidget(0, 2)
@@ -354,6 +359,61 @@ class ParamDialog(QDialog):
             path += ".params"
         n = self.save_params_to(path)
         self.status.setText(f"saved {n} parameters to {os.path.basename(path)}")
+
+    @staticmethod
+    def diff_params(current, type_of, loaded):
+        """Compare a loaded {name: value} file against the vehicle's current values. Returns
+        (changed, missing): `changed` is a sorted list of (name, vehicle_value, file_value) for
+        params present on the vehicle whose value differs (type-aware, same test as a write would
+        use); `missing` is a sorted list of names in the file the vehicle does not have. Pure --
+        writes nothing."""
+        changed, missing = [], []
+        for name in sorted(loaded):
+            fval = loaded[name]
+            if name not in current:
+                missing.append(name)
+            elif not ParamManager._values_match(
+                    current[name], fval, type_of.get(name, mavlink.MAV_PARAM_TYPE_REAL32)):
+                changed.append((name, current[name], fval))
+        return changed, missing
+
+    def _compare_file(self):
+        path, _ = QFileDialog.getOpenFileName(self, "Compare parameters", os.path.expanduser("~"),
+                                              "Parameters (*.params);;All files (*)")
+        if not path:
+            return
+        loaded = self.load_params_from(path)
+        if not loaded:
+            self.status.setText("no parameters found in that file")
+            return
+        if not self.mgr.values:
+            self.status.setText(f"parsed {len(loaded)} params -- Refresh the vehicle to compare")
+            return
+        changed, missing = self.diff_params(self.mgr.values, self.mgr.type_of, loaded)
+        base = os.path.basename(path)
+        if not changed and not missing:
+            QMessageBox.information(self, "Compare parameters",
+                                   f"No differences: the vehicle matches {base} "
+                                   f"({len(loaded)} params checked).")
+            self.status.setText(f"compared {base}: identical")
+            return
+        lines = []
+        if changed:
+            lines.append(f"{len(changed)} parameter(s) differ (vehicle -> file):")
+            for name, cur, fval in changed:
+                lines.append(f"  {name}\t{cur:g}\t->\t{fval:g}")
+        if missing:
+            lines.append("")
+            lines.append(f"{len(missing)} param(s) in file not on this vehicle:")
+            lines.extend(f"  {n}" for n in missing)
+        box = QMessageBox(self)
+        box.setWindowTitle("Compare parameters")
+        box.setIcon(QMessageBox.Information)
+        box.setText(f"{base}: {len(changed)} differ, {len(missing)} missing on vehicle. "
+                    "Nothing was written -- use Load to apply.")
+        box.setDetailedText("\n".join(lines))
+        box.exec()
+        self.status.setText(f"compared {base}: {len(changed)} differ, {len(missing)} missing")
 
     def _load_file(self):
         path, _ = QFileDialog.getOpenFileName(self, "Load parameters", os.path.expanduser("~"),
