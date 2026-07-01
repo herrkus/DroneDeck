@@ -1,7 +1,18 @@
 """panels.py -- text telemetry readouts grouped like a GCS sidebar."""
 from __future__ import annotations
 
+import math
 import time
+
+
+def _num(x, fmt, suffix=""):
+    """Format a telemetry float, or '--' if it is NaN/Inf. Autopilots emit non-finite speeds,
+    climb and vibration during init / before the estimator converges -- showing 'nan m/s' to a
+    pilot is worse than showing nothing."""
+    try:
+        return format(x, fmt) + suffix if math.isfinite(x) else "--"
+    except (TypeError, ValueError):
+        return "--"
 
 from PySide6.QtCore import Qt, QRectF, QPointF, Signal
 from PySide6.QtGui import QFont, QColor, QPainter, QPen, QTextCursor
@@ -167,18 +178,18 @@ class TelemetryPanel(QWidget):
         self._set("alt_msl", f"{ve.alt_msl:7.1f} m")
         self._set("alt_rel", f"{ve.alt_rel:7.1f} m")
 
-        self._set("gspeed", f"{ve.groundspeed:5.1f} m/s")
-        self._set("aspeed", f"{ve.airspeed:5.1f} m/s")
-        self._set("climb", f"{ve.climb:+5.1f} m/s")
+        self._set("gspeed", _num(ve.groundspeed, "5.1f", " m/s"))
+        self._set("aspeed", _num(ve.airspeed, "5.1f", " m/s"))
+        self._set("climb", _num(ve.climb, "+5.1f", " m/s"))
         self._set("throttle", f"{ve.throttle} %")
         self._set("hdg", f"{ve.heading:5.1f} deg")
         if ve.have_wind:
             self._set("wind", f"{ve.wind_speed():4.1f} m/s from {ve.wind_dir():3.0f} deg")
         else:
             self._set("wind", "--")
-        if ve.have_vibration:
+        vpk = max(ve.vibration) if ve.have_vibration else None
+        if vpk is not None and math.isfinite(vpk):
             # peak axis vibration; PX4 rule of thumb: <30 good, 30-60 caution, >60 bad
-            vpk = max(ve.vibration)
             self._set("vibe", f"{vpk:4.1f} m/s2",
                       "#37d67a" if vpk < 30 else "#e0a030" if vpk < 60 else "#e05050")
         else:

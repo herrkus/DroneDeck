@@ -17,6 +17,16 @@ YELLOW = QColor(255, 206, 0)
 LINE = QColor(245, 245, 245)
 
 
+def _finite(x, default=0.0):
+    """Sanitise a telemetry float before it reaches a QPainter. Real autopilots emit NaN/Inf --
+    e.g. attitude and heading before the estimator converges -- and NaN coordinates or an int(NaN)
+    inside a paintEvent SEGFAULT Qt, hard-crashing the app. Clamp them to a safe default here."""
+    try:
+        return x if math.isfinite(x) else default
+    except (TypeError, ValueError):
+        return default
+
+
 class AttitudeIndicator(QWidget):
     """Primary flight display: artificial horizon with airspeed/altitude tapes,
     a vertical-speed indicator and a heading strip -- QGroundControl style."""
@@ -35,12 +45,13 @@ class AttitudeIndicator(QWidget):
         return QSize(300, 220)
 
     def set_attitude(self, roll, pitch):
-        self.roll, self.pitch = roll, pitch
+        self.roll, self.pitch = _finite(roll), _finite(pitch)
         self.update()
 
     def set_data(self, roll, pitch, airspeed, alt, heading, climb):
-        self.roll, self.pitch = roll, pitch
-        self.airspeed, self.alt, self.heading, self.climb = airspeed, alt, heading, climb
+        self.roll, self.pitch = _finite(roll), _finite(pitch)
+        self.airspeed, self.alt = _finite(airspeed), _finite(alt)
+        self.heading, self.climb = _finite(heading), _finite(climb)
         self.update()
 
     def paintEvent(self, _):
@@ -213,17 +224,17 @@ class Compass(QWidget):
         return QSize(200, 200)
 
     def set_heading(self, hdg):
-        self.heading = hdg % 360.0
+        self.heading = _finite(hdg) % 360.0
         self.update()
 
     def set_wind(self, speed, direction, have=True):
-        self.wind_speed = speed
-        self.wind_dir = direction % 360.0
+        self.wind_speed = _finite(speed)
+        self.wind_dir = _finite(direction) % 360.0
         self.have_wind = have
         self.update()
 
     def set_home_bearing(self, bearing, have=True):
-        self.home_bearing = bearing % 360.0
+        self.home_bearing = _finite(bearing) % 360.0
         self.have_home = have
         self.update()
 
