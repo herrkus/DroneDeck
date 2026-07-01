@@ -1730,6 +1730,14 @@ class DroneDeck(QMainWindow):
                     "Preflight: " + ("ready to arm" if ready else "; ".join(reasons)))
             else:
                 self.status_strip.setToolTip("")
+            # flight-phase chip -- only when meaningful (armed, or airborne/transitioning),
+            # so a disarmed-on-ground vehicle isn't cluttered by a redundant "ON GROUND"
+            if ve.have_ext_state and (armed or ve.landed_state in (2, 3, 4)):
+                fs = {1: ("ON GROUND", GREY, LIGHT), 2: ("FLYING", GREEN, GREEN),
+                      3: ("TAKING OFF", AMBER, AMBER),
+                      4: ("LANDING", AMBER, AMBER)}.get(ve.landed_state)
+                if fs:
+                    chips.append(fs)
             chips.append((ve.mode, TEAL, LIGHT))
             chips.append((f"GPS {ve.fix_text} · {ve.satellites}",
                           GREEN if ve.fix_type >= 3 else AMBER, LIGHT))
