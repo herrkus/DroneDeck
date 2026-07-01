@@ -151,6 +151,10 @@ NEW = {
         ("float", "afx", 0), ("float", "afy", 0), ("float", "afz", 0), ("float", "yaw", 0),
         ("float", "yaw_rate", 0), ("uint16_t", "type_mask", 0), ("uint8_t", "target_system", 0),
         ("uint8_t", "target_component", 0), ("uint8_t", "coordinate_frame", 0)]),
+    # yaw_absolute is a MAVLink extension field -> excluded from the CRC (still sent on wire).
+    # Computes 26 with it excluded, 77 if wrongly included -- a classic silent-CRC pitfall.
+    "MOUNT_ORIENTATION": (265, [("uint32_t", "time_boot_ms", 0), ("float", "roll", 0),
+                                ("float", "pitch", 0), ("float", "yaw", 0)]),
 }
 
 if __name__ == "__main__":

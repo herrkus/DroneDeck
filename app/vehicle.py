@@ -79,6 +79,11 @@ class Vehicle(QObject):
         self.wind_y = 0.0                    # east component
         self.wind_z = 0.0                    # down component
         self.have_wind = False
+        # gimbal / mount attitude (MOUNT_ORIENTATION), degrees
+        self.gimbal_roll = 0.0
+        self.gimbal_pitch = 0.0
+        self.gimbal_yaw = 0.0                # relative to vehicle
+        self.have_gimbal = False
         # gps
         self.fix_type = 0
         self.satellites = 0
@@ -265,6 +270,12 @@ class Vehicle(QObject):
         self.wind_z = float(f.get("wind_z", 0.0))
         self.have_wind = True
 
+    def _on_mount_orientation(self, f):
+        self.gimbal_roll = float(f.get("roll", 0.0))
+        self.gimbal_pitch = float(f.get("pitch", 0.0))
+        self.gimbal_yaw = float(f.get("yaw", 0.0))
+        self.have_gimbal = True
+
     def wind_speed(self):
         """Horizontal wind speed, m/s."""
         return math.hypot(self.wind_x, self.wind_y)
@@ -321,6 +332,7 @@ class Vehicle(QObject):
         mavlink.EKF_STATUS_REPORT: _on_ekf_status,
         mavlink.ESTIMATOR_STATUS: _on_estimator_status,
         mavlink.WIND_COV: _on_wind_cov,
+        mavlink.MOUNT_ORIENTATION: _on_mount_orientation,
         mavlink.BATTERY_STATUS: _on_battery_status,
         mavlink.RADIO_STATUS: _on_radio_status,
         mavlink.RC_CHANNELS: _on_rc_channels,

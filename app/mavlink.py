@@ -71,6 +71,7 @@ SERIAL_CONTROL_FLAG_RESPOND = 2
 SERIAL_CONTROL_FLAG_EXCLUSIVE = 4
 SERIAL_CONTROL_FLAG_MULTI = 16
 ADSB_VEHICLE = 246
+MOUNT_ORIENTATION = 265      # gimbal attitude report (roll/pitch/yaw deg)
 
 MSG_NAME = {
     HEARTBEAT: "HEARTBEAT",
@@ -88,6 +89,7 @@ MSG_NAME = {
     EKF_STATUS_REPORT: "EKF_STATUS_REPORT",
     ESTIMATOR_STATUS: "ESTIMATOR_STATUS",
     WIND_COV: "WIND_COV",
+    MOUNT_ORIENTATION: "MOUNT_ORIENTATION",
     MANUAL_CONTROL: "MANUAL_CONTROL",
     COMMAND_INT: "COMMAND_INT",
     COMMAND_LONG: "COMMAND_LONG",
@@ -125,7 +127,8 @@ CRC_EXTRA = {
     MISSION_CLEAR_ALL: 232, MISSION_ITEM_REACHED: 11, MISSION_ACK: 153,
     MISSION_REQUEST_INT: 196, MISSION_ITEM_INT: 38, MANUAL_CONTROL: 243, RC_CHANNELS: 118,
     ALTITUDE: 47, BATTERY_STATUS: 154, VIBRATION: 90, RADIO_STATUS: 185,
-    EKF_STATUS_REPORT: 71, ESTIMATOR_STATUS: 163, WIND_COV: 105, REQUEST_DATA_STREAM: 148,
+    EKF_STATUS_REPORT: 71, ESTIMATOR_STATUS: 163, WIND_COV: 105, MOUNT_ORIENTATION: 26,
+    REQUEST_DATA_STREAM: 148,
     LOG_REQUEST_LIST: 128, LOG_ENTRY: 56, LOG_REQUEST_DATA: 116,
     LOG_DATA: 134, LOG_REQUEST_END: 203, ADSB_VEHICLE: 184,
     SERIAL_CONTROL: 194,
@@ -154,6 +157,7 @@ FIELDS = {
                        "pos_vert_accuracy", "flags"],
     WIND_COV: ["time_usec", "wind_x", "wind_y", "wind_z", "var_horiz", "var_vert",
                "wind_alt", "horiz_accuracy", "vert_accuracy"],
+    MOUNT_ORIENTATION: ["time_boot_ms", "roll", "pitch", "yaw", "yaw_absolute"],
     BATTERY_STATUS: (["current_consumed", "energy_consumed", "temperature"]
                      + [f"voltage{i}" for i in range(1, 11)]
                      + ["current_battery", "id", "battery_function", "type", "battery_remaining"]),
@@ -717,6 +721,8 @@ _WIRE = {
     WIND_COV: ("<Q8f",
                ["time_usec", "wind_x", "wind_y", "wind_z", "var_horiz", "var_vert",
                 "wind_alt", "horiz_accuracy", "vert_accuracy"], 40),
+    MOUNT_ORIENTATION: ("<I4f",
+                        ["time_boot_ms", "roll", "pitch", "yaw", "yaw_absolute"], 20),
     BATTERY_STATUS: ("<iih10HhBBBb",
                      ["current_consumed", "energy_consumed", "temperature"]
                      + [f"voltage{i}" for i in range(1, 11)]

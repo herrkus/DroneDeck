@@ -703,6 +703,14 @@ class SystemsPanel(QWidget):
         ef.addRow("Flags", self.e_flags)
         lay.addWidget(ekf)
 
+        gmb = QGroupBox("Gimbal")
+        gf = QFormLayout(gmb)
+        self.g_roll = QLabel("--"); self.g_pitch = QLabel("--"); self.g_yaw = QLabel("--")
+        gf.addRow("Roll", self.g_roll)
+        gf.addRow("Pitch", self.g_pitch)
+        gf.addRow("Yaw", self.g_yaw)
+        lay.addWidget(gmb)
+
         alt = QGroupBox("Altitude")
         af = QFormLayout(alt)
         self.a_amsl = QLabel("--"); self.a_rel = QLabel("--"); self.a_terr = QLabel("--")
@@ -752,6 +760,13 @@ class SystemsPanel(QWidget):
                 lbl.setText("--"); lbl.setStyleSheet("")
             self.e_status.setText("--"); self.e_status.setStyleSheet("")
             self.e_flags.setText("--")
+        if ve.have_gimbal:
+            self.g_roll.setText(f"{ve.gimbal_roll:+.1f} deg")
+            self.g_pitch.setText(f"{ve.gimbal_pitch:+.1f} deg")
+            self.g_yaw.setText(f"{ve.gimbal_yaw:+.1f} deg")
+        else:
+            for lbl in (self.g_roll, self.g_pitch, self.g_yaw):
+                lbl.setText("--")
         self.b_cells.setText("  ".join(f"{c:.2f}" for c in ve.cells) if ve.cells else "--")
         self.vib_bars.set_values(ve.vibration)
         self.vib_clip.setText("clip {} / {} / {}".format(*ve.clipping))
