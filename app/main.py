@@ -1934,7 +1934,10 @@ class DroneDeck(QMainWindow):
                           ve.alt_rel, ve.heading, ve.climb)
         self.compass.set_heading(ve.heading)
         self.compass.set_wind(ve.wind_speed(), ve.wind_dir(), ve.have_wind)
-        if ve.have_position and ve.home:            # bearing to launch, for the home bug
+        # home bug: bearing to launch, but hidden within ~10 m of home where the bearing is just
+        # GPS-noise jitter (a spinning H is worse than none) -- matches QGC hiding it near home
+        if ve.have_position and ve.home and \
+                haversine(ve.lat, ve.lon, ve.home[0], ve.home[1]) > 10.0:
             self.compass.set_home_bearing(bearing(ve.lat, ve.lon, ve.home[0], ve.home[1]))
         else:
             self.compass.set_home_bearing(0.0, have=False)

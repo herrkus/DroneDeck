@@ -71,4 +71,19 @@ assert (wl - base_l) > (wr - base_r), (base_l, base_r, wl, wr)   # extra green i
 assert abs(m.bearing(0.0, 0.0, 0.0, 1.0) - 90.0) < 1.0
 assert abs((m.bearing(0.0, 0.0, 1.0, 0.0)) % 360.0) < 1.0
 
+# _refresh gating: the home bug is HIDDEN within ~10 m of home (where the bearing is just GPS
+# jitter -- caught in an airborne verification: it span 326->296->126 at dist~0), shown beyond it.
+win = m.DroneDeck(14599)
+ve = win.vehicle
+ve.have_position = True
+ve.home = (47.4000, 8.5400)
+ve.lat, ve.lon = 47.400015, 8.540015          # ~2 m from home
+win._refresh()
+assert win.compass.have_home is False, "home bug must hide within 10 m of home"
+ve.lat, ve.lon = 47.4013, 8.5413              # ~170 m from home
+win._refresh()
+assert win.compass.have_home is True, "home bug must show when clear of home"
+exp = m.bearing(ve.lat, ve.lon, ve.home[0], ve.home[1])
+assert abs((win.compass.home_bearing - exp + 180) % 360 - 180) < 0.5, (win.compass.home_bearing, exp)
+
 print("HOMEBUG PASSED")
