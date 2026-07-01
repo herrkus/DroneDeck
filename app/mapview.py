@@ -46,6 +46,19 @@ def num2deg(x, y, z):
     return lat, lon
 
 
+def scale_nice(mpp, target_px=90):
+    """For a given metres-per-pixel, pick a 'nice' round distance (1/2/5 x 10^n metres) near
+    target_px wide and return (metres, bar_px, label) for a map scale bar."""
+    if mpp <= 0:
+        return (0.0, 0.0, "")
+    target_m = mpp * target_px
+    p10 = 10.0 ** math.floor(math.log10(target_m))
+    frac = target_m / p10
+    nice = (5 if frac >= 5 else 2 if frac >= 2 else 1) * p10
+    label = f"{nice / 1000:g} km" if nice >= 1000 else f"{nice:g} m"
+    return (nice, nice / mpp, label)
+
+
 class MapView(QWidget):
     clicked = Signal(float, float)            # map click -> (lat, lon)
     contextAction = Signal(str, float, float)  # right-click empty map -> (action, lat, lon)
@@ -401,6 +414,21 @@ class MapView(QWidget):
         p.setFont(QFont("DejaVu Sans Mono", 8))
         tag = "OSM" if online else "offline grid"
         p.drawText(8, self.height() - 8, f"z{self.zoom}  {tag}")
+        # scale bar, bottom-left just above the zoom tag; on a translucent plate so it stays
+        # readable over any tile (light streets or dark satellite)
+        mpp = 156543.03392 * math.cos(math.radians(self.center[0])) / (2 ** self.zoom)
+        _, bar_px, label = scale_nice(mpp)
+        bar_px = int(round(bar_px))
+        if bar_px >= 10:
+            x0, y0 = 12, self.height() - 22
+            p.setPen(Qt.NoPen)
+            p.setBrush(QColor(18, 20, 24, 160))
+            p.drawRect(x0 - 6, y0 - 20, bar_px + 12, 28)
+            p.setPen(QPen(QColor(240, 242, 245), 2))
+            p.drawLine(x0, y0, x0 + bar_px, y0)                     # bar
+            p.drawLine(x0, y0 - 4, x0, y0 + 4)                      # end ticks
+            p.drawLine(x0 + bar_px, y0 - 4, x0 + bar_px, y0 + 4)
+            p.drawText(x0, y0 - 7, label)
 
     # -- interaction ----------------------------------------------------------
     def _px_to_ll(self, px, py):

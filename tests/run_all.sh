@@ -73,6 +73,7 @@ check "autopilot_v (py)"    "DRONEDECK_FORCE_PYTHON=1" tests/test_autopilot_vers
 check "flightchip"          ""                        tests/test_flightchip.py
 check "mapcenter"           ""                        tests/test_mapcenter.py
 check "cleartrail"          ""                        tests/test_cleartrail.py
+check "scalebar"            ""                        tests/test_scalebar.py
 check "msgunread"           ""                        tests/test_msgunread.py
 check "takeoffalt"          ""                        tests/test_takeoffalt.py
 check "mavversion"          ""                        tests/test_mavversion.py
