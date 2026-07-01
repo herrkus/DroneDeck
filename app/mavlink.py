@@ -624,7 +624,10 @@ def enc_param_request_list(target_system=1, target_component=1):
 
 
 def enc_param_request_read(param_id="", param_index=-1, target_system=1, target_component=1):
-    return struct.pack("<hBB16s", int(param_index), target_system & 0xFF,
+    # param_index is an int16 field (-1 = read-by-name); a vehicle (or spoofed PARAM_VALUE) reporting
+    # >32767 params would drive a by-index request past int16 and crash struct.pack -- clamp it.
+    idx = max(-32768, min(32767, int(param_index)))
+    return struct.pack("<hBB16s", idx, target_system & 0xFF,
                        target_component & 0xFF, _pid(param_id))
 
 

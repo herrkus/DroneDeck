@@ -26,6 +26,8 @@ import mavlink
 
 TIMEOUT_MS = 1500
 MAX_RETRIES = 5
+MAX_SURVEY_LINES = 2000     # cap generated survey sweeps (~4000 waypoints) so a huge area / tiny
+#                             spacing can't OOM the app or exceed MAVLink's 65535-item mission
 
 
 @dataclass
@@ -60,8 +62,14 @@ def survey_grid(points, spacing_m=35.0, alt=50.0):
     lons = [p[1] for p in points]
     lat0, lat1 = min(lats), max(lats)
     lon0, lon1 = min(lons), max(lons)
-    dlat = spacing_m / 111320.0
-    n_lines = max(2, int((lat1 - lat0) / dlat) + 1)
+    span = lat1 - lat0
+    dlat = max(1e-7, spacing_m / 111320.0)              # guard a zero/negative spacing (no /0)
+    # Cap the sweep count. A large area or a tiny spacing (10 deg @ 0.5 m = ~4.5M waypoints) would
+    # otherwise OOM/hang, draw for seconds every paint, and exceed MAVLink's 65535-item mission.
+    # Coarsen the effective spacing so the whole area is still covered within MAX_SURVEY_LINES.
+    if span / dlat > MAX_SURVEY_LINES:
+        dlat = span / MAX_SURVEY_LINES
+    n_lines = max(2, int(span / dlat) + 1)
     items = []
     y = lat0
     left_to_right = True

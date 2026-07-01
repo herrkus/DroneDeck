@@ -53,6 +53,7 @@ check "upload_progress"     ""                        tests/test_upload_progress
 check "wpprogress"          ""                        tests/test_wpprogress.py
 check "missionreached"      ""                        tests/test_missionreached.py
 check "missionrobust"       ""                        tests/test_missionrobust.py
+check "scalemission"        ""                        tests/test_scalemission.py
 check "spline"              ""                        tests/test_spline.py
 check "terrain"             ""                        tests/test_terrain.py
 check "odometer"            ""                        tests/test_odometer.py
