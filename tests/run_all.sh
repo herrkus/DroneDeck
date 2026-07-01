@@ -90,6 +90,7 @@ check "takeoffalt"          ""                        tests/test_takeoffalt.py
 check "mavversion"          ""                        tests/test_mavversion.py
 check "paramfile"           ""                        tests/test_paramfile.py
 check "paramdiff"           ""                        tests/test_paramdiff.py
+check "paramrobust"         ""                        tests/test_paramrobust.py
 check "streamreq"           ""                        tests/test_streamreq.py
 check "packetloss"          ""                        tests/test_packetloss.py
 check "missionack"          ""                        tests/test_missionack.py

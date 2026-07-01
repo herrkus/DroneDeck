@@ -145,14 +145,18 @@ class ParamManager(QObject):
                 self.set_result.emit(name, True, f"{name} = {val:g} confirmed")
                 if not self.pending:
                     self.set_timer.stop()
-        if self.state == "download":
+        if self.state == "download" and 0 <= idx < cnt:
+            # Only a real, in-range index advances the bulk download. Autopilots send PARAM_VALUE
+            # with param_index 65535 (the MAVLink "by name" convention) for read-by-name replies;
+            # counting those would inflate `received` and complete the download prematurely, dropping
+            # real params (the value is still stored + `updated` emitted above -- see test_paramrobust).
             self.expected = cnt
             self.received.add(idx)
             self.retries = 0
             self.param.emit(name, val, idx, cnt)
             self.download_progress.emit(len(self.received), cnt)
             self.progress.emit(f"{len(self.received)}/{cnt} parameters")
-            if cnt and len(self.received) >= cnt:
+            if len(self.received) >= cnt:
                 self.state = "idle"
                 self.timer.stop()
                 self.finished.emit(True, f"{cnt} parameters")
