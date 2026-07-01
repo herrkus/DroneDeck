@@ -217,6 +217,11 @@ class Vehicle(QObject):
     def _moved(a, b):
         return abs(a[0] - b[0]) > 2e-6 or abs(a[1] - b[1]) > 2e-6
 
+    def clear_trail(self):
+        """Empty the flight breadcrumb in place, so the MapView (which holds the same list
+        reference) clears immediately and future fixes start a fresh trail."""
+        self.trail.clear()
+
     def _on_radio_status(self, f):
         self.radio_rssi = int(f.get("rssi", 0))
         self.radio_remrssi = int(f.get("remrssi", 0))

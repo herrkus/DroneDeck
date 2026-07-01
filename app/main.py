@@ -1317,6 +1317,11 @@ class DroneDeck(QMainWindow):
             self._refresh_mission_view()
             self._on_info(f"added ROI waypoint at {lat:.5f}, {lon:.5f}")
             return
+        if action == "clear_trail":                # view action -- no vehicle command needed
+            self.vehicle.clear_trail()
+            self.map.update()
+            self._on_info("flight trail cleared")
+            return
         if not self._has_vehicle():
             QMessageBox.information(self, "No vehicle", "Connect to a vehicle first.")
             return

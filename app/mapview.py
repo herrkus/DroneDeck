@@ -469,6 +469,10 @@ class MapView(QWidget):
                                ("Add ROI waypoint here", "add_roi"), ("Set home here", "sethome")):
                 act = menu.addAction(label)
                 act.triggered.connect(lambda _=False, k=key: self.contextAction.emit(k, la, lo))
+            if self.trail:                         # view action -- clear the breadcrumb trail
+                menu.addSeparator()
+                act = menu.addAction("Clear trail")
+                act.triggered.connect(lambda _=False: self.contextAction.emit("clear_trail", la, lo))
         menu.exec(e.globalPos())
 
     def mouseDoubleClickEvent(self, _):
