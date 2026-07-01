@@ -136,7 +136,9 @@ class TelemetryPanel(QWidget):
         self._set("armed", "ARMED" if ve.armed else "DISARMED",
                   "#e05050" if ve.armed else "#37d67a")
         self._set("status", {0: "Uninit", 1: "Boot", 2: "Calibrating", 3: "Standby",
-                             4: "Active", 5: "Critical", 6: "Emergency"}.get(ve.system_status, "--"))
+                             4: "Active", 5: "Critical", 6: "Emergency", 7: "Poweroff",
+                             8: "Terminate"}.get(ve.system_status, "--"),
+                  "#e05050" if ve.system_status >= 5 else None)
         self._set("type", ve.type_text)
 
         vcolor = None

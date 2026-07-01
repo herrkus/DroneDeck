@@ -216,6 +216,7 @@ class DroneDeck(QMainWindow):
         # flight-time tracking (since arm)
         self._arm_t0 = None
         self._flight_time = 0.0
+        self._failsafe_prev = {}                # sysid -> last MAV_STATE (failsafe edge detect)
 
         # mission planning state
         self.plan_mode = False
@@ -1661,8 +1662,25 @@ class DroneDeck(QMainWindow):
             self.map.center = (self.vehicle.lat, self.vehicle.lon)
 
     # -- refresh --------------------------------------------------------------
+    def _check_failsafe(self, ve):
+        """Raise a one-shot console note + toast when a vehicle transitions INTO a
+        Critical/Emergency (or worse) MAV_STATE. Fires once per entry into the failsafe
+        band, not on every telemetry update, and re-arms after the vehicle recovers."""
+        sid = ve.sysid
+        if not sid:
+            return
+        prev = self._failsafe_prev.get(sid)
+        cur = ve.system_status
+        self._failsafe_prev[sid] = cur
+        if cur >= 5 and (prev is None or prev < 5):
+            name = {5: "CRITICAL", 6: "EMERGENCY", 7: "POWEROFF",
+                    8: "FLIGHT TERMINATION"}.get(cur, f"MAV_STATE {cur}")
+            self.console.add_note(f"FAILSAFE: vehicle {sid} entered {name}", "#e05050")
+            self._notify(f"FAILSAFE: {name}", "#e05050")
+
     def _refresh(self):
         ve = self.vehicle
+        self._check_failsafe(ve)
         self.adi.set_data(ve.roll, ve.pitch, ve.airspeed or ve.groundspeed,
                           ve.alt_rel, ve.heading, ve.climb)
         self.compass.set_heading(ve.heading)
