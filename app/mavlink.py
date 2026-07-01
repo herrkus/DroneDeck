@@ -283,6 +283,22 @@ MAV_PARAM_TYPE_REAL32 = 9          # ArduPilot stores every parameter as REAL32
 MAV_MISSION_TYPE_MISSION = 0
 MAV_MISSION_TYPE_FENCE = 1
 MAV_MISSION_TYPE_RALLY = 2
+
+# MAV_MISSION_RESULT -- what a MISSION_ACK "type" means, in plain language. PX4 for example
+# rejects a NAV_RETURN_TO_LAUNCH mission item with 3 (command not supported).
+MAV_MISSION_RESULT_TEXT = {
+    0: "accepted", 1: "generic error", 2: "coordinate frame not supported",
+    3: "a command is not supported by the vehicle", 4: "not enough storage space",
+    5: "an item has an invalid value", 6: "invalid param1", 7: "invalid param2",
+    8: "invalid param3", 9: "invalid param4", 10: "invalid latitude/param5",
+    11: "invalid longitude/param6", 12: "invalid altitude/param7",
+    13: "item received out of sequence", 14: "vehicle not accepting missions right now",
+    15: "operation cancelled",
+}
+
+
+def mission_result_text(result):
+    return MAV_MISSION_RESULT_TEXT.get(int(result), "unknown reason")
 MAV_CMD_NAV_FENCE_POLYGON_VERTEX_INCLUSION = 5001
 MAV_CMD_NAV_FENCE_POLYGON_VERTEX_EXCLUSION = 5002
 MAV_CMD_NAV_FENCE_CIRCLE_INCLUSION = 5003       # param1 = radius (m)

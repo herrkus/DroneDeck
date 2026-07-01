@@ -372,7 +372,8 @@ class MissionProtocol(QObject):
                 self._arm()
         elif self.state == "upload" and mid == mavlink.MISSION_ACK:
             res = int(m.fields.get("type", 0))
-            self._done(res == 0, "upload complete" if res == 0 else f"upload rejected (type {res})")
+            self._done(res == 0, "upload complete" if res == 0
+                       else f"upload rejected: {mavlink.mission_result_text(res)} (code {res})")
         elif self.state == "dl_count" and mid == mavlink.MISSION_COUNT:
             self.expected = int(m.fields.get("count", 0))
             self.items = []
@@ -412,7 +413,8 @@ class MissionProtocol(QObject):
                 self._arm()
         elif self.state == "clear" and mid == mavlink.MISSION_ACK:
             res = int(m.fields.get("type", 0))
-            self._done(res == 0, "mission cleared" if res == 0 else f"clear rejected (type {res})")
+            self._done(res == 0, "mission cleared" if res == 0
+                       else f"clear rejected: {mavlink.mission_result_text(res)} (code {res})")
 
     def _on_timeout(self):
         self.retries += 1

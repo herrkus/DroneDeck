@@ -83,6 +83,7 @@ check "takeoffalt"          ""                        tests/test_takeoffalt.py
 check "mavversion"          ""                        tests/test_mavversion.py
 check "paramfile"           ""                        tests/test_paramfile.py
 check "streamreq"           ""                        tests/test_streamreq.py
+check "missionack"          ""                        tests/test_missionack.py
 check "confirm"             ""                        tests/test_confirm.py
 check "windcompass"         ""                        tests/test_windcompass.py
 check "homebug"             ""                        tests/test_homebug.py
