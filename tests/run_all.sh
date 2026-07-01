@@ -86,6 +86,7 @@ check "streamreq"           ""                        tests/test_streamreq.py
 check "packetloss"          ""                        tests/test_packetloss.py
 check "missionack"          ""                        tests/test_missionack.py
 check "px4warn"             ""                        tests/test_px4warn.py
+check "about"               ""                        tests/test_about.py
 check "confirm"             ""                        tests/test_confirm.py
 check "windcompass"         ""                        tests/test_windcompass.py
 check "homebug"             ""                        tests/test_homebug.py

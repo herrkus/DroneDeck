@@ -43,6 +43,7 @@ from calibration import CalibrationDialog
 from instruments import AttitudeIndicator, Compass
 
 LOG_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "logs")
+APP_VERSION = "1.0"
 from mapview import MapView
 from panels import (TelemetryPanel, MessageConsole, MavInspector, HealthPanel,
                     StatusStrip, CameraPanel, LogPanel, SystemsPanel, MavlinkConsole,
@@ -750,6 +751,9 @@ class DroneDeck(QMainWindow):
         act_fence.triggered.connect(self._fence_from_mission)
         act_vinfo = tools.addAction("Vehicle Info...")
         act_vinfo.triggered.connect(self._show_vehicle_info)
+        self._help_menu = helpm = self.menuBar().addMenu("&Help")
+        helpm.addAction("Quick Help").triggered.connect(self._show_help)
+        helpm.addAction("About DroneDeck...").triggered.connect(self._show_about)
 
     def _open_analyze(self):
         from analyze import AnalyzeDialog
@@ -2157,6 +2161,28 @@ class DroneDeck(QMainWindow):
             "<tr><td><b>F1</b></td><td>this help</td><td></td><td></td></tr>"
             "</table>")
         QMessageBox.information(self, "DroneDeck Help", html)
+
+    def _about_html(self):
+        ve = self.vehicle
+        veh_html = ""
+        if ve is not None and ve.have_autopilot_version:
+            ap = {3: "ArduPilot", 12: "PX4"}.get(ve.autopilot, f"autopilot #{ve.autopilot}")
+            veh_html = (f"<tr><td><b>Vehicle</b></td>"
+                        f"<td>{ap} &mdash; {ve.fw_version or 'firmware --'}</td></tr>")
+        mav = (self.link.mavlink_version_str if self.link else None) or "not connected"
+        return (
+            "<h2>DroneDeck</h2>"
+            f"<p>MAVLink ground control station &mdash; version {APP_VERSION}</p>"
+            "<table cellspacing=6>"
+            "<tr><td><b>Built with</b></td><td>Python (PySide6) + C++ + x86-64 assembly</td></tr>"
+            "<tr><td><b>Protocol</b></td><td>MAVLink v1 / v2, MISSION_INT mission protocol</td></tr>"
+            f"<tr><td><b>Link MAVLink</b></td><td>{mav}</td></tr>"
+            f"{veh_html}"
+            "</table>"
+            "<p style='color:#8a90a0'>Bring your own drone &mdash; no vehicle models bundled.</p>")
+
+    def _show_about(self):
+        QMessageBox.about(self, "About DroneDeck", self._about_html())
 
     def resizeEvent(self, e):
         super().resizeEvent(e)
