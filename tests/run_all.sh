@@ -64,6 +64,8 @@ check "esc"                 ""                        tests/test_esc.py
 check "esc (python)"        "DRONEDECK_FORCE_PYTHON=1" tests/test_esc.py
 check "extstate"            ""                        tests/test_extstate.py
 check "extstate (python)"   "DRONEDECK_FORCE_PYTHON=1" tests/test_extstate.py
+check "autopilot_version"   ""                        tests/test_autopilot_version.py
+check "autopilot_v (py)"    "DRONEDECK_FORCE_PYTHON=1" tests/test_autopilot_version.py
 check "confirm"             ""                        tests/test_confirm.py
 check "windcompass"         ""                        tests/test_windcompass.py
 check "manual"              ""                        tests/test_manual.py

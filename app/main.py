@@ -726,6 +726,8 @@ class DroneDeck(QMainWindow):
         act_analyze.triggered.connect(self._open_analyze)
         act_fence = tools.addAction("Geofence from Mission")
         act_fence.triggered.connect(self._fence_from_mission)
+        act_vinfo = tools.addAction("Vehicle Info...")
+        act_vinfo.triggered.connect(self._show_vehicle_info)
 
     def _open_analyze(self):
         from analyze import AnalyzeDialog
@@ -1932,6 +1934,33 @@ class DroneDeck(QMainWindow):
         sc("=", lambda: self.map.set_zoom(self.map.zoom + 1))
         sc("-", lambda: self.map.set_zoom(self.map.zoom - 1))
         sc("F1", self._show_help)
+
+    def _show_vehicle_info(self):
+        ve = self.vehicle
+        if not self._has_vehicle():
+            QMessageBox.information(self, "Vehicle Info", "No vehicle connected.")
+            return
+        if not ve.have_autopilot_version:
+            if self.link:
+                self.link.send_command_long(self._sysid(), mavlink.MAV_CMD_REQUEST_MESSAGE,
+                                            [float(mavlink.AUTOPILOT_VERSION), 0, 0, 0, 0, 0, 0])
+            QMessageBox.information(self, "Vehicle Info",
+                                    "Firmware info not received yet -- requested it now; "
+                                    "reopen this in a moment.")
+            return
+        ap = {3: "ArduPilot", 12: "PX4"}.get(ve.autopilot, f"autopilot #{ve.autopilot}")
+        caps = mavlink.capability_names(ve.capabilities)
+        caps_html = "".join(f"<li>{c}</li>" for c in caps) or "<li>(none reported)</li>"
+        html = (f"<h3>Vehicle {self._sysid()} &mdash; {ap}</h3>"
+                "<table cellspacing=6>"
+                f"<tr><td><b>Firmware</b></td><td>{ve.fw_version or '--'}</td></tr>"
+                f"<tr><td><b>Git hash</b></td><td>{ve.fw_git or '--'}</td></tr>"
+                f"<tr><td><b>Board version</b></td><td>{ve.board_version}</td></tr>"
+                f"<tr><td><b>Vendor / Product</b></td>"
+                f"<td>0x{ve.vendor_id:04x} / 0x{ve.product_id:04x}</td></tr>"
+                "</table>"
+                f"<p><b>Capabilities</b> (0x{ve.capabilities:x}):</p><ul>{caps_html}</ul>")
+        QMessageBox.information(self, "Vehicle Info", html)
 
     def _show_help(self):
         html = (

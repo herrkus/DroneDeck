@@ -195,6 +195,9 @@ class Link(QObject):
                               (mavlink.GPS_RAW_INT, 2), (mavlink.ALTITUDE, 5)):
                 self.send_command_long(target_sys, mavlink.MAV_CMD_SET_MESSAGE_INTERVAL,
                                        [float(msgid), 1_000_000.0 / hz, 0, 0, 0, 0, 0])
+        # one-shot: firmware version + capabilities (both autopilots answer CMD 512)
+        self.send_command_long(target_sys, mavlink.MAV_CMD_REQUEST_MESSAGE,
+                               [float(mavlink.AUTOPILOT_VERSION), 0, 0, 0, 0, 0, 0])
 
     def send_manual_control(self, target_sys, x, y, z, r, buttons=0):
         self._send_msg(mavlink.MANUAL_CONTROL,

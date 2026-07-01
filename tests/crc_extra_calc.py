@@ -173,6 +173,16 @@ NEW = {
                          ("uint8_t", "index", 0)]),
     # two uint8 in declaration order, no extensions. Computes 130.
     "EXTENDED_SYS_STATE": (245, [("uint8_t", "vtol_state", 0), ("uint8_t", "landed_state", 0)]),
+    # uid2 (uint8[18]) is an extension -> excluded. Three uint8[8] custom-version arrays keep
+    # their length byte in the CRC. Computes 178.
+    "AUTOPILOT_VERSION": (148, [("uint64_t", "capabilities", 0), ("uint64_t", "uid", 0),
+                                ("uint32_t", "flight_sw_version", 0),
+                                ("uint32_t", "middleware_sw_version", 0),
+                                ("uint32_t", "os_sw_version", 0), ("uint32_t", "board_version", 0),
+                                ("uint16_t", "vendor_id", 0), ("uint16_t", "product_id", 0),
+                                ("uint8_t", "flight_custom_version", 8),
+                                ("uint8_t", "middleware_custom_version", 8),
+                                ("uint8_t", "os_custom_version", 8)]),
 }
 
 if __name__ == "__main__":

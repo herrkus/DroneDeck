@@ -42,6 +42,7 @@ VFR_HUD = 74
 COMMAND_INT = 75
 COMMAND_LONG = 76
 COMMAND_ACK = 77
+AUTOPILOT_VERSION = 148      # firmware version + capability flags (request via CMD 512)
 SET_POSITION_TARGET_GLOBAL_INT = 86
 STATUSTEXT = 253
 # parameter protocol
@@ -97,6 +98,7 @@ MSG_NAME = {
     MOUNT_ORIENTATION: "MOUNT_ORIENTATION",
     HOME_POSITION: "HOME_POSITION",
     EXTENDED_SYS_STATE: "EXTENDED_SYS_STATE",
+    AUTOPILOT_VERSION: "AUTOPILOT_VERSION",
     ESC_STATUS: "ESC_STATUS",
     MANUAL_CONTROL: "MANUAL_CONTROL",
     COMMAND_INT: "COMMAND_INT",
@@ -137,7 +139,8 @@ CRC_EXTRA = {
     MISSION_REQUEST_INT: 196, MISSION_ITEM_INT: 38, MANUAL_CONTROL: 243, RC_CHANNELS: 118,
     ALTITUDE: 47, BATTERY_STATUS: 154, VIBRATION: 90, RADIO_STATUS: 185,
     EKF_STATUS_REPORT: 71, ESTIMATOR_STATUS: 163, WIND_COV: 105, MOUNT_ORIENTATION: 26,
-    HOME_POSITION: 104, EXTENDED_SYS_STATE: 130, ESC_STATUS: 10, REQUEST_DATA_STREAM: 148,
+    HOME_POSITION: 104, EXTENDED_SYS_STATE: 130, AUTOPILOT_VERSION: 178,
+    ESC_STATUS: 10, REQUEST_DATA_STREAM: 148,
     LOG_REQUEST_LIST: 128, LOG_ENTRY: 56, LOG_REQUEST_DATA: 116,
     LOG_DATA: 134, LOG_REQUEST_END: 203, ADSB_VEHICLE: 184,
     SERIAL_CONTROL: 194,
@@ -174,6 +177,9 @@ FIELDS = {
                  + [f"voltage{i}" for i in range(1, 5)]
                  + [f"current{i}" for i in range(1, 5)] + ["index"]),
     EXTENDED_SYS_STATE: ["vtol_state", "landed_state"],
+    AUTOPILOT_VERSION: (["capabilities", "flight_sw_version", "middleware_sw_version",
+                         "os_sw_version", "board_version", "vendor_id", "product_id"]
+                        + [f"fcv{i}" for i in range(8)]),
     BATTERY_STATUS: (["current_consumed", "energy_consumed", "temperature"]
                      + [f"voltage{i}" for i in range(1, 11)]
                      + ["current_battery", "id", "battery_function", "type", "battery_remaining"]),
@@ -281,6 +287,25 @@ SENSOR_BITS = [
     (1 << 16, "RC"), (1 << 20, "Fence"), (1 << 21, "AHRS"), (1 << 22, "Terrain"),
     (1 << 24, "Logging"), (1 << 25, "Battery"),
 ]
+
+# MAV_PROTOCOL_CAPABILITY bits (AUTOPILOT_VERSION.capabilities) -- curated (bit, label)
+CAPABILITY_BITS = [
+    (1 << 0, "Mission float"), (1 << 1, "Param float"), (1 << 2, "Mission int"),
+    (1 << 3, "Command int"), (1 << 5, "FTP"), (1 << 6, "Set attitude"),
+    (1 << 7, "Set pos local"), (1 << 8, "Set pos global"), (1 << 9, "Terrain"),
+    (1 << 11, "Flight termination"), (1 << 12, "Compass cal"), (1 << 13, "MAVLink2"),
+    (1 << 14, "Mission fence"), (1 << 15, "Mission rally"),
+]
+
+
+def capability_names(caps):
+    return [name for bit, name in CAPABILITY_BITS if int(caps) & bit]
+
+
+def fw_version_str(v):
+    """Decode a MAVLink sw_version uint32 -> 'major.minor.patch'."""
+    v = int(v)
+    return f"{(v >> 24) & 0xff}.{(v >> 16) & 0xff}.{(v >> 8) & 0xff}"
 # SET_POSITION_TARGET type_mask: use position fields only (ignore vel/accel/yaw).
 POSITION_TARGET_TYPEMASK_POS_ONLY = 0x0DF8
 
@@ -755,6 +780,12 @@ _WIRE = {
                  + [f"voltage{i}" for i in range(1, 5)]
                  + [f"current{i}" for i in range(1, 5)] + ["index"], 57),
     EXTENDED_SYS_STATE: ("<2B", ["vtol_state", "landed_state"], 2),
+    # uid (u64) + middleware/os custom versions skipped: uid loses precision as a double and
+    # none are needed. CRC (178) is still over the full 60-byte payload.
+    AUTOPILOT_VERSION: ("<Q8x4I2H8B16x",
+                        ["capabilities", "flight_sw_version", "middleware_sw_version",
+                         "os_sw_version", "board_version", "vendor_id", "product_id"]
+                        + [f"fcv{i}" for i in range(8)], 60),
     BATTERY_STATUS: ("<iih10HhBBBb",
                      ["current_consumed", "energy_consumed", "temperature"]
                      + [f"voltage{i}" for i in range(1, 11)]

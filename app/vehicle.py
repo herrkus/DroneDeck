@@ -87,6 +87,14 @@ class Vehicle(QObject):
         # actuator outputs (SERVO_OUTPUT_RAW), PWM microseconds servo1..8
         self.servo_raw = [0] * 8
         self.have_servo = False
+        # autopilot / firmware info (AUTOPILOT_VERSION)
+        self.fw_version = ""        # "major.minor.patch"
+        self.fw_git = ""           # flight_custom_version bytes as hex (git hash)
+        self.board_version = 0
+        self.vendor_id = 0
+        self.product_id = 0
+        self.capabilities = 0
+        self.have_autopilot_version = False
         # flight state (EXTENDED_SYS_STATE)
         self.landed_state = 0       # 1=on ground, 2=in air, 3=takeoff, 4=landing
         self.vtol_state = 0         # 1=->FW, 2=->MC, 3=MC, 4=FW
@@ -294,6 +302,16 @@ class Vehicle(QObject):
         self.servo_raw = [int(f.get(f"servo{i}_raw", 0)) for i in range(1, 9)]
         self.have_servo = True
 
+    def _on_autopilot_version(self, f):
+        self.capabilities = int(f.get("capabilities", 0))
+        self.fw_version = mavlink.fw_version_str(f.get("flight_sw_version", 0))
+        self.board_version = int(f.get("board_version", 0))
+        self.vendor_id = int(f.get("vendor_id", 0))
+        self.product_id = int(f.get("product_id", 0))
+        git = bytes(int(f.get(f"fcv{i}", 0)) & 0xff for i in range(8))
+        self.fw_git = git.hex() if any(git) else ""
+        self.have_autopilot_version = True
+
     def _on_extended_sys_state(self, f):
         self.landed_state = int(f.get("landed_state", 0))
         self.vtol_state = int(f.get("vtol_state", 0))
@@ -377,6 +395,7 @@ class Vehicle(QObject):
         mavlink.SERVO_OUTPUT_RAW: _on_servo_output_raw,
         mavlink.ESC_STATUS: _on_esc_status,
         mavlink.EXTENDED_SYS_STATE: _on_extended_sys_state,
+        mavlink.AUTOPILOT_VERSION: _on_autopilot_version,
         mavlink.HOME_POSITION: _on_home_position,
         mavlink.BATTERY_STATUS: _on_battery_status,
         mavlink.RADIO_STATUS: _on_radio_status,

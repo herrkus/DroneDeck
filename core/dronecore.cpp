@@ -110,6 +110,7 @@ constexpr MsgInfo MSGS[] = {
     { 36, 222, 21},  // SERVO_OUTPUT_RAW (servo9..16 are extensions: excluded from CRC)
     {242, 104, 52},  // HOME_POSITION (time_usec is an extension: excluded from CRC)
     {245, 130,  2},  // EXTENDED_SYS_STATE (vtol_state, landed_state)
+    {148, 178, 60},  // AUTOPILOT_VERSION (uid + custom versions skipped; CRC over full 60)
     {265,  26, 20},  // MOUNT_ORIENTATION (yaw_absolute is an extension: excluded from CRC)
     {291,  10, 57},  // ESC_STATUS (rpm/voltage/current x4 + index)
     {246, 184, 38},  // ADSB_VEHICLE
@@ -213,6 +214,13 @@ void decode(uint32_t msgid, const uint8_t* pl, Decoded& d) {
         break;
     case 245: // EXTENDED_SYS_STATE: vtol_state, landed_state
         push(pl[0]); push(pl[1]);
+        break;
+    case 148: // AUTOPILOT_VERSION: capabilities(u64), [skip uid], 4x u32, 2x u16, flight_custom[8]
+        push(rd_u64(pl + 0));                                   // capabilities (uid @8 skipped)
+        push(rd_u32(pl + 16)); push(rd_u32(pl + 20)); push(rd_u32(pl + 24)); push(rd_u32(pl + 28));
+        push(rd_u16(pl + 32)); push(rd_u16(pl + 34));
+        push(pl[36]); push(pl[37]); push(pl[38]); push(pl[39]);
+        push(pl[40]); push(pl[41]); push(pl[42]); push(pl[43]);  // flight_custom_version[8]
         break;
     case 242: // HOME_POSITION: lat, lon, alt (int), x/y/z, q[4], approach_x/y/z (float)
         push(rd_i32(pl + 0)); push(rd_i32(pl + 4)); push(rd_i32(pl + 8));
