@@ -309,6 +309,11 @@ class DroneDeck(QMainWindow):
         split.setSizes([820, 420])
         split.setChildrenCollapsible(False)   # neither pane can be crushed to zero
         split.setHandleWidth(4)
+        # user asked that the map / right-column divider be fixed, not draggable
+        for _i in range(split.count()):
+            _h = split.handle(_i)
+            if _h is not None:
+                _h.setEnabled(False)
 
         # QGC-style status strip above the split view
         self.status_strip = StatusStrip()
@@ -1225,7 +1230,10 @@ def main():
     win = DroneDeck(port, replay_path=replay_path)
     win._persist = True
     win.load_settings()
-    win.show()
+    if os.environ.get("HYPRLAND_INSTANCE_SIGNATURE"):
+        win.show()               # run.sh maximizes it via hyprctl under Hyprland
+    else:
+        win.showMaximized()      # other WMs/DEs: open filling the screen directly
     sys.exit(app.exec())
 
 

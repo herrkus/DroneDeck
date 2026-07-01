@@ -33,10 +33,10 @@ print(next((c['address'] for c in cs if c.get('class') == 'DroneDeck'), ''))" 2>
             sleep 0.1
         done
         if [ -n "$addr" ]; then
-            hyprctl dispatch setfloating "address:$addr" >/dev/null 2>&1
-            hyprctl dispatch resizewindowpixel "exact 1600 1000,address:$addr" >/dev/null 2>&1
+            # a ground station wants the whole screen -- open it maximized. Hyprland
+            # fullscreen mode 1 fills the monitor while keeping the top bar visible.
             hyprctl dispatch focuswindow "address:$addr" >/dev/null 2>&1
-            hyprctl dispatch centerwindow >/dev/null 2>&1
+            hyprctl dispatch fullscreen 1 >/dev/null 2>&1
         fi
         wait "$app"
     else
