@@ -17,6 +17,7 @@ Each outstanding request is guarded by a timeout and retried; the whole exchange
 aborts after too many retries. Modern ArduPilot/PX4 use the _INT variants.
 """
 from __future__ import annotations
+import math
 from dataclasses import dataclass
 
 from PySide6.QtCore import QObject, Signal, QTimer
@@ -72,6 +73,68 @@ def survey_grid(points, spacing_m=35.0, alt=50.0):
             seq += 1
         y += dlat
         left_to_right = not left_to_right
+    return items
+
+
+def _ll_to_m(lat, lon, lat0, lon0):
+    """Equirectangular local frame (metres east/north) about (lat0, lon0)."""
+    x = math.radians(lon - lon0) * 6378137.0 * math.cos(math.radians(lat0))
+    y = math.radians(lat - lat0) * 6378137.0
+    return x, y
+
+
+def _m_to_ll(x, y, lat0, lon0):
+    lat = lat0 + math.degrees(y / 6378137.0)
+    lon = lon0 + math.degrees(x / (6378137.0 * math.cos(math.radians(lat0))))
+    return lat, lon
+
+
+def _vertex_normals(pts):
+    """Unit left-normals at each polyline vertex (bisector of the adjacent segments)."""
+    n = len(pts)
+    out = []
+    for i in range(n):
+        if i == 0:
+            tx, ty = pts[1][0] - pts[0][0], pts[1][1] - pts[0][1]
+        elif i == n - 1:
+            tx, ty = pts[-1][0] - pts[-2][0], pts[-1][1] - pts[-2][1]
+        else:
+            ax, ay = pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]
+            bx, by = pts[i + 1][0] - pts[i][0], pts[i + 1][1] - pts[i][1]
+            la = math.hypot(ax, ay) or 1.0
+            lb = math.hypot(bx, by) or 1.0
+            tx, ty = ax / la + bx / lb, ay / la + by / lb    # segment-direction bisector
+        tl = math.hypot(tx, ty) or 1.0
+        out.append((-ty / tl, tx / tl))                      # rotate unit tangent +90deg
+    return out
+
+
+def corridor_scan(path, width_m=60.0, spacing_m=30.0, alt=50.0):
+    """Parallel passes along a polyline centerline `path` [(lat,lon), ...], covering a
+    corridor of `width_m` (measured perpendicular to the path) with passes `spacing_m`
+    apart. Boustrophedon order so the vehicle snakes back and forth. Returns
+    MissionItems -- for linear inspection (power lines, roads, pipelines, coastlines).
+
+    Offsetting uses per-vertex segment-bisector normals in a local metres frame: exact
+    on straight runs, good on gentle bends (no miter scaling, so very sharp corners
+    pinch slightly)."""
+    if len(path) < 2:
+        return []
+    lat0, lon0 = path[0]
+    pts = [_ll_to_m(la, lo, lat0, lon0) for la, lo in path]
+    normals = _vertex_normals(pts)
+    n_pass = max(1, int(round(width_m / max(spacing_m, 1e-6))))
+    offsets = [(-width_m / 2.0) + i * (width_m / n_pass) for i in range(n_pass + 1)]
+    items = []
+    seq = 0
+    for k, off in enumerate(offsets):
+        line = [(x + nx * off, y + ny * off) for (x, y), (nx, ny) in zip(pts, normals)]
+        if k % 2:
+            line = list(reversed(line))                      # snake between passes
+        for x, y in line:
+            la, lo = _m_to_ll(x, y, lat0, lon0)
+            items.append(MissionItem(seq, la, lo, alt))
+            seq += 1
     return items
 
 

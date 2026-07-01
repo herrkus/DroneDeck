@@ -27,7 +27,7 @@ import core
 import mavlink
 from vehicle import Vehicle
 from link import UdpLink, TcpLink, SerialLink, ReplayLink
-from mission import MissionProtocol, MissionItem, survey_grid
+from mission import MissionProtocol, MissionItem, survey_grid, corridor_scan
 from params import ParamManager, ParamDialog
 from tlog import TlogWriter
 from logdownload import LogManager
@@ -289,7 +289,8 @@ class DroneDeck(QMainWindow):
         self.radius_spin.valueChanged.connect(lambda v: setattr(self, "fence_radius", v))
         tb3.addWidget(self.radius_spin)
         self._mission_btns = []
-        for label, slot in (("Survey", self._survey), ("Clear", self._clear_mission),
+        for label, slot in (("Survey", self._survey), ("Corridor", self._corridor),
+                            ("Clear", self._clear_mission),
                             ("Upload", self._upload_mission), ("Download", self._download_mission)):
             b = QPushButton(label)
             b.clicked.connect(slot)
@@ -1144,6 +1145,45 @@ class DroneDeck(QMainWindow):
             self.mission_items = grid
             self._refresh_mission_view()
             self._on_info(f"survey grid: {len(grid)} waypoints")
+
+    def _corridor(self):
+        if len(self.mission_items) < 2:
+            QMessageBox.information(self, "Corridor Scan",
+                                    "Place at least 2 waypoints to draw the corridor "
+                                    "centerline, then Corridor.")
+            return
+        from PySide6.QtWidgets import QDialog, QFormLayout, QDialogButtonBox
+        dlg = QDialog(self)
+        dlg.setWindowTitle("Corridor Scan")
+        form = QFormLayout(dlg)
+
+        def spin(lo, hi, val, suf=" m"):
+            s = QSpinBox()
+            s.setRange(lo, hi)
+            s.setValue(val)
+            s.setSuffix(suf)
+            return s
+
+        w_spin = spin(5, 2000, 60)
+        s_spin = spin(2, 500, 30)
+        a_spin = spin(2, 1000, int(self.mission_items[0].alt or 50))
+        form.addRow("Corridor width", w_spin)
+        form.addRow("Pass spacing", s_spin)
+        form.addRow("Altitude", a_spin)
+        bb = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        bb.accepted.connect(dlg.accept)
+        bb.rejected.connect(dlg.reject)
+        form.addRow(bb)
+        if dlg.exec() != QDialog.Accepted:
+            return
+        items = corridor_scan([(it.lat, it.lon) for it in self.mission_items],
+                              width_m=float(w_spin.value()), spacing_m=float(s_spin.value()),
+                              alt=float(a_spin.value()))
+        if items:
+            self.mission_items = items
+            self._refresh_mission_view()
+            self._on_info(f"corridor scan: {len(items)} waypoints "
+                          f"({w_spin.value()}m wide, {s_spin.value()}m spacing)")
 
     def _build_fence_items(self):
         """Whole geofence (inclusion/exclusion polygons + circles) as MISSION_ITEM_INTs."""
