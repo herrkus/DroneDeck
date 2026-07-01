@@ -5,13 +5,21 @@ tool opens in the other. We read/write the mission section (SimpleItems); geoFen
 rallyPoints are written empty (the GCS edits those through its own tools)."""
 from __future__ import annotations
 import json
+import math
 
 from mission import MissionItem
 
 
 def _f(v):
-    """QGC stores unset params as JSON null -- coerce to 0.0."""
-    return float(v) if v is not None else 0.0
+    """QGC stores unset params as JSON null -- coerce to 0.0. Also coerce non-finite to 0.0: a .plan
+    can carry NaN/Infinity (Python's json.load accepts those literal tokens, and a hand-edited or
+    corrupt file can hold them), and a NaN/Inf coordinate must never enter a mission or fence that
+    could then be uploaded to a real drone. Non-numeric junk still raises, so a blatantly corrupt
+    file is rejected with a clear error by the caller rather than silently loading a bad waypoint."""
+    if v is None:
+        return 0.0
+    f = float(v)
+    return f if math.isfinite(f) else 0.0
 
 
 def fence_to_plan(fence_inc=None, fence_exc=None, fence_circles=None):
@@ -34,7 +42,7 @@ def plan_to_fence(data):
     gf = data.get("geoFence", {})
     inc, exc, circles = [], [], []
     for poly in gf.get("polygons", []):
-        pts = [(float(p[0]), float(p[1])) for p in poly.get("polygon", [])]
+        pts = [(_f(p[0]), _f(p[1])) for p in poly.get("polygon", [])]
         if poly.get("inclusion", True):
             inc = pts
         else:
@@ -42,8 +50,8 @@ def plan_to_fence(data):
     for c in gf.get("circles", []):
         cir = c.get("circle", {})
         ctr = (list(cir.get("center", [])) + [0.0, 0.0])[:2]
-        circles.append({"lat": float(ctr[0]), "lon": float(ctr[1]),
-                        "radius": float(cir.get("radius", 0.0)),
+        circles.append({"lat": _f(ctr[0]), "lon": _f(ctr[1]),
+                        "radius": _f(cir.get("radius", 0.0)),
                         "incl": bool(c.get("inclusion", True))})
     return inc, exc, circles
 

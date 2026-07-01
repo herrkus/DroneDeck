@@ -46,6 +46,7 @@ check "params"              ""                        tests/test_params.py
 check "tlog"                ""                        tests/test_tlog.py
 check "analyze"             ""                        tests/test_analyze.py
 check "planfile"            ""                        tests/test_planfile.py
+check "planload"            ""                        tests/test_planload.py
 check "mission_validate"    ""                        tests/test_mission_validate.py
 check "upload_progress"     ""                        tests/test_upload_progress.py
 check "wpprogress"          ""                        tests/test_wpprogress.py
