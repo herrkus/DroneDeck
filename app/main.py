@@ -30,7 +30,8 @@ import mavlink
 from vehicle import Vehicle
 from link import UdpLink, TcpLink, SerialLink, ReplayLink
 from mission import (MissionProtocol, MissionItem, survey_grid, corridor_scan,
-                     structure_scan, fence_from_mission, validate_mission)
+                     structure_scan, fence_from_mission, validate_mission,
+                     autopilot_mission_warnings)
 from params import ParamManager, ParamDialog
 from tlog import TlogWriter
 from logdownload import LogManager
@@ -1715,6 +1716,7 @@ class DroneDeck(QMainWindow):
                 return
             self._renumber()
             warns = validate_mission(self.mission_items)
+            warns += autopilot_mission_warnings(self.mission_items, self.vehicle.autopilot)
             for w in warns:                              # advisory, non-blocking (QGC-style)
                 self.console.add_note(f"mission check: {w}", "#e0a030")
             if warns:

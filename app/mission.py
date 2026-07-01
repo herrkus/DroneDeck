@@ -269,6 +269,19 @@ def validate_mission(items):
     return warns
 
 
+def autopilot_mission_warnings(items, autopilot):
+    """Autopilot-specific advisories that plain validate_mission cannot know. PX4 treats
+    Return-To-Launch as a flight mode, not a mission command, so it rejects a NAV_RETURN_TO_LAUNCH
+    mission item (MAV_MISSION_UNSUPPORTED) -- verified live against PX4. Warn before the upload
+    fails so the user can end with Land or drop the item instead of hitting a cryptic reject."""
+    warns = []
+    if int(autopilot) == mavlink.MAV_AUTOPILOT_PX4 and \
+            any(it.command == mavlink.MAV_CMD_NAV_RETURN_TO_LAUNCH for it in items):
+        warns.append("PX4 will reject Return-To-Launch as a mission item -- end the mission with "
+                     "Land, or remove the RTL item.")
+    return warns
+
+
 class MissionProtocol(QObject):
     progress = Signal(str)          # human-readable step
     progress_n = Signal(int, int)   # (done, total) -- drives a progress bar
