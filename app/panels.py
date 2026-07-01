@@ -9,7 +9,7 @@ from PySide6.QtWidgets import (QWidget, QVBoxLayout, QFormLayout, QGroupBox, QLa
                                QListWidget, QListWidgetItem, QTableWidget,
                                QTableWidgetItem, QHeaderView, QPushButton, QSlider,
                                QSpinBox, QHBoxLayout, QGridLayout, QProgressBar,
-                               QAbstractItemView, QPlainTextEdit, QLineEdit)
+                               QAbstractItemView, QPlainTextEdit, QLineEdit, QMenu)
 
 import mavlink
 
@@ -17,9 +17,12 @@ _MONO = QFont("DejaVu Sans Mono", 10)
 
 
 class TelemetryPanel(QWidget):
+    groupsChanged = Signal()               # user toggled which groups are shown
+
     def __init__(self, parent=None):
         super().__init__(parent)
         self.v: dict[str, QLabel] = {}
+        self.groups: dict[str, QGroupBox] = {}     # title -> box, for show/hide
         specs = {
             "LINK": [("link", "Status"), ("rate", "Msg rate"), ("counts", "OK / drop")],
             "FLIGHT": [("mode", "Mode"), ("armed", "State"), ("status", "System"), ("type", "Airframe")],
@@ -57,7 +60,29 @@ class TelemetryPanel(QWidget):
             val.setFont(_MONO)
             self.v[key] = val
             form.addRow(QLabel(label), val)
+        self.groups[title] = box
         return box
+
+    def contextMenuEvent(self, e):
+        """Right-click to choose which telemetry groups are shown (QGC-style)."""
+        menu = QMenu(self)
+        menu.addAction("Telemetry groups").setEnabled(False)
+        menu.addSeparator()
+        for title, box in self.groups.items():
+            act = menu.addAction(title)
+            act.setCheckable(True)
+            act.setChecked(not box.isHidden())
+            act.toggled.connect(lambda on, b=box: (b.setVisible(on), self.groupsChanged.emit()))
+        self._ctx_menu = menu                       # keep a ref so it isn't GC'd
+        menu.exec(e.globalPos())
+
+    def hidden_groups(self):
+        return [t for t, b in self.groups.items() if b.isHidden()]
+
+    def set_hidden_groups(self, titles):
+        want = set(titles or ())
+        for title, box in self.groups.items():
+            box.setVisible(title not in want)
 
     def _set(self, key, text, color=None):
         lbl = self.v[key]

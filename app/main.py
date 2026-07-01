@@ -420,6 +420,7 @@ class DroneDeck(QMainWindow):
         # full text readouts now live in a roomy "Telemetry" bottom-dock tab (below),
         # so the right column stays uncramped: just the PFD + system health + breathing room.
         self.panel = TelemetryPanel()
+        self.panel.groupsChanged.connect(self._save_telem_groups)
         rlay.addStretch(1)
 
         # left pane: Map / Video tabs (QGC-style swap)
@@ -630,6 +631,11 @@ class DroneDeck(QMainWindow):
     def _open_analyze(self):
         from analyze import AnalyzeDialog
         AnalyzeDialog(self, LOG_DIR).exec()
+
+    def _save_telem_groups(self):
+        if self._persist:
+            self.settings.setValue("telem/hidden", json.dumps(self.panel.hidden_groups()))
+            self.settings.sync()
 
     def _open_plan(self):
         path, _ = QFileDialog.getOpenFileName(self, "Open mission plan", LOG_DIR,
@@ -1782,6 +1788,12 @@ class DroneDeck(QMainWindow):
                 self.link_configs = json.loads(raw)
             except (ValueError, TypeError):
                 self.link_configs = []
+        hidden = s.value("telem/hidden")
+        if hidden:
+            try:
+                self.panel.set_hidden_groups(json.loads(hidden))
+            except (ValueError, TypeError):
+                pass
 
     def save_settings(self):
         s = self.settings
@@ -1795,6 +1807,7 @@ class DroneDeck(QMainWindow):
         s.setValue("map/provider", self.map.provider)
         s.setValue("map/follow", bool(self.map.follow))
         s.setValue("links/configs", json.dumps(self.link_configs))
+        s.setValue("telem/hidden", json.dumps(self.panel.hidden_groups()))
         s.sync()
 
     def closeEvent(self, e):
