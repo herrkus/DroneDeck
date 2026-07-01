@@ -92,7 +92,7 @@ class WaypointEditor(QDialog):
 
     CMDS = [("Waypoint", 16), ("Takeoff", 22), ("Loiter (time)", 19),
             ("Loiter (unlim)", 17), ("Land", 21), ("Return to launch", 20),
-            ("ROI (point camera)", 195), ("Change speed", 178)]
+            ("ROI (point camera)", 195), ("Change speed", 178), ("Jump to WP", 177)]
 
     def __init__(self, item, parent=None):
         super().__init__(parent)
@@ -121,12 +121,21 @@ class WaypointEditor(QDialog):
         self.p3 = dspin(-1e6, 1e6, item.param3)       # loiter radius (m)
         self.p4 = dspin(-360, 360, item.param4, " deg")   # yaw
         self.spd = dspin(0, 100, item.param2 if item.command == 178 else 5.0, " m/s")
+        self.jump_to = QSpinBox()
+        self.jump_to.setRange(0, 999)
+        self.jump_to.setValue(int(item.param1) if item.command == 177 else 0)
+        self.jump_rep = QSpinBox()
+        self.jump_rep.setRange(-1, 999)
+        self.jump_rep.setSpecialValueText("forever")      # shown when value == -1
+        self.jump_rep.setValue(int(item.param2) if item.command == 177 else 1)
         form.addRow("Command", self.cmd)
         form.addRow("Altitude", self.alt)
         form.addRow("Hold / loiter time (s)", self.p1)
         form.addRow("Loiter radius (m)", self.p3)
         form.addRow("Yaw", self.p4)
         form.addRow("Speed", self.spd)
+        form.addRow("Jump to WP #", self.jump_to)
+        form.addRow("Repeat count", self.jump_rep)
         bb = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         bb.accepted.connect(self.accept)
         bb.rejected.connect(self.reject)
@@ -137,13 +146,16 @@ class WaypointEditor(QDialog):
     def _sync_fields(self):
         """Grey out the fields that don't apply to the chosen command (QGC-style)."""
         cmd = self.cmd.currentData()
-        has_pos = cmd not in (20, 178)                # RTL + change-speed carry no position
+        has_pos = cmd not in (20, 178, 177)           # RTL / change-speed / jump carry no position
         is_loiter = cmd in (17, 19)
+        is_jump = cmd == 177
         self.alt.setEnabled(has_pos)
         self.p1.setEnabled(is_loiter)
         self.p3.setEnabled(is_loiter)
         self.p4.setEnabled(has_pos)
         self.spd.setEnabled(cmd == 178)
+        self.jump_to.setEnabled(is_jump)
+        self.jump_rep.setEnabled(is_jump)
 
     def apply_to(self, item):
         cmd = self.cmd.currentData()
@@ -154,14 +166,20 @@ class WaypointEditor(QDialog):
             item.param3 = -1.0                        # throttle: no change
             item.param4 = 0.0
             item.alt = 0.0
+        elif cmd == 177:                              # DO_JUMP
+            item.param1 = float(self.jump_to.value())   # target waypoint seq
+            item.param2 = float(self.jump_rep.value())  # repeat count (-1 = forever)
+            item.param3 = 0.0
+            item.param4 = 0.0
+            item.alt = 0.0
         else:
             item.alt = self.alt.value()
             item.param1 = self.p1.value()
             item.param3 = self.p3.value()
             item.param4 = self.p4.value()
-        # RTL and DO_CHANGE_SPEED carry no position and must use the MISSION frame (2);
-        # PX4 rejects them with a global frame. Everything else stays georeferenced.
-        item.frame = 2 if cmd in (20, 178) else mavlink.MAV_FRAME_GLOBAL_RELATIVE_ALT_INT
+        # RTL / DO_CHANGE_SPEED / DO_JUMP carry no position and must use the MISSION
+        # frame (2); PX4 rejects them with a global frame. Others stay georeferenced.
+        item.frame = 2 if cmd in (20, 178, 177) else mavlink.MAV_FRAME_GLOBAL_RELATIVE_ALT_INT
 
 
 class DroneDeck(QMainWindow):
@@ -1237,6 +1255,9 @@ class DroneDeck(QMainWindow):
                 extra = f"  r{it.param3:.0f}"
         elif it.command == 178:                       # DO_CHANGE_SPEED
             extra = f"  {it.param2:.1f} m/s"
+        elif it.command == 177:                       # DO_JUMP
+            rep = "inf" if it.param2 < 0 else f"{it.param2:.0f}"
+            extra = f"  -> WP{it.param1:.0f} x{rep}"
         return (f"{it.seq:2d}  {it.cmd_name:9s} {it.lat:10.6f} {it.lon:11.6f}"
                 f"  {it.alt:5.0f} m{extra}")
 
