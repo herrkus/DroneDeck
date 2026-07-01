@@ -575,6 +575,10 @@ class DroneDeck(QMainWindow):
             lambda _=0: self.console.set_threshold(self.msg_filter.currentData()))
         frow.addWidget(self.msg_filter)
         frow.addStretch(1)
+        self.btn_msg_clear = QPushButton("Clear")
+        self.btn_msg_clear.setToolTip("Clear the message log")
+        self.btn_msg_clear.clicked.connect(self._clear_messages)
+        frow.addWidget(self.btn_msg_clear)
         mcl.addLayout(frow)
         mcl.addWidget(self.console, 1)
         self.msg_dock = dock = QDockWidget("Messages", self)
@@ -1862,6 +1866,13 @@ class DroneDeck(QMainWindow):
         """Reflect the unread count on the dock's tab title (blank when all read)."""
         self.msg_dock.setWindowTitle("Messages" if not self._msg_unread
                                      else f"Messages ({self._msg_unread})")
+
+    def _clear_messages(self):
+        """Empty the message log and reset the unread badge."""
+        self.console.clear()
+        self._msg_unread = 0
+        self._msg_worst = 99
+        self._update_msg_badge()
 
     def _on_map_follow_changed(self, on):
         """Keep the Follow checkbox in sync when the map auto-detaches on pan / re-attaches on

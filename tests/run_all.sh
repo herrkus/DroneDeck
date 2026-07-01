@@ -78,6 +78,7 @@ check "fitmap"              ""                        tests/test_fitmap.py
 check "ruler"               ""                        tests/test_ruler.py
 check "battwarn"            ""                        tests/test_battwarn.py
 check "msgunread"           ""                        tests/test_msgunread.py
+check "msgclear"            ""                        tests/test_msgclear.py
 check "takeoffalt"          ""                        tests/test_takeoffalt.py
 check "mavversion"          ""                        tests/test_mavversion.py
 check "confirm"             ""                        tests/test_confirm.py
