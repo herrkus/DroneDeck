@@ -56,6 +56,7 @@ class Vehicle(QObject):
         # gps
         self.fix_type = 0
         self.satellites = 0
+        self.current_wp = -1        # active mission waypoint seq (from MISSION_CURRENT)
         # status
         self.sysid = 0
         self.mav_type = 0
@@ -194,6 +195,9 @@ class Vehicle(QObject):
         if f.get("heading") is not None and not self.have_position:
             self.heading = float(f["heading"]) % 360.0
 
+    def _on_mission_current(self, f):
+        self.current_wp = int(f.get("seq", -1))
+
     _H = {
         mavlink.HEARTBEAT: _on_heartbeat,
         mavlink.ATTITUDE: _on_attitude,
@@ -207,6 +211,7 @@ class Vehicle(QObject):
         mavlink.VFR_HUD: _on_vfr_hud,
         mavlink.STATUSTEXT: _on_statustext,
         mavlink.COMMAND_ACK: _on_command_ack,
+        mavlink.MISSION_CURRENT: _on_mission_current,
     }
 
     # -- derived --------------------------------------------------------------

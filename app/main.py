@@ -16,7 +16,7 @@ import json
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from PySide6.QtCore import Qt, QTimer, QSettings
-from PySide6.QtGui import QAction, QFont
+from PySide6.QtGui import QAction, QFont, QColor
 from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QHBoxLayout,
                                QVBoxLayout, QSplitter, QToolBar, QLineEdit,
                                QPushButton, QLabel, QCheckBox, QMessageBox, QScrollArea,
@@ -1006,6 +1006,16 @@ class DroneDeck(QMainWindow):
         n = len(self.mission_items)
         self.mission_status.setText(f"{n} waypoint{'' if n == 1 else 's'}" if n else "no mission")
         self.mission_stats.setText(self._mission_stats_text())
+        self._hl_wp = -2                      # force the current-wp highlight to re-apply
+
+    def _highlight_current_wp(self, cur):
+        if cur == getattr(self, "_hl_wp", -2):
+            return
+        self._hl_wp = cur
+        for r in range(self.mission_list.count()):
+            it = self.mission_list.item(r)
+            if it is not None:
+                it.setForeground(QColor("#37d67a") if r == cur else QColor("#d6d9df"))
 
     def _mission_stats_text(self):
         wps = [it for it in self.mission_items
@@ -1255,6 +1265,8 @@ class DroneDeck(QMainWindow):
         self.systems.update_from(ve)
         if ve.have_position:
             self.map.update_vehicle(ve.lat, ve.lon, ve.heading, ve.home, ve.trail)
+        self.map.set_current_wp(ve.current_wp)
+        self._highlight_current_wp(ve.current_wp)
 
         # other vehicles + ADSB traffic on the map (traffic expires after 10 s)
         now_t = time.monotonic()

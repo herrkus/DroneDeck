@@ -70,6 +70,7 @@ class MapView(QWidget):
         self.traffic = []                     # ADSB: [{"lat","lon","heading","callsign"}]
         self.others = []                      # other vehicles: [(lat, lon, heading)]
         self.selected_wp = -1
+        self.current_wp = -1                  # live mission target (MISSION_CURRENT)
         self._wp_drag = None
         self._pending = set()
         self._drag = None
@@ -131,6 +132,11 @@ class MapView(QWidget):
     def set_selected(self, idx):
         self.selected_wp = idx
         self.update()
+
+    def set_current_wp(self, seq):
+        if seq != self.current_wp:
+            self.current_wp = seq
+            self.update()
 
     def _nearest_wp(self, pos):
         if not self.mission:
@@ -295,6 +301,10 @@ class MapView(QWidget):
             wpf = QFont("DejaVu Sans Mono", 8)
             wpf.setBold(True)
             for i, pt in enumerate(pts):
+                if i == self.current_wp:                 # live target waypoint: green ring
+                    p.setPen(QPen(QColor(0, 230, 90), 3))
+                    p.setBrush(Qt.NoBrush)
+                    p.drawEllipse(pt, 14, 14)
                 if i == self.selected_wp:
                     p.setPen(QPen(QColor(255, 255, 255), 2))
                     p.setBrush(QBrush(QColor(255, 140, 0)))
