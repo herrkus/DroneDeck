@@ -129,8 +129,13 @@ class WaypointEditor(QDialog):
         self.jump_rep.setRange(-1, 999)
         self.jump_rep.setSpecialValueText("forever")      # shown when value == -1
         self.jump_rep.setValue(int(item.param2) if item.command == 177 else 1)
+        self.altmode = QComboBox()
+        self.altmode.addItem("Relative (home)", mavlink.MAV_FRAME_GLOBAL_RELATIVE_ALT_INT)
+        self.altmode.addItem("AMSL", mavlink.MAV_FRAME_GLOBAL_INT)
+        self.altmode.setCurrentIndex(1 if item.frame == mavlink.MAV_FRAME_GLOBAL_INT else 0)
         form.addRow("Command", self.cmd)
         form.addRow("Altitude", self.alt)
+        form.addRow("Altitude mode", self.altmode)
         form.addRow("Hold / loiter time (s)", self.p1)
         form.addRow("Loiter radius (m)", self.p3)
         form.addRow("Yaw", self.p4)
@@ -151,6 +156,7 @@ class WaypointEditor(QDialog):
         is_loiter = cmd in (17, 19)
         is_jump = cmd == 177
         self.alt.setEnabled(has_pos)
+        self.altmode.setEnabled(has_pos)             # AMSL/relative only for georeferenced items
         self.p1.setEnabled(is_loiter)
         self.p3.setEnabled(is_loiter)
         self.p4.setEnabled(has_pos)
@@ -181,9 +187,10 @@ class WaypointEditor(QDialog):
             item.param1 = self.p1.value()
             item.param3 = self.p3.value()
             item.param4 = self.p4.value()
-        # RTL / DO_CHANGE_SPEED / DO_JUMP carry no position and must use the MISSION
-        # frame (2); PX4 rejects them with a global frame. Others stay georeferenced.
-        item.frame = 2 if cmd in (20, 178, 177, 197) else mavlink.MAV_FRAME_GLOBAL_RELATIVE_ALT_INT
+        # RTL / DO_CHANGE_SPEED / DO_JUMP / clear-ROI carry no position and must use the
+        # MISSION frame (2); PX4 rejects them with a global frame. Georeferenced items take
+        # the chosen altitude mode: relative-to-home (6) or AMSL (5).
+        item.frame = 2 if cmd in (20, 178, 177, 197) else self.altmode.currentData()
 
 
 class DroneDeck(QMainWindow):
@@ -1277,8 +1284,9 @@ class DroneDeck(QMainWindow):
         elif it.command == 177:                       # DO_JUMP
             rep = "inf" if it.param2 < 0 else f"{it.param2:.0f}"
             extra = f"  -> WP{it.param1:.0f} x{rep}"
+        amode = " MSL" if it.frame == mavlink.MAV_FRAME_GLOBAL_INT else ""
         return (f"{it.seq:2d}  {it.cmd_name:9s} {it.lat:10.6f} {it.lon:11.6f}"
-                f"  {it.alt:5.0f} m{extra}")
+                f"  {it.alt:5.0f} m{amode}{extra}")
 
     def _refresh_mission_view(self):
         self.mission_list.clear()
