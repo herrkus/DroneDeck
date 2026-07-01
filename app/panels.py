@@ -430,23 +430,34 @@ class MessageConsole(QListWidget):
         self.setFont(QFont("DejaVu Sans Mono", 9))
         self.setUniformItemSizes(True)
         self.setSelectionMode(QListWidget.NoSelection)
+        self.threshold = 7                 # show severities <= threshold (7 = everything)
+
+    def _add(self, item, severity):
+        item.setData(Qt.UserRole, int(severity))
+        self.addItem(item)
+        item.setHidden(int(severity) > self.threshold)   # only sticks once in the list
+        while self.count() > 300:
+            self.takeItem(0)
+        self.scrollToBottom()
 
     def add_message(self, severity, text):
         sev = mavlink.MAV_SEVERITY.get(severity, str(severity))
         item = QListWidgetItem(f"[{sev}] {text}")
         item.setForeground(QColor(self.SEV_COLOR.get(severity, "#c4c8d0")))
-        self.addItem(item)
-        while self.count() > 300:
-            self.takeItem(0)
-        self.scrollToBottom()
+        self._add(item, severity)
 
     def add_note(self, text, color="#8fd0ff"):
         item = QListWidgetItem(text)
         item.setForeground(QColor(color))
-        self.addItem(item)
-        while self.count() > 300:
-            self.takeItem(0)
-        self.scrollToBottom()
+        self._add(item, 0)                 # local notes always show (0 <= any threshold)
+
+    def set_threshold(self, sev):
+        """Hide STATUSTEXT lines less severe than `sev` (higher MAV_SEVERITY number)."""
+        self.threshold = int(sev)
+        for i in range(self.count()):
+            it = self.item(i)
+            s = it.data(Qt.UserRole)
+            it.setHidden((s if s is not None else 0) > self.threshold)
 
 
 class MavInspector(QWidget):

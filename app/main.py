@@ -486,13 +486,28 @@ class DroneDeck(QMainWindow):
         cv.addWidget(split, 1)
         self.setCentralWidget(central)
 
-        # bottom message console (STATUSTEXT + command results)
+        # bottom message console (STATUSTEXT + command results) with a severity filter
         self.console = MessageConsole()
         self.console.setMinimumHeight(70)
         # no maximum height -- drag the map/messages divider to grow the board freely
+        msg_wrap = QWidget()
+        mcl = QVBoxLayout(msg_wrap)
+        mcl.setContentsMargins(2, 2, 2, 2)
+        mcl.setSpacing(2)
+        frow = QHBoxLayout()
+        frow.addWidget(QLabel("Show:"))
+        self.msg_filter = QComboBox()
+        for label, thr in (("All", 7), ("Info", 6), ("Warnings", 4), ("Errors", 3)):
+            self.msg_filter.addItem(label, thr)
+        self.msg_filter.currentIndexChanged.connect(
+            lambda _=0: self.console.set_threshold(self.msg_filter.currentData()))
+        frow.addWidget(self.msg_filter)
+        frow.addStretch(1)
+        mcl.addLayout(frow)
+        mcl.addWidget(self.console, 1)
         self.msg_dock = dock = QDockWidget("Messages", self)
         dock.setObjectName("messages_dock")
-        dock.setWidget(self.console)
+        dock.setWidget(msg_wrap)
         dock.setFeatures(QDockWidget.DockWidgetMovable | QDockWidget.DockWidgetFloatable)
         self.addDockWidget(Qt.BottomDockWidgetArea, dock)
 
