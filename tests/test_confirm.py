@@ -12,9 +12,22 @@ sys.path.insert(0, os.path.join(ROOT, "app"))
 
 from PySide6.QtWidgets import QApplication, QMessageBox
 import main as m
+import mavlink
 
 app = QApplication([])
 win = m.DroneDeck(14599)
+
+# Wire-level: link.force_disarm must emit MAV_CMD_COMPONENT_ARM_DISARM with the force magic
+# param2=21196 (a plain disarm is refused mid-flight -- PX4-verified). Capture + decode the frame.
+_frames = []
+win.link._send = lambda data: _frames.append(bytes(data))
+win.link.force_disarm(7)
+assert len(_frames) == 1
+_dm = mavlink.PyParser().feed(_frames[0])
+assert len(_dm) == 1 and _dm[0].msgid == mavlink.COMMAND_LONG
+_ff = _dm[0].fields
+assert _ff["command"] == mavlink.MAV_CMD_COMPONENT_ARM_DISARM
+assert _ff["param1"] == 0.0 and abs(_ff["param2"] - 21196.0) < 1e-3 and _ff["target_system"] == 7
 
 
 class RecLink:
@@ -29,6 +42,9 @@ class RecLink:
 
     def rtl(self, sysid):
         self.calls.append(("rtl",))
+
+    def force_disarm(self, sysid):
+        self.calls.append(("force_disarm",))
 
 
 win.link = RecLink()
@@ -67,5 +83,9 @@ assert run(lambda: win._arm(True), YES) == [("arm", True)]
 # Disarm while NOT armed -- harmless, no prompt shown, sends directly even though answer is No
 win.vehicle.armed = False
 assert run(lambda: win._arm(False), NO) == [("arm", False)]
+
+# Emergency Stop -- guarded force-disarm; declined sends nothing, confirmed sends force_disarm
+assert run(win._emergency_stop, NO) == []
+assert run(win._emergency_stop, YES) == [("force_disarm",)]
 
 print("CONFIRM PASSED")

@@ -328,8 +328,15 @@ class DroneDeck(QMainWindow):
         self.btn_arm.clicked.connect(lambda: self._arm(True))
         self.btn_disarm = QPushButton("Disarm")
         self.btn_disarm.clicked.connect(lambda: self._arm(False))
+        self.btn_estop = QPushButton("Emergency Stop")
+        self.btn_estop.setStyleSheet(
+            "QPushButton { background:#7a1414; color:#fff; font-weight:bold; }"
+            "QPushButton:hover { background:#a01a1a; }"
+            "QPushButton:disabled { background:#3a2222; color:#886; }")
+        self.btn_estop.clicked.connect(self._emergency_stop)
         tb.addWidget(self.btn_arm)
         tb.addWidget(self.btn_disarm)
+        tb.addWidget(self.btn_estop)
         self.btn_params = QPushButton("Params")
         self.btn_params.clicked.connect(self._open_params)
         tb.addWidget(self.btn_params)
@@ -1021,6 +1028,7 @@ class DroneDeck(QMainWindow):
         armed = connected and ve.armed
         self.btn_arm.setEnabled(connected and not armed)
         self.btn_disarm.setEnabled(connected and armed)
+        self.btn_estop.setEnabled(connected)     # always reachable while connected
         self.mode_combo.setEnabled(connected)
         for b in self._flight_btns:
             b.setEnabled(connected and (armed if getattr(b, "_needs", "conn") == "armed" else True))
@@ -1041,6 +1049,17 @@ class DroneDeck(QMainWindow):
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             QMessageBox.StandardButton.No,
         ) == QMessageBox.StandardButton.Yes
+
+    def _emergency_stop(self):
+        if not self._has_vehicle():
+            QMessageBox.information(self, "Emergency Stop", "No vehicle connected.")
+            return
+        if not self._confirm("EMERGENCY STOP",
+                             "Force-disarm NOW?\n\nThis cuts ALL motors immediately -- if the "
+                             "aircraft is airborne it WILL fall.\n\nUse only to prevent worse harm."):
+            return
+        self.link.force_disarm(self._sysid())
+        self._on_info(f"EMERGENCY STOP -- force-disarm sent to system {self._sysid()}")
 
     def _arm(self, arm):
         if not self._has_vehicle():
@@ -1867,6 +1886,7 @@ class DroneDeck(QMainWindow):
         self.btn_cal.setToolTip("Vehicle setup: radio + sensor calibration")
         self.btn_arm.setToolTip("Arm the vehicle  (Ctrl+Shift+A)")
         self.btn_disarm.setToolTip("Disarm the vehicle  (Ctrl+Shift+D)")
+        self.btn_estop.setToolTip("Emergency Stop: force-disarm / cut all motors immediately")
         self.btn_params.setToolTip("Download, search and edit parameters  (Ctrl+P)")
         self.btn_record.setToolTip("Record telemetry to a .tlog file for replay")
         self.btn_help.setToolTip("Keyboard shortcuts & quick help  (F1)")

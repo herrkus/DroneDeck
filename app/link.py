@@ -127,6 +127,12 @@ class Link(QObject):
         self.send_command_long(target_sys, mavlink.MAV_CMD_COMPONENT_ARM_DISARM,
                                [1.0 if arm else 0.0, 0, 0, 0, 0, 0, 0])
 
+    def force_disarm(self, target_sys: int):
+        # param2 = 21196 is the MAVLink force magic: disarm even with motors spinning
+        # (emergency motor kill). A plain disarm (param2=0) is refused mid-flight -- PX4-verified.
+        self.send_command_long(target_sys, mavlink.MAV_CMD_COMPONENT_ARM_DISARM,
+                               [0.0, 21196.0, 0, 0, 0, 0, 0])
+
     def set_mode(self, target_sys: int, custom_mode, sub_mode=0):
         # ArduPilot: custom_mode is the mode number (sub_mode 0). PX4: custom_mode is the
         # main mode and sub_mode the sub mode -- both ride in DO_SET_MODE param2/param3.
