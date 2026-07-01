@@ -14,13 +14,43 @@ if [ ! -f core/libdronecore.so ]; then
     ./build.sh || echo "WARNING: core build failed; continuing with pure-Python fallback"
 fi
 
+# Launch the GCS window. Under Hyprland (a tiling WM) a big ground-station window
+# gets crushed into a tile, squashing its attitude/compass instruments; so there
+# we float + size + centre it. On any other WM/DE this is skipped and the window
+# opens normally, keeping run.sh portable (Ubuntu, KDE, GNOME, ...).
+launch_gcs() {
+    if command -v hyprctl >/dev/null 2>&1 && [ -n "${HYPRLAND_INSTANCE_SIGNATURE:-}" ]; then
+        python3 app/main.py "$@" &
+        local app=$!
+        local addr=""
+        local i
+        for i in $(seq 1 60); do
+            addr=$(hyprctl clients -j 2>/dev/null | python3 -c "import sys, json
+try: cs = json.load(sys.stdin)
+except Exception: cs = []
+print(next((c['address'] for c in cs if c.get('class') == 'DroneDeck'), ''))" 2>/dev/null)
+            [ -n "$addr" ] && break
+            sleep 0.1
+        done
+        if [ -n "$addr" ]; then
+            hyprctl dispatch setfloating "address:$addr" >/dev/null 2>&1
+            hyprctl dispatch resizewindowpixel "exact 1600 1000,address:$addr" >/dev/null 2>&1
+            hyprctl dispatch focuswindow "address:$addr" >/dev/null 2>&1
+            hyprctl dispatch centerwindow >/dev/null 2>&1
+        fi
+        wait "$app"
+    else
+        exec python3 app/main.py "$@"
+    fi
+}
+
 if [ "${1:-}" = "demo" ]; then
     shift || true
     echo "starting TEST telemetry source on UDP 14550 (not a real drone)..."
     python3 sim/simulator.py --target 127.0.0.1:14550 &
     SIM_PID=$!
     trap 'kill "$SIM_PID" 2>/dev/null || true' EXIT INT TERM
-    python3 app/main.py "$@"
+    launch_gcs "$@"
 else
-    exec python3 app/main.py "$@"
+    launch_gcs "$@"
 fi

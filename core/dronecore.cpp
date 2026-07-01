@@ -326,7 +326,18 @@ struct Parser {
                 : buf[pos + 5];
 
             const MsgInfo* info = find_info(msgid);
-            if (!info) { ++pos; continue; }       // unknown id: cannot CRC, resync by 1
+            if (!info) {
+                // Unknown msgid: no CRC seed to validate it, but the header gave us
+                // the exact frame length. If a valid start byte sits right where this
+                // frame ends (or it runs to the buffer edge), the framing is
+                // self-consistent -- skip the whole message rather than byte-scanning
+                // its payload (which used to spawn phantom frames counted as drops).
+                if (pos + total >= n || buf[pos + total] == 0xFE || buf[pos + total] == 0xFD)
+                    pos += total;
+                else
+                    ++pos;
+                continue;
+            }
 
             // CRC over [len .. end-of-payload] then the per-message extra seed.
             uint16_t crc = crc_buf(0xFFFF, &buf[pos + 1], (hdr - 1) + payload);

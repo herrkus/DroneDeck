@@ -275,7 +275,7 @@ class DroneDeck(QMainWindow):
         rlay.setContentsMargins(0, 0, 0, 0)
         rlay.setSpacing(0)
         inst = QWidget()
-        inst.setFixedHeight(230)
+        inst.setFixedHeight(250)
         ilay = QHBoxLayout(inst)
         ilay.setContentsMargins(6, 6, 6, 0)
         ilay.setSpacing(10)
@@ -291,13 +291,10 @@ class DroneDeck(QMainWindow):
         hb.setContentsMargins(8, 4, 8, 6)
         hb.addWidget(self.health)
         rlay.addWidget(hbox)
+        # full text readouts now live in a roomy "Telemetry" bottom-dock tab (below),
+        # so the right column stays uncramped: just the PFD + system health + breathing room.
         self.panel = TelemetryPanel()
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setWidget(self.panel)
-        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        scroll.setFrameShape(QScrollArea.NoFrame)
-        rlay.addWidget(scroll, 1)
+        rlay.addStretch(1)
 
         # left pane: Map / Video tabs (QGC-style swap)
         self.video_pane = VideoPane()
@@ -414,6 +411,18 @@ class DroneDeck(QMainWindow):
         sdock.setFeatures(QDockWidget.DockWidgetMovable | QDockWidget.DockWidgetFloatable)
         self.addDockWidget(Qt.BottomDockWidgetArea, sdock)
         self.tabifyDockWidget(ldock, sdock)
+
+        # full telemetry readouts -- a roomy wide tab (was a cramped scroll in the column)
+        tscroll = QScrollArea()
+        tscroll.setWidgetResizable(True)
+        tscroll.setWidget(self.panel)
+        tscroll.setFrameShape(QScrollArea.NoFrame)
+        tdock = QDockWidget("Telemetry", self)
+        tdock.setObjectName("telemetry_dock")
+        tdock.setWidget(tscroll)
+        tdock.setFeatures(QDockWidget.DockWidgetMovable | QDockWidget.DockWidgetFloatable)
+        self.addDockWidget(Qt.BottomDockWidgetArea, tdock)
+        self.tabifyDockWidget(sdock, tdock)
 
         # virtual joystick dock (hidden until the Joystick button is toggled)
         self.joystick = VirtualJoystick()
@@ -1054,8 +1063,10 @@ class DroneDeck(QMainWindow):
         chips = []
         if ve.link_alive:
             armed = ve.armed
-            chips.append((f"{'ARMED' if armed else 'DISARMED'}  {ve.mode}",
-                          RED if armed else GREEN, RED if armed else LIGHT))
+            # arm state as its own bold filled badge (most safety-critical); mode separate
+            chips.append(("ARMED" if armed else "DISARMED", RED if armed else GREEN,
+                          LIGHT, RED if armed else GREEN))
+            chips.append((ve.mode, TEAL, LIGHT))
             chips.append((f"GPS {ve.fix_text} · {ve.satellites}",
                           GREEN if ve.fix_type >= 3 else AMBER, LIGHT))
             rem = ve.battery_remaining
@@ -1207,6 +1218,9 @@ def main():
         elif os.path.isfile(arg):          # a .tlog (or any capture) -> replay it
             replay_path = os.path.abspath(arg)
     app = QApplication(sys.argv)
+    app.setApplicationName("DroneDeck")
+    app.setApplicationDisplayName("DroneDeck")
+    app.setDesktopFileName("DroneDeck")     # Wayland app_id -> stable Hyprland window class
     app.setStyleSheet(DARK_QSS)
     win = DroneDeck(port, replay_path=replay_path)
     win._persist = True

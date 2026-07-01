@@ -20,27 +20,31 @@ class TelemetryPanel(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.v: dict[str, QLabel] = {}
-        lay = QVBoxLayout(self)
-        lay.setContentsMargins(6, 6, 6, 6)
-        lay.setSpacing(6)
-        lay.addWidget(self._group("LINK", [
-            ("link", "Status"), ("rate", "Msg rate"), ("counts", "OK / drop")]))
-        lay.addWidget(self._group("FLIGHT", [
-            ("mode", "Mode"), ("armed", "State"), ("status", "System"), ("type", "Airframe")]))
-        lay.addWidget(self._group("BATTERY", [
-            ("voltage", "Voltage"), ("current", "Current"), ("remaining", "Remaining")]))
-        lay.addWidget(self._group("POSITION", [
-            ("lat", "Latitude"), ("lon", "Longitude"),
-            ("alt_msl", "Alt MSL"), ("alt_rel", "Alt rel")]))
-        lay.addWidget(self._group("MOTION", [
-            ("gspeed", "Ground spd"), ("aspeed", "Air spd"),
-            ("climb", "Climb"), ("throttle", "Throttle"), ("hdg", "Heading")]))
-        lay.addWidget(self._group("NAVIGATION", [
-            ("home_dist", "Dist to home"), ("flight_time", "Flight time"),
-            ("home_eta", "Home ETA"), ("wp_dist", "Dist to WP")]))
-        lay.addWidget(self._group("GPS", [
-            ("fix", "Fix"), ("sats", "Satellites")]))
-        lay.addStretch(1)
+        specs = {
+            "LINK": [("link", "Status"), ("rate", "Msg rate"), ("counts", "OK / drop")],
+            "FLIGHT": [("mode", "Mode"), ("armed", "State"), ("status", "System"), ("type", "Airframe")],
+            "BATTERY": [("voltage", "Voltage"), ("current", "Current"), ("remaining", "Remaining")],
+            "POSITION": [("lat", "Latitude"), ("lon", "Longitude"), ("alt_msl", "Alt MSL"), ("alt_rel", "Alt rel")],
+            "MOTION": [("gspeed", "Ground spd"), ("aspeed", "Air spd"), ("climb", "Climb"),
+                       ("throttle", "Throttle"), ("hdg", "Heading")],
+            "NAVIGATION": [("home_dist", "Dist to home"), ("flight_time", "Flight time"),
+                           ("home_eta", "Home ETA"), ("wp_dist", "Dist to WP")],
+            "GPS": [("fix", "Fix"), ("sats", "Satellites")],
+        }
+        # Wide-and-short: this panel lives in a wide bottom dock, so the groups flow
+        # across columns instead of one tall stack (kills the old cramped scroll).
+        columns = [["LINK", "GPS"], ["FLIGHT", "BATTERY"], ["POSITION", "NAVIGATION"], ["MOTION"]]
+        outer = QHBoxLayout(self)
+        outer.setContentsMargins(6, 6, 6, 6)
+        outer.setSpacing(8)
+        for col in columns:
+            cv = QVBoxLayout()
+            cv.setSpacing(6)
+            for title in col:
+                cv.addWidget(self._group(title, specs[title]))
+            cv.addStretch(1)
+            outer.addLayout(cv)
+        outer.addStretch(1)
 
     def _group(self, title, rows):
         box = QGroupBox(title)
@@ -251,8 +255,8 @@ class StatusStrip(QWidget):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setFixedHeight(30)
-        self.chips = []                  # list of (label, dot_color, text_color)
+        self.setFixedHeight(38)
+        self.chips = []                  # (label, dot_color, text_color[, fill_color])
 
     def set_chips(self, chips):
         self.chips = chips
@@ -264,23 +268,36 @@ class StatusStrip(QWidget):
         p.fillRect(self.rect(), QColor(18, 20, 26))
         p.setPen(QColor(40, 44, 52))
         p.drawLine(0, self.height() - 1, self.width(), self.height() - 1)
-        font = QFont("DejaVu Sans", 9, QFont.Bold)
-        p.setFont(font)
-        fm = p.fontMetrics()
+        h = self.height()
         x = 8.0
-        for label, dot, txt in self.chips:
-            tw = fm.horizontalAdvance(label)
-            w = tw + 28
-            rect = QRectF(x, 4, w, self.height() - 8)
-            p.setBrush(QColor(30, 33, 40))
-            p.setPen(QPen(QColor(48, 52, 62), 1))
-            p.drawRoundedRect(rect, 5, 5)
-            p.setPen(Qt.NoPen)
-            p.setBrush(QColor(dot))
-            p.drawEllipse(QPointF(x + 13, self.height() / 2.0), 4.5, 4.5)
-            p.setPen(QColor(txt))
-            p.drawText(QRectF(x + 22, 4, tw + 4, self.height() - 8),
-                       Qt.AlignVCenter | Qt.AlignLeft, label)
+        for chip in self.chips:
+            label, dot, txt = chip[0], chip[1], chip[2]
+            fill = chip[3] if len(chip) > 3 else None
+            if fill is not None:
+                # bold filled badge (arm state) -- no dot, dark text on bright fill
+                p.setFont(QFont("DejaVu Sans", 11, QFont.Bold))
+                tw = p.fontMetrics().horizontalAdvance(label)
+                w = tw + 24
+                rect = QRectF(x, 5, w, h - 11)
+                p.setPen(Qt.NoPen)
+                p.setBrush(QColor(fill))
+                p.drawRoundedRect(rect, 6, 6)
+                p.setPen(QColor("#0d0f14"))
+                p.drawText(rect, Qt.AlignCenter, label)
+            else:
+                p.setFont(QFont("DejaVu Sans", 10, QFont.Bold))
+                tw = p.fontMetrics().horizontalAdvance(label)
+                w = tw + 30
+                rect = QRectF(x, 5, w, h - 11)
+                p.setBrush(QColor(30, 33, 40))
+                p.setPen(QPen(QColor(48, 52, 62), 1))
+                p.drawRoundedRect(rect, 6, 6)
+                p.setPen(Qt.NoPen)
+                p.setBrush(QColor(dot))
+                p.drawEllipse(QPointF(x + 14, h / 2.0), 5.0, 5.0)
+                p.setPen(QColor(txt))
+                p.drawText(QRectF(x + 24, 5, tw + 6, h - 11),
+                           Qt.AlignVCenter | Qt.AlignLeft, label)
             x += w + 7
         p.end()
 
@@ -528,7 +545,8 @@ class SystemsPanel(QWidget):
         self.vib_clip.setText("clip {} / {} / {}".format(*ve.clipping))
         self.a_amsl.setText(f"{ve.alt_msl:.1f} m")
         self.a_rel.setText(f"{ve.alt_rel:.1f} m")
-        self.a_terr.setText("--" if ve.alt_terrain is None else f"{ve.alt_terrain:.1f} m")
+        _t = ve.alt_terrain                      # NaN when PX4 has no terrain estimate
+        self.a_terr.setText("--" if _t is None or _t != _t else f"{_t:.1f} m")
         self.r_rssi.setText("--" if ve.radio_rssi is None else str(ve.radio_rssi))
         self.r_remrssi.setText("--" if ve.radio_remrssi is None else str(ve.radio_remrssi))
         self.r_noise.setText("--" if ve.radio_noise is None else str(ve.radio_noise))

@@ -49,25 +49,26 @@ class AttitudeIndicator(QWidget):
         p.setRenderHint(QPainter.Antialiasing)
         p.fillRect(self.rect(), QColor(18, 19, 24))
 
-        tape = max(30, min(48, int(w * 0.16)))
+        tape = max(30, min(46, int(w * 0.15)))
         head_h = 16
         hx0, hx1 = tape, w - tape
         hy0, hy1 = head_h, h
         hw, hh = hx1 - hx0, hy1 - hy0
         cx, cy = (hx0 + hx1) / 2.0, (hy0 + hy1) / 2.0
-        ppd = hh / 50.0                       # +/-25 deg visible
+        R = max(12.0, min(hw, hh) * 0.5 - 3)          # round ADI ball radius
+        ppd = (2 * R) / 52.0                           # ~+/-26 deg across the ball
         roll_deg = math.degrees(self.roll)
         pitch_deg = math.degrees(self.pitch)
 
-        # ---- horizon (clipped to the centre rect) ---------------------------
+        # ---- horizon ball, clipped to a CIRCLE (QGroundControl-style ADI) ----
         p.save()
         clip = QPainterPath()
-        clip.addRoundedRect(QRectF(hx0, hy0, hw, hh), 6, 6)
+        clip.addEllipse(QPointF(cx, cy), R, R)
         p.setClipPath(clip)
         p.translate(cx, cy)
         p.rotate(-roll_deg)
         horizon_y = pitch_deg * ppd
-        big = max(hw, hh) * 3
+        big = R * 3
         p.fillRect(QRectF(-big, -big, 2 * big, big + horizon_y), QBrush(SKY))
         p.fillRect(QRectF(-big, horizon_y, 2 * big, big), QBrush(GROUND))
         p.setPen(QPen(LINE, 2))
@@ -77,38 +78,48 @@ class AttitudeIndicator(QWidget):
             if a == 0:
                 continue
             y = (pitch_deg - a) * ppd
-            if abs(y) > hh / 2 - 4:
+            if abs(y) > R - 6:
                 continue
-            half = hw * 0.16 if a % 30 == 0 else hw * 0.09
+            half = R * 0.32 if a % 30 == 0 else R * 0.17
             p.setPen(QPen(LINE, 1.3))
             p.drawLine(QPointF(-half, y), QPointF(half, y))
-            p.drawText(QRectF(half + 3, y - 7, 26, 14), Qt.AlignVCenter | Qt.AlignLeft, str(abs(a)))
-        # bank ticks
-        p.setPen(QPen(LINE, 1.4))
-        rr = min(hw, hh) * 0.48
+            p.drawText(QRectF(half + 3, y - 7, 24, 14), Qt.AlignVCenter | Qt.AlignLeft, str(abs(a)))
+        p.restore()
+
+        # ---- bank scale (rotates with the ball) + fixed sky pointer ---------
+        p.save()
+        p.translate(cx, cy)
+        p.save()
+        p.rotate(-roll_deg)
+        p.setPen(QPen(LINE, 1.5))
         for t in (-60, -45, -30, -20, -10, 0, 10, 20, 30, 45, 60):
             p.save()
             p.rotate(t)
-            ln = 9 if t % 30 == 0 else 5
-            p.drawLine(QPointF(0, -rr), QPointF(0, -rr + ln))
+            ln = 10 if t % 30 == 0 else 5
+            p.drawLine(QPointF(0, -R), QPointF(0, -R + ln))
             p.restore()
         p.restore()
-
-        # bank pointer + aircraft symbol (fixed)
-        p.save()
-        p.translate(cx, cy)
         p.setPen(Qt.NoPen)
         p.setBrush(QBrush(YELLOW))
-        rr = min(hw, hh) * 0.48
-        p.drawPolygon(QPolygonF([QPointF(0, -rr + 1), QPointF(-5, -rr + 11), QPointF(5, -rr + 11)]))
+        p.drawPolygon(QPolygonF([QPointF(0, -R + 1), QPointF(-6, -R + 12), QPointF(6, -R + 12)]))
+        p.restore()
+
+        # ---- fixed aircraft symbol ------------------------------------------
+        p.save()
+        p.translate(cx, cy)
         p.setPen(QPen(YELLOW, 3))
         p.setBrush(Qt.NoBrush)
-        wing = hw * 0.30
-        p.drawLine(QPointF(-wing, 0), QPointF(-wing * 0.4, 0))
-        p.drawLine(QPointF(wing * 0.4, 0), QPointF(wing, 0))
+        wing = R * 0.6
+        p.drawLine(QPointF(-wing, 0), QPointF(-wing * 0.42, 0))
+        p.drawLine(QPointF(wing * 0.42, 0), QPointF(wing, 0))
         p.setBrush(QBrush(YELLOW))
         p.drawEllipse(QPointF(0, 0), 2.5, 2.5)
         p.restore()
+
+        # ---- bezel ring around the ball -------------------------------------
+        p.setPen(QPen(QColor(22, 23, 28), 4))
+        p.setBrush(Qt.NoBrush)
+        p.drawEllipse(QPointF(cx, cy), R, R)
 
         # ---- tapes + heading strip ------------------------------------------
         self._tape(p, QRectF(0, hy0, tape, hh), self.airspeed, 4.0, 1, "%.0f", right=True)
