@@ -447,7 +447,8 @@ class MapView(QWidget):
         else:                                  # empty map -> guided/flight actions
             la, lo = self._px_to_ll(e.pos().x(), e.pos().y())
             for label, key in (("Go to here", "goto"), ("Orbit here", "orbit"),
-                               ("Point camera here (ROI)", "roi"), ("Set home here", "sethome")):
+                               ("Point camera here (ROI)", "roi"),
+                               ("Add ROI waypoint here", "add_roi"), ("Set home here", "sethome")):
                 act = menu.addAction(label)
                 act.triggered.connect(lambda _=False, k=key: self.contextAction.emit(k, la, lo))
         menu.exec(e.globalPos())

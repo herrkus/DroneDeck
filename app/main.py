@@ -90,7 +90,8 @@ class WaypointEditor(QDialog):
     """Edit one mission item's command + altitude + the params that matter for it."""
 
     CMDS = [("Waypoint", 16), ("Takeoff", 22), ("Loiter (time)", 19),
-            ("Loiter (unlim)", 17), ("Land", 21), ("Return to launch", 20)]
+            ("Loiter (unlim)", 17), ("Land", 21), ("Return to launch", 20),
+            ("ROI (point camera)", 195)]
 
     def __init__(self, item, parent=None):
         super().__init__(parent)
@@ -1039,6 +1040,13 @@ class DroneDeck(QMainWindow):
             self._on_info(f"goto {lat:.5f}, {lon:.5f} @ {alt:.0f} m")
 
     def _on_map_context(self, action, lat, lon):
+        if action == "add_roi":                        # a mission item, not a live command
+            alt = self.mission_items[-1].alt if self.mission_items else 50.0
+            self.mission_items.append(MissionItem(len(self.mission_items), lat, lon, alt,
+                                                  command=195))
+            self._refresh_mission_view()
+            self._on_info(f"added ROI waypoint at {lat:.5f}, {lon:.5f}")
+            return
         if not self._has_vehicle():
             QMessageBox.information(self, "No vehicle", "Connect to a vehicle first.")
             return
