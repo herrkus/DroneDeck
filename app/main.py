@@ -1182,6 +1182,17 @@ class DroneDeck(QMainWindow):
             # arm state as its own bold filled badge (most safety-critical); mode separate
             chips.append(("ARMED" if armed else "DISARMED", RED if armed else GREEN,
                           LIGHT, RED if armed else GREEN))
+            if not armed:
+                ready, reasons = ve.preflight_status()
+                if ready:
+                    chips.append(("READY TO ARM", GREEN, GREEN))
+                else:
+                    first = reasons[0] + (f"  +{len(reasons) - 1}" if len(reasons) > 1 else "")
+                    chips.append((f"NOT READY: {first}", AMBER, AMBER))
+                self.status_strip.setToolTip(
+                    "Preflight: " + ("ready to arm" if ready else "; ".join(reasons)))
+            else:
+                self.status_strip.setToolTip("")
             chips.append((ve.mode, TEAL, LIGHT))
             chips.append((f"GPS {ve.fix_text} · {ve.satellites}",
                           GREEN if ve.fix_type >= 3 else AMBER, LIGHT))

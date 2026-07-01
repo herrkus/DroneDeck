@@ -214,6 +214,23 @@ class Vehicle(QObject):
     def link_alive(self) -> bool:
         return (time.monotonic() - self.last_heartbeat) < 3.0 if self.last_heartbeat else False
 
+    def preflight_status(self):
+        """QGC-style arming readiness from live telemetry -> (ready: bool, reasons: list).
+        Empty reasons == ready to arm. Only meaningful once telemetry is flowing."""
+        reasons = []
+        if self.fix_type < 3:
+            reasons.append("no 3D GPS fix")
+        elif self.satellites and self.satellites < 6:
+            reasons.append(f"only {self.satellites} sats")
+        bad = [name for bit, name in mavlink.SENSOR_BITS
+               if (self.sensors_present & bit) and (self.sensors_enabled & bit)
+               and not (self.sensors_health & bit)]
+        if bad:
+            reasons.append("unhealthy: " + ", ".join(bad[:4]))
+        if 0 <= self.battery_remaining < 20:
+            reasons.append(f"battery {self.battery_remaining}%")
+        return (not reasons, reasons)
+
     @property
     def fix_text(self) -> str:
         return {0: "No GPS", 1: "No Fix", 2: "2D", 3: "3D", 4: "DGPS",
