@@ -306,7 +306,7 @@ class CalibrationDialog(QDialog):
         tabs = QTabWidget()
         tabs.addTab(self.radio, "Radio")
         tabs.addTab(self.sensor, "Sensors")
-        if param_mgr is not None:
+        if param_mgr is not None and hasattr(param_mgr, "updated"):
             self.safety = SafetyWidget(param_mgr)
             tabs.addTab(self.safety, "Safety")
             self.power = PowerWidget(param_mgr)

@@ -22,7 +22,7 @@ from calibration import CalibrationDialog
 
 app = QApplication([])
 win = appmain.DroneDeck(14550)
-dlg = CalibrationDialog(lambda: win.link, win)
+dlg = CalibrationDialog(lambda: win.link, parent=win)
 sim = subprocess.Popen([sys.executable, SIM, "--target", "127.0.0.1:14550"],
                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
