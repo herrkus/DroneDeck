@@ -72,6 +72,7 @@ check "autopilot_version"   ""                        tests/test_autopilot_versi
 check "autopilot_v (py)"    "DRONEDECK_FORCE_PYTHON=1" tests/test_autopilot_version.py
 check "flightchip"          ""                        tests/test_flightchip.py
 check "mapcenter"           ""                        tests/test_mapcenter.py
+check "msgunread"           ""                        tests/test_msgunread.py
 check "confirm"             ""                        tests/test_confirm.py
 check "windcompass"         ""                        tests/test_windcompass.py
 check "manual"              ""                        tests/test_manual.py

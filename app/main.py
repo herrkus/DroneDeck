@@ -550,6 +550,8 @@ class DroneDeck(QMainWindow):
         # bottom message console (STATUSTEXT + command results) with a severity filter
         self.console = MessageConsole()
         self.console.setMinimumHeight(70)
+        self._msg_unread = 0        # STATUSTEXT arrived while the Messages tab wasn't visible
+        self._msg_worst = 99        # worst (lowest) unread severity; 99 = none
         # no maximum height -- drag the map/messages divider to grow the board freely
         msg_wrap = QWidget()
         mcl = QVBoxLayout(msg_wrap)
@@ -571,6 +573,7 @@ class DroneDeck(QMainWindow):
         dock.setWidget(msg_wrap)
         dock.setFeatures(QDockWidget.DockWidgetMovable | QDockWidget.DockWidgetFloatable)
         self.addDockWidget(Qt.BottomDockWidgetArea, dock)
+        dock.visibilityChanged.connect(self._on_msg_visibility)   # clear unread when viewed
 
         # mission waypoint list + edit buttons, tabbed with Messages at the bottom
         self.mission_list = QListWidget()
@@ -822,6 +825,7 @@ class DroneDeck(QMainWindow):
 
     def _wire(self):
         self.vehicle.status_text.connect(self.console.add_message)
+        self.vehicle.status_text.connect(self._on_new_message)
         self.vehicle.command_ack.connect(self._on_command_ack)
         self.map.clicked.connect(self._on_map_click)
         self.map.contextAction.connect(self._on_map_context)
@@ -991,6 +995,7 @@ class DroneDeck(QMainWindow):
         else:
             veh = Vehicle()
             veh.status_text.connect(self.console.add_message)
+            veh.status_text.connect(self._on_new_message)
             veh.command_ack.connect(self._on_command_ack)
         self.vehicles[sysid] = veh
         active_sid = next((s for s, v in self.vehicles.items() if v is self.vehicle), sysid)
@@ -1755,7 +1760,11 @@ class DroneDeck(QMainWindow):
         link_col = RED if drop else (TEAL if is_open else GREY)
         chips.append((f"{self._rate:.0f} Hz" + (f" · {drop} drop" if drop else ""),
                       link_col, RED if drop else LIGHT))
-        chips.append((f"MSG {len(ve.messages)}", GREY, LIGHT))
+        if self._msg_unread:
+            mcol = RED if self._msg_worst <= 3 else AMBER if self._msg_worst == 4 else LIGHT
+            chips.append((f"MSG {len(ve.messages)} (+{self._msg_unread})", mcol, mcol))
+        else:
+            chips.append((f"MSG {len(ve.messages)}", GREY, LIGHT))
         self.status_strip.set_chips(chips)
 
     def _update_link_banner(self, ve, is_open):
@@ -1777,6 +1786,25 @@ class DroneDeck(QMainWindow):
         """One-shot recenter on the vehicle (QGC 'center on vehicle'); no follow change."""
         if not self.map.center_on_vehicle():
             self.statusBar().showMessage("No position fix yet", 2000)
+
+    def _on_new_message(self, sev, _text):
+        """Count a STATUSTEXT as unread unless the Messages tab is the one on screen."""
+        if not self.msg_dock.isVisible():
+            self._msg_unread += 1
+            self._msg_worst = min(self._msg_worst, int(sev))
+            self._update_msg_badge()
+
+    def _on_msg_visibility(self, visible):
+        """The Messages dock became the active/visible tab -> everything is now read."""
+        if visible and self._msg_unread:
+            self._msg_unread = 0
+            self._msg_worst = 99
+            self._update_msg_badge()
+
+    def _update_msg_badge(self):
+        """Reflect the unread count on the dock's tab title (blank when all read)."""
+        self.msg_dock.setWindowTitle("Messages" if not self._msg_unread
+                                     else f"Messages ({self._msg_unread})")
 
     def _on_map_follow_changed(self, on):
         """Keep the Follow checkbox in sync when the map auto-detaches on pan / re-attaches on
