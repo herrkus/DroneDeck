@@ -127,6 +127,21 @@ if not (it.command == 31 and it.alt == 120 and it.param2 == 90 and it.param1 == 
 if MissionItem(0, 47, 8, 50, command=31).cmd_name != "LOITER_TO_ALT":
     fail.append("cmd 31 name")
 
+# 6c) VTOL takeoff/land 84/85 (iter130, PX4-verified): georeferenced like takeoff/land -------------
+for cmd, name in ((84, "VTOL_TAKEOFF"), (85, "VTOL_LAND")):
+    it, ed = editor_for(16)
+    select(ed, cmd)
+    if not ed.alt.isEnabled():
+        fail.append(f"{name}: altitude should be enabled")
+    if ed.p1.isEnabled() or ed.p3.isEnabled():
+        fail.append(f"{name}: loiter fields should be disabled")
+    ed.alt.setValue(40)
+    ed.apply_to(it)
+    if not (it.command == cmd and it.alt == 40 and it.frame != 2):
+        fail.append(f"{name} apply: cmd={it.command} alt={it.alt} frame={it.frame}")
+    if MissionItem(0, 47, 8, 50, command=cmd).cmd_name != name:
+        fail.append(f"cmd {cmd} name")
+
 # 7) no regression: a plain waypoint stays georeferenced with the chosen altitude ------------------
 it, ed = editor_for(16)
 select(ed, 16)

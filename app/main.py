@@ -152,7 +152,7 @@ class WaypointEditor(QDialog):
 
     CMDS = [("Waypoint", 16), ("Spline waypoint", 82), ("Takeoff", 22), ("Loiter (time)", 19),
             ("Loiter (unlim)", 17), ("Loiter (turns)", 18), ("Loiter to alt", 31), ("Delay", 93),
-            ("Land", 21), ("Return to launch", 20),
+            ("Land", 21), ("VTOL takeoff", 84), ("VTOL land", 85), ("Return to launch", 20),
             ("ROI (point camera)", 195), ("Clear ROI", 197),
             ("Change speed", 178), ("Jump to WP", 177), ("Land start", 189),
             ("Set servo", 183), ("Condition: Yaw", 115), ("Camera trig dist", 206)]
