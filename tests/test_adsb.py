@@ -11,6 +11,9 @@ import subprocess
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "app"))
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))   # for _ports
+from _ports import free_udp_port
+PORT = free_udp_port()
 SIM = os.path.join(ROOT, "sim", "simulator.py")
 
 from PySide6.QtWidgets import QApplication
@@ -18,8 +21,8 @@ from PySide6.QtCore import QTimer
 import main as appmain
 
 app = QApplication([])
-win = appmain.DroneDeck(14550)
-sim = subprocess.Popen([sys.executable, SIM, "--target", "127.0.0.1:14550"],
+win = appmain.DroneDeck(PORT)
+sim = subprocess.Popen([sys.executable, SIM, "--target", f"127.0.0.1:{PORT}"],
                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 snap = {}

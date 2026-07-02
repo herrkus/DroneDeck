@@ -15,13 +15,16 @@ os.environ["XDG_CONFIG_HOME"] = _CFG          # QSettings .conf lands here
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "app"))
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))   # for _ports
+from _ports import free_udp_port
+PORT = free_udp_port()
 
 from PySide6.QtWidgets import QApplication
 import main as appmain
 
 app = QApplication([])
 
-win1 = appmain.DroneDeck(14550)
+win1 = appmain.DroneDeck(PORT)
 win1._persist = True
 win1.map.set_zoom(11)
 win1.map.center = (50.0, 10.0)
@@ -31,7 +34,7 @@ win1.chk_follow.setChecked(False)
 win1.save_settings()
 win1.close()                                  # frees the UDP socket
 
-win2 = appmain.DroneDeck(14550)
+win2 = appmain.DroneDeck(PORT)
 win2.load_settings()
 
 got = dict(zoom=win2.map.zoom, lat=round(win2.map.center[0], 4), lon=round(win2.map.center[1], 4),

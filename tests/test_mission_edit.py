@@ -10,12 +10,15 @@ import sys
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "app"))
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))   # for _ports
+from _ports import free_udp_port
+PORT = free_udp_port()
 
 from PySide6.QtWidgets import QApplication
 import main as appmain
 
 app = QApplication([])
-win = appmain.DroneDeck(14550)
+win = appmain.DroneDeck(PORT)
 
 fail = []
 

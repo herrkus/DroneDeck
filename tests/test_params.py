@@ -19,11 +19,14 @@ from PySide6.QtCore import QTimer
 
 from link import UdpLink
 from params import ParamManager
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))   # for _ports
+from _ports import free_udp_port
+PORT = free_udp_port()
 
 app = QApplication([])
 link = UdpLink()
-link.open(port=14550)
-sim = subprocess.Popen([sys.executable, SIM, "--target", "127.0.0.1:14550"],
+link.open(port=PORT)
+sim = subprocess.Popen([sys.executable, SIM, "--target", f"127.0.0.1:{PORT}"],
                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 pm = ParamManager(lambda: link, lambda: 1)

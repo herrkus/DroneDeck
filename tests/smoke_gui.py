@@ -21,17 +21,20 @@ from PySide6.QtWidgets import QApplication
 from PySide6.QtCore import QTimer
 
 import main as appmain
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))   # for _ports
+from _ports import free_udp_port
+PORT = free_udp_port()
 
 OUT = sys.argv[1] if len(sys.argv) > 1 else os.path.join(ROOT, "build", "dronedeck.png")
 os.makedirs(os.path.dirname(OUT), exist_ok=True)
 
 app = QApplication([])
 app.setStyleSheet(appmain.DARK_QSS)
-win = appmain.DroneDeck(14550)
+win = appmain.DroneDeck(PORT)
 win.setFixedSize(1240, 770)   # offscreen screen would otherwise clamp the window
 win.show()
 
-sim = subprocess.Popen([sys.executable, SIM, "--target", "127.0.0.1:14550"],
+sim = subprocess.Popen([sys.executable, SIM, "--target", f"127.0.0.1:{PORT}"],
                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 state = {}

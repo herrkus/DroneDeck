@@ -11,11 +11,21 @@ fail=0
 ok()   { echo "  PASS  $1"; pass=$((pass + 1)); }
 bad()  { echo "  FAIL  $1"; fail=$((fail + 1)); }
 
+# Reap any orphaned DroneDeck test simulators. When `timeout` kills a hung/slow test, the test's
+# own sim-teardown never runs and its `sim/simulator.py` child is reparented to init and left
+# running. This matches ONLY DroneDeck's mock sim by its script path -- never the PX4 SITL (px4/gz)
+# or the GUI. Run after each test and once on exit as a backstop; tests run serially so this can't
+# race a still-wanted sim.
+reap_sims() { pkill -f "sim/simulator.py" 2>/dev/null || true; }
+trap reap_sims EXIT
+
 # check <name> <env-prefix-or-empty> <script>
 check() {
     local name="$1" env="$2" script="$3"
-    local full
-    full=$(env ${env} timeout 60 python3 "$script" 2>&1)
+    local full rc
+    full=$(env ${env} timeout --kill-after=5 60 python3 "$script" 2>&1)
+    rc=$?
+    reap_sims                       # kill a sim orphaned by a timeout-killed test
     local last
     last=$(echo "$full" | tail -1)
     if echo "$full" | grep -qE "PASSED|VALIDATED" && ! echo "$full" | grep -qE "FAILED|BROKEN"; then
