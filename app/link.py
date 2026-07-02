@@ -196,10 +196,17 @@ class Link(QObject):
         if not self._pending:
             self._ack_timer.stop()
 
-    def send_command_int(self, target_sys, command, params4, x, y, z, frame=6):
+    def _tx_command_int(self, target_sys, command, params4, x, y, z, frame):
         # frame 6 = MAV_FRAME_GLOBAL_RELATIVE_ALT_INT; x/y are lat/lon * 1e7 (int, precise)
         self._send(core.encode_command_int(self.gcs_sysid, self.gcs_compid, self._next_seq(),
                                            target_sys, 1, frame, command, params4, x, y, z))
+
+    def send_command_int(self, target_sys, command, params4, x, y, z, frame=6, confirm=False):
+        """Send a COMMAND_INT; confirm=True resends until ACKed (see send_command_long)."""
+        self._tx_command_int(target_sys, command, params4, x, y, z, frame)
+        if confirm:
+            self._track(command,
+                        lambda: self._tx_command_int(target_sys, command, params4, x, y, z, frame))
 
     def orbit(self, target_sys, lat, lon, radius, alt):
         self.send_command_int(target_sys, mavlink.MAV_CMD_DO_ORBIT,
@@ -242,7 +249,7 @@ class Link(QObject):
         # A COMMAND_LONG NAV_TAKEOFF carries absolute AMSL, which PX4 reads as below
         # ground and refuses to climb -- verified against real PX4 SITL.
         self.send_command_int(target_sys, mavlink.MAV_CMD_NAV_TAKEOFF, [0, 0, 0, 0],
-                              int(lat * 1e7), int(lon * 1e7), alt, frame=6)
+                              int(lat * 1e7), int(lon * 1e7), alt, frame=6, confirm=True)
 
     def land(self, target_sys: int):
         self.send_command_long(target_sys, mavlink.MAV_CMD_NAV_LAND, [0, 0, 0, 0, 0, 0, 0], confirm=True)

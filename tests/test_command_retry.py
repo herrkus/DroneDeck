@@ -120,8 +120,23 @@ for cid, label in [(ARM, "arm"), (MODE, "set_mode"),
     if cid not in lk3._pending:
         fail.append(f"{label} should send a confirmed (tracked) command")
 
+# 7) COMMAND_INT confirmation: a dropped takeoff is just as critical, so it opts in + retries -------
+lk4 = CaptureLink()
+lk4.takeoff(1, 20.0, 47.0, 8.0)
+TKO = mavlink.MAV_CMD_NAV_TAKEOFF
+if TKO not in lk4._pending or lk4._pending[TKO]["tries"] != 1:
+    fail.append("takeoff (COMMAND_INT) should be confirmed/tracked")
+else:
+    dl = lk4._pending[TKO]["deadline"]
+    before = len(lk4.sent)
+    lk4._check_acks(dl + 0.01)
+    if len(lk4.sent) != before + 1 or lk4._pending[TKO]["tries"] != 2:
+        fail.append(f"confirmed takeoff should resend (sent {before}->{len(lk4.sent)}, "
+                    f"tries={lk4._pending.get(TKO, {}).get('tries')})")
+
 print("COMMAND_RETRY FAILED: " + "; ".join(fail) if fail else
       "COMMAND_RETRY PASSED (no-track for fire-and-forget; retry schedule + give-up after "
       "ACK_MAX_TRIES + command_unacked; ACK via _match_acks and real frame via _ingest resolves + "
-      "stops resends; unrelated ACK ignored; arm/set_mode/land/rtl opt in)")
+      "stops resends; unrelated ACK ignored; arm/set_mode/land/rtl opt in; COMMAND_INT takeoff "
+      "confirmed + retries)")
 sys.exit(1 if fail else 0)
