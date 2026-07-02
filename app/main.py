@@ -280,6 +280,7 @@ class DroneDeck(QMainWindow):
         self._flight_time = 0.0
         self._failsafe_prev = {}                # sysid -> last MAV_STATE (failsafe edge detect)
         self._fence_breached = {}               # geofence breach edge detect, keyed by sysid
+        self._batt_band = {}                    # sysid -> last battery band (low-batt edge detect)
 
         # mission planning state
         self.plan_mode = False
@@ -1123,6 +1124,7 @@ class DroneDeck(QMainWindow):
         self.traffic = {}
         self._fence_breached = {}
         self._failsafe_prev = {}
+        self._batt_band = {}
         self._stream_reqs = {}
         self.params.reset()
         self.vehicle_combo.blockSignals(True)
@@ -2110,6 +2112,48 @@ class DroneDeck(QMainWindow):
             self.console.add_note(f"FAILSAFE: vehicle {sid} entered {name}", "#e05050")
             self._notify(f"FAILSAFE: {name}", "#e05050")
 
+    # GCS-side low-battery advisory thresholds (percent remaining). These sit ABOVE a typical
+    # autopilot failsafe so the pilot is prompted to return/land first; HYST stops a value jittering
+    # around a threshold from re-firing the warning.
+    BATT_LOW_PCT = 30
+    BATT_CRIT_PCT = 15
+    BATT_HYST_PCT = 3
+
+    def _check_battery(self, ve):
+        """Edge-triggered GCS-side low-battery annunciation (QGroundControl-style): warn ONCE when a
+        vehicle's remaining battery drops past the LOW then CRITICAL threshold, so the operator is
+        prompted to return/land BEFORE the vehicle's own failsafe triggers. Re-arms (with hysteresis)
+        after a recharge/battery swap. Advisory + independent of _check_failsafe; uses the fuel-gauge
+        percent (battery_remaining), skipping vehicles with no estimate (-1)."""
+        sid = ve.sysid
+        rem = ve.battery_remaining
+        if not sid or rem < 0:                     # -1 = no battery sensor / not reported
+            return
+        prev = self._batt_band.get(sid, 0)         # 0 OK, 1 LOW, 2 CRITICAL
+        if rem < self.BATT_CRIT_PCT:
+            band = 2
+        elif rem < self.BATT_LOW_PCT:
+            band = 1
+        else:
+            band = 0
+        # hysteresis: only step DOWN to a healthier band once clearly above that boundary, so a
+        # reading jittering around a threshold doesn't re-arm + re-fire the warning repeatedly.
+        if band < prev:
+            if prev >= 2 and rem < self.BATT_CRIT_PCT + self.BATT_HYST_PCT:
+                band = prev
+            elif prev >= 1 and rem < self.BATT_LOW_PCT + self.BATT_HYST_PCT:
+                band = prev
+        self._batt_band[sid] = band
+        if band <= prev:                           # unchanged or (hysteresis-gated) recovery
+            return
+        tag = f"vehicle {sid} " if len(self.vehicles) > 1 else ""
+        if band == 2:
+            self.console.add_note(f"CRITICAL BATTERY: {tag}{rem}% -- land now", "#e05050")
+            self._notify(f"CRITICAL BATTERY {rem}%", "#e05050")
+        else:
+            self.console.add_note(f"LOW BATTERY: {tag}{rem}% -- return soon", "#e0a030")
+            self._notify(f"LOW BATTERY {rem}%", "#e0a030")
+
     def _refresh(self):
         ve = self.vehicle
         # failsafe + geofence watch EVERY tracked vehicle (state is keyed per-sysid) -- a
@@ -2117,6 +2161,7 @@ class DroneDeck(QMainWindow):
         for v in (list(self.vehicles.values()) or [ve]):
             self._check_failsafe(v)
             self._check_geofence(v)
+            self._check_battery(v)
         self.adi.set_data(ve.roll, ve.pitch, ve.airspeed or ve.groundspeed,
                           ve.alt_rel, ve.heading, ve.climb)
         self.compass.set_heading(ve.heading)

@@ -58,5 +58,46 @@ ve.system_status = 3
 tp.update_all(ve, "UDP", 20.0, 100, 0)
 assert "e05050" not in tp.v["status"].styleSheet()
 
+# -- iter114: GCS-side low-battery annunciation, edge-triggered LOW then CRITICAL, hysteresis+re-arm -
+bnotes, btoasts = [], []
+win.console.add_note = lambda text, color=None: bnotes.append((text, color))
+win._notify = lambda text, color="#e0a030", ms=7000: btoasts.append((text, color))
+bv = Vehicle()
+bv.sysid = 9
+
+
+def bstep(rem):
+    bv.battery_remaining = rem
+    win._check_battery(bv)
+
+
+# healthy battery never warns; -1 (no sensor / no estimate) never warns
+for r in (95, 60, 31, -1):
+    bstep(r)
+assert not bnotes and not btoasts, (bnotes, btoasts)
+
+# crossing below LOW (30%) -> exactly one amber LOW warning (console + toast)
+bstep(28)
+assert len(bnotes) == 1 and "LOW BATTERY" in bnotes[0][0] and bnotes[0][1] == "#e0a030", bnotes
+assert len(btoasts) == 1, btoasts
+
+# jittering around the threshold must NOT re-fire (hysteresis: 31 < 30+3 stays in the LOW band)
+bstep(27); bstep(29); bstep(31)
+assert len(bnotes) == 1, f"low-battery warning re-fired on jitter: {bnotes}"
+
+# dropping into CRITICAL (<15%) -> one red CRITICAL warning
+bstep(12)
+assert len(bnotes) == 2 and "CRITICAL BATTERY" in bnotes[1][0] and bnotes[1][1] == "#e05050", bnotes
+
+# staying critical (or a small recovery within hysteresis) does not re-fire
+bstep(10); bstep(13)
+assert len(bnotes) == 2, "critical warning re-fired while still critical"
+
+# battery swap / recharge well above LOW re-arms; a later decline warns again
+bstep(100)
+bstep(25)
+assert len(bnotes) == 3 and "LOW BATTERY" in bnotes[2][0], f"re-arm after recharge failed: {bnotes}"
+
 print("alarms:", [n[0] for n in notes])
-print("FAILSAFE PASSED")
+print("battery alarms:", [n[0] for n in bnotes])
+print("FAILSAFE PASSED (+ iter114: low-battery LOW/CRITICAL annunciation, edge-triggered + re-arm)")
