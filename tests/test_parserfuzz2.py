@@ -118,4 +118,25 @@ for label, mk in (("native", core.Parser), ("py", mavlink.PyParser)):
     n = len(feed_chunked(mk, noise, 3))
     assert n <= 3, f"{label}: {n} false decodes from structured-unknown noise"
 
-print(f"PARSERFUZZ2 PASSED ({runs} chunked runs x2 parsers, v1+v2+msgid>255+signed, native={core.NATIVE})")
+# -- audit batch 12: a v2 frame carrying an UNKNOWN incompat flag MUST be discarded, not decoded ----
+# (spec: a frame we can't fully interpret must not be handled). Take a valid HEARTBEAT v2 frame and
+# set incompat bit 0x02 (unknown): both parsers must decode 0 messages. With incompat 0 it decodes.
+HB = mavlink.HEARTBEAT
+good = mavlink.frame_v2(HB, bytes(9), 0, 1, 1)                 # normal v2 heartbeat (incompat=0)
+bad = bytearray(good)
+bad[2] |= 0x02                                                 # set an unknown incompat bit
+bad = bytes(bad)
+# a following start byte makes the bad frame self-consistent-skippable; append a good frame after
+mixed = bad + good
+for label, mk in (("native", core.Parser), ("py", mavlink.PyParser)):
+    only_bad = mk()
+    assert len(only_bad.feed(bad)) == 0, f"{label}: decoded a frame with an unknown incompat flag"
+    p = mk()
+    got = p.feed(mixed)
+    assert len(got) == 1 and got[0].msgid == HB, \
+        f"{label}: unknown-incompat frame not skipped cleanly ({len(got)} msgs)"
+    sane = mk()
+    assert len(sane.feed(good)) == 1, f"{label}: a plain incompat=0 v2 frame must still decode"
+
+print(f"PARSERFUZZ2 PASSED ({runs} chunked runs x2 parsers, v1+v2+msgid>255+signed+incompat-reject, "
+      f"native={core.NATIVE})")

@@ -27,7 +27,7 @@ class Link(QObject):
     state = Signal(bool)           # open / closed
     info = Signal(str)             # human-readable status line
 
-    def __init__(self, gcs_sysid=255, gcs_compid=0):
+    def __init__(self, gcs_sysid=255, gcs_compid=mavlink.MAV_COMP_ID_MISSIONPLANNER):
         super().__init__()
         self.parser: core.Parser | None = None
         self.remote = None         # truthy once a peer is known (can send)

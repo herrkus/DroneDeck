@@ -415,6 +415,18 @@ struct Parser {
             size_t total = hdr + payload + 2 + sig;
             if (pos + total > n) { mark(pos); ++pos; continue; }  // frame not all here yet
 
+            if (v2 && (buf[pos + 2] & 0xFE)) {   // incompat bits other than 0x01 (SIGNED)
+                // Unknown incompatible flag: spec REQUIRES discarding a frame we can't fully
+                // interpret rather than decoding it. Same self-consistent skip as an unknown msgid.
+                if (pos + total >= n) { mark(pos); ++pos; }
+                else if (buf[pos + total] == 0xFE || buf[pos + total] == 0xFD) {
+                    track_seq(buf[pos + 5], buf[pos + 6], buf[pos + 4]);
+                    pos += total;
+                } else
+                    ++pos;
+                continue;
+            }
+
             uint32_t msgid = v2
                 ? (uint32_t(buf[pos + 7]) | (uint32_t(buf[pos + 8]) << 8) | (uint32_t(buf[pos + 9]) << 16))
                 : buf[pos + 5];

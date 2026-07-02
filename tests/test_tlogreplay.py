@@ -96,4 +96,17 @@ r = tlog.read_tlog(p)
 os.unlink(p)
 assert len(r) == 3 and all(fr[0] in (0xFE, 0xFD) for _t, fr in r), r
 
-print("TLOGREPLAY PASSED (corrupt/truncated .tlog: no crash, no replay stall, round-trip intact)")
+# -- audit batch 12: big-file cap -- a huge log must not be slurped whole (OOM/GUI freeze) ---------
+many = b"".join(rec(1000 * i, hb()) for i in range(200))
+p = write(many)
+full = tlog.read_tlog(p)
+assert len(full) == 200 and tlog.read_tlog.truncated is False, "unbounded read regressed"
+one = len(rec(0, hb()))
+capped = tlog.read_tlog(p, max_bytes=one * 20 + 3)          # cap mid-record
+os.unlink(p)
+assert tlog.read_tlog.truncated is True, "over-cap file not flagged truncated"
+assert 0 < len(capped) <= 20, f"cap not honoured: {len(capped)} records"
+assert all(fr[0] in (0xFE, 0xFD) for _t, fr in capped), "capped read emitted a partial frame"
+
+print("TLOGREPLAY PASSED (corrupt/truncated .tlog: no crash, no replay stall, round-trip intact; "
+      "big-file cap honoured + flagged)")

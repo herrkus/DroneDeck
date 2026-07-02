@@ -58,10 +58,24 @@ def replay_schedule(records, max_gap_us=10_000_000):
     return sched
 
 
-def read_tlog(path):
-    """Parse a .tlog into a list of (timestamp_us, frame_bytes), in file order."""
+# Cap the in-memory parse. A .tlog grows ~unbounded with flight time; f.read() on a multi-GB log
+# would exhaust RAM and freeze the GUI thread. 512 MB is hours of dense telemetry -- far beyond any
+# real session -- and anything larger is parsed only up to this prefix (last whole frame within it).
+MAX_TLOG_BYTES = 512 * 1024 * 1024
+
+
+def read_tlog(path, max_bytes=MAX_TLOG_BYTES):
+    """Parse a .tlog into a list of (timestamp_us, frame_bytes), in file order.
+
+    Reads at most max_bytes so a runaway/huge log can't OOM or freeze the caller. If the file is
+    larger, sets read_tlog.truncated = True and parses only the prefix (up to the last whole frame).
+    """
+    read_tlog.truncated = False
     with open(path, "rb") as f:
-        data = f.read()
+        data = f.read(max_bytes + 1)                 # one extra byte reveals an over-cap file
+    if len(data) > max_bytes:
+        read_tlog.truncated = True
+        data = data[:max_bytes]
     records = []
     n = len(data)
     i = 0
@@ -71,8 +85,11 @@ def read_tlog(path):
         if j >= n or data[j] not in (0xFE, 0xFD):
             break                                    # not a frame boundary -> stop
         total = mavlink.frame_total(data, j)
-        if total is None:
-            break
+        if total is None or j + total > n:
+            break                                    # frame runs past the (capped) data -> stop clean
         records.append((t_us, bytes(data[j:j + total])))
         i = j + total
     return records
+
+
+read_tlog.truncated = False

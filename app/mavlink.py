@@ -254,6 +254,10 @@ MAV_AUTOPILOT_ARDUPILOTMEGA = 3
 MAV_MODE_FLAG_SAFETY_ARMED = 0x80
 MAV_AUTOPILOT_INVALID = 8          # "no valid autopilot": GCS, gimbals, companion computers, ADSB peripherals
 MAV_MODE_FLAG_CUSTOM_MODE_ENABLED = 0x01
+# Component id this ground station SOURCES its packets from. compid 0 (MAV_COMP_ID_ALL) is a
+# broadcast/target-all value and is spec-forbidden as a source; QGroundControl uses 190.
+MAV_COMP_ID_ALL = 0
+MAV_COMP_ID_MISSIONPLANNER = 190
 MAV_STATE_ACTIVE = 4
 GPS_FIX_TYPE_3D_FIX = 3
 MAV_CMD_COMPONENT_ARM_DISARM = 400
@@ -1016,6 +1020,20 @@ class PyParser:
             if pos + total > n:
                 first_incomplete = pos if first_incomplete < 0 else first_incomplete
                 pos += 1
+                continue
+            if v2 and (self.buf[pos + 2] & 0xFE):     # incompat bits other than 0x01 (SIGNED)
+                # Unknown incompatible flag: the spec REQUIRES discarding a frame we can't fully
+                # interpret rather than decoding it (its layout may differ). Skip it the same
+                # self-consistent way as an unknown msgid, so a future/unsupported frame never
+                # yields a bogus Message and its seq still counts toward loss%.
+                if pos + total >= n:
+                    first_incomplete = pos if first_incomplete < 0 else first_incomplete
+                    pos += 1
+                elif self.buf[pos + total] in (0xFE, 0xFD):
+                    self.track_seq(self.buf[pos + 5], self.buf[pos + 6], self.buf[pos + 4])
+                    pos += total
+                else:
+                    pos += 1
                 continue
             if v2:
                 msgid = self.buf[pos + 7] | (self.buf[pos + 8] << 8) | (self.buf[pos + 9] << 16)

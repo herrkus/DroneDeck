@@ -16,7 +16,7 @@ from PySide6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QPushButton, Q
 
 import mavlink
 import core
-from tlog import read_tlog
+from tlog import read_tlog, MAX_TLOG_BYTES
 
 _MONO = QFont("DejaVu Sans Mono", 8)
 
@@ -305,6 +305,9 @@ class AnalyzeDialog(QDialog):
         except Exception as e:
             self.status.setText(f"open failed: {e}")
             return
+        if getattr(read_tlog, "truncated", False):
+            self.status.setText(f"note: log exceeds {MAX_TLOG_BYTES // (1024 * 1024)} MB -- "
+                                f"showing the first {len(records)} frames only")
         self.series, self.units = extract_series(records)
         ordered = [label for (_, _, label, _, _) in PLOTTABLE if self.series.get(label)]
         self.fieldlist.blockSignals(True)
