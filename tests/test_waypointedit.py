@@ -78,7 +78,22 @@ if not (it.command == 183 and it.param1 == 9 and it.param2 == 1800 and it.frame 
 if MissionItem(0, 47, 8, 50, command=183).cmd_name != "SET_SERVO":
     fail.append("cmd 183 name")
 
-# 5) no regression: a plain waypoint stays georeferenced with the chosen altitude ------------------
+# 5) Condition: Yaw 115 (iter123): no position; Yaw field reused as heading -> param1, frame 2 ------
+it, ed = editor_for(16)
+select(ed, 115)
+if not ed.p4.isEnabled():
+    fail.append("condition-yaw: the Yaw field should stay enabled as the heading input")
+if ed.alt.isEnabled() or ed.p1.isEnabled() or ed.p3.isEnabled():
+    fail.append("condition-yaw: position/loiter fields should be disabled")
+ed.p4.setValue(270)
+ed.apply_to(it)
+if not (it.command == 115 and it.param1 == 270 and it.param2 == 0 and it.frame == 2 and it.alt == 0.0):
+    fail.append(f"condition-yaw apply: cmd={it.command} p1={it.param1} p2={it.param2} "
+                f"frame={it.frame} alt={it.alt}")
+if MissionItem(0, 47, 8, 50, command=115).cmd_name != "YAW":
+    fail.append("cmd 115 name")
+
+# 6) no regression: a plain waypoint stays georeferenced with the chosen altitude ------------------
 it, ed = editor_for(16)
 select(ed, 16)
 ed.alt.setValue(60)
@@ -87,6 +102,6 @@ if not (it.command == 16 and it.alt == 60 and it.frame != 2):
     fail.append(f"waypoint regressed: cmd={it.command} alt={it.alt} frame={it.frame}")
 
 print("WAYPOINTEDIT FAILED: " + "; ".join(fail) if fail else
-      "WAYPOINTEDIT PASSED (Loiter-turns + Delay + Set-servo: fields/labels/params/frame correct, "
-      "no regression)")
+      "WAYPOINTEDIT PASSED (Loiter-turns + Delay + Set-servo + Condition-Yaw: fields/labels/params/"
+      "frame correct, no regression)")
 sys.exit(1 if fail else 0)
