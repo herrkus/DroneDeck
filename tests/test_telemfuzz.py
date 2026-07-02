@@ -90,4 +90,30 @@ for key, lbl in win.panel.v.items():
         bad_text.append((key, lbl.text()))
 assert not bad_text, f"panel shows non-finite text: {bad_text}"
 
-print("TELEMFUZZ PASSED (instruments + panel survive NaN/Inf/extreme telemetry)")
+# -- wire sentinels (audit batch 4): "not measured" markers must not become readings ----------------
+from vehicle import Vehicle
+sv = Vehicle()
+sv.consume([Msg(mavlink.BATTERY_STATUS, id=0, current_battery=1234,
+                voltages=[3800] * 4 + [65535] * 6, battery_remaining=88)])
+sv.consume([Msg(mavlink.SYS_STATUS, voltage_battery=65535, current_battery=-1, battery_remaining=88,
+                onboard_present=1, onboard_enabled=1, onboard_health=1)])
+assert sv.voltage == 0.0, "SYS_STATUS voltage UINT16_MAX sentinel displayed as 65.535 V"
+assert abs(sv.current - 12.34) < 0.01, "SYS_STATUS current=-1 sentinel stomped BATTERY_STATUS current"
+sv.consume([Msg(mavlink.SYS_STATUS, voltage_battery=16200, current_battery=1500, battery_remaining=88,
+                onboard_present=1, onboard_enabled=1, onboard_health=1)])
+assert abs(sv.voltage - 16.2) < 0.01 and abs(sv.current - 15.0) < 0.01   # real values still land
+
+hv = Vehicle()
+hv.consume([Msg(mavlink.GLOBAL_POSITION_INT, lat=474000000, lon=85000000, alt=100000,
+                relative_alt=50000, vx=0, vy=0, vz=0, hdg=65535)])
+assert hv.heading == 0.0, "hdg UINT16_MAX shown as a confident 295.35 deg"
+hv.consume([Msg(mavlink.VFR_HUD, airspeed=0.0, groundspeed=1.0, heading=123, throttle=10,
+                alt=50.0, climb=0.0)])
+assert hv.heading == 123.0, "VFR_HUD heading fallback locked out while gp hdg is unknown"
+hv.consume([Msg(mavlink.GLOBAL_POSITION_INT, lat=474000000, lon=85000000, alt=100000,
+                relative_alt=50000, vx=0, vy=0, vz=0, hdg=9000)])
+hv.consume([Msg(mavlink.VFR_HUD, airspeed=0.0, groundspeed=1.0, heading=45, throttle=10,
+                alt=50.0, climb=0.0)])
+assert hv.heading == 90.0, "VFR_HUD must not override a VALID gp heading"
+
+print("TELEMFUZZ PASSED (instruments + panel survive NaN/Inf/extreme telemetry; wire sentinels safe)")

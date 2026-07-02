@@ -40,6 +40,7 @@ class Vehicle(QObject):
         self.alt_msl = 0.0          # m
         self.alt_rel = 0.0          # m above home
         self.heading = 0.0          # deg
+        self._gp_hdg_valid = False  # GLOBAL_POSITION_INT hdg != UINT16_MAX seen (gates VFR fallback)
         self.vx = self.vy = self.vz = 0.0
         # vfr hud
         self.airspeed = self.groundspeed = 0.0
@@ -203,7 +204,10 @@ class Vehicle(QObject):
         self.lon = f.get("lon", 0) / 1e7
         self.alt_msl = f.get("alt", 0) / 1000.0
         self.alt_rel = f.get("relative_alt", 0) / 1000.0
-        self.heading = (f.get("hdg", 0) / 100.0) % 360.0
+        hdg = int(f.get("hdg", 0))
+        self._gp_hdg_valid = hdg != 65535       # UINT16_MAX = yaw unknown (compass-less/pre-align):
+        if self._gp_hdg_valid:                  # don't display a confident 655.35%360=295.35 deg,
+            self.heading = (hdg / 100.0) % 360.0    # and let the VFR_HUD heading keep serving
         self.vx, self.vy, self.vz = f.get("vx", 0) / 100.0, f.get("vy", 0) / 100.0, f.get("vz", 0) / 100.0
         if abs(self.lat) > 1e-6 or abs(self.lon) > 1e-6:
             self.have_position = True
@@ -391,8 +395,12 @@ class Vehicle(QObject):
         return (self.ekf_flags & need) == need and self.ekf_variance_max() < 1.0
 
     def _on_sys_status(self, f):
-        self.voltage = f.get("voltage_battery", 0) / 1000.0
-        self.current = f.get("current_battery", 0) / 100.0
+        v = int(f.get("voltage_battery", 0))
+        if v != 65535:                          # UINT16_MAX = voltage not measured
+            self.voltage = v / 1000.0
+        cur = int(f.get("current_battery", 0))
+        if cur != -1:                           # -1 = no current sensor; without this guard the 1 Hz
+            self.current = cur / 100.0          # SYS_STATUS stomped BATTERY_STATUS's valid current
         self.battery_remaining = int(f.get("battery_remaining", -1))
         self.sensors_present = int(f.get("onboard_present", 0))
         self.sensors_enabled = int(f.get("onboard_enabled", 0))
@@ -417,7 +425,9 @@ class Vehicle(QObject):
         self.groundspeed = f.get("groundspeed", 0.0)
         self.climb = f.get("climb", 0.0)
         self.throttle = int(f.get("throttle", 0))
-        if f.get("heading") is not None and not self.have_position:
+        # VFR_HUD heading serves when GLOBAL_POSITION_INT isn't flowing OR its hdg field is the
+        # UINT16_MAX unknown sentinel (a valid gp hdg stays authoritative).
+        if f.get("heading") is not None and (not self.have_position or not self._gp_hdg_valid):
             self.heading = float(f["heading"]) % 360.0
 
     def _on_mission_current(self, f):
