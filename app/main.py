@@ -891,10 +891,7 @@ class DroneDeck(QMainWindow):
                  176: "SET MODE", 192: "REPOSITION", 193: "PAUSE/CONTINUE"}
 
     def _wire(self):
-        self.vehicle.status_text.connect(self.console.add_message)
-        self.vehicle.status_text.connect(self._on_new_message)
-        self.vehicle.command_ack.connect(self._on_command_ack)
-        self.vehicle.mission_reached.connect(self._on_mission_reached)
+        self._wire_vehicle(self.vehicle)
         self.map.clicked.connect(self._on_map_click)
         self.map.contextAction.connect(self._on_map_context)
         self.map.wpAction.connect(self._on_wp_action)
@@ -984,8 +981,8 @@ class DroneDeck(QMainWindow):
         if self.link is not None:
             self.link.close()
             self.link.deleteLater()
+        self._reset_vehicles()      # fresh link -> fresh vehicles (no stale sysid/home/params)
         self.link = self._make_link()
-        self._stream_reqs.clear()   # re-request telemetry streams on a fresh/re-connect
         t = self.transport_combo.currentText()
         p = self.link_edit.text().strip()
         try:
@@ -1098,6 +1095,32 @@ class DroneDeck(QMainWindow):
             self._on_info(f"vehicle #{sysid}: no telemetry yet -- re-requesting streams "
                           f"(try {st['tries']}/{self.STREAM_MAX_TRIES})")
 
+    def _wire_vehicle(self, veh):
+        """Connect a Vehicle's signals to the window. Factored so the primary vehicle and any
+        later per-sysid vehicle are wired identically (and so a reconnect can rebuild cleanly)."""
+        veh.status_text.connect(self.console.add_message)
+        veh.status_text.connect(self._on_new_message)
+        veh.command_ack.connect(self._on_command_ack)
+        veh.mission_reached.connect(self._on_mission_reached)
+
+    def _reset_vehicles(self):
+        """Drop all per-vehicle state on a fresh connect. Without this, switching from one drone to
+        another (SITL sysid 1 -> a real drone sysid 2, or reconnecting at a new field) left the old
+        dead vehicle active -- commands went to the wrong sysid, the HUD showed NO TELEMETRY while
+        data flowed, and a stale home corrupted the RTL reference. A brand-new primary Vehicle also
+        clears attitude/battery/home/trail so nothing bleeds across the reconnect."""
+        self.vehicle = Vehicle()
+        self._wire_vehicle(self.vehicle)
+        self.vehicles = {}
+        self.traffic = {}
+        self._fence_breached = {}
+        self._failsafe_prev = {}
+        self._stream_reqs = {}
+        self.params.reset()
+        self.vehicle_combo.blockSignals(True)
+        self.vehicle_combo.clear()
+        self.vehicle_combo.blockSignals(False)
+
     def _ensure_vehicle(self, sysid):
         veh = self.vehicles.get(sysid)
         if veh is not None:
@@ -1106,10 +1129,7 @@ class DroneDeck(QMainWindow):
             veh = self.vehicle                  # reuse the pre-wired primary vehicle
         else:
             veh = Vehicle()
-            veh.status_text.connect(self.console.add_message)
-            veh.status_text.connect(self._on_new_message)
-            veh.command_ack.connect(self._on_command_ack)
-            veh.mission_reached.connect(self._on_mission_reached)
+            self._wire_vehicle(veh)
         self.vehicles[sysid] = veh
         active_sid = next((s for s, v in self.vehicles.items() if v is self.vehicle), sysid)
         self.vehicle_combo.blockSignals(True)
@@ -1126,10 +1146,12 @@ class DroneDeck(QMainWindow):
 
     def _select_vehicle(self, idx):
         sid = self.vehicle_combo.itemData(idx)
-        if sid in self.vehicles:
+        if sid in self.vehicles and self.vehicles[sid] is not self.vehicle:
             self.vehicle = self.vehicles[sid]
             self._arm_t0 = None
-            self._on_info(f"active vehicle: #{sid}")
+            self.params.reset()     # the param table/manager is global -> clear #A's params so a
+            #                         re-open re-downloads #B's (never write A's values to B)
+            self._on_info(f"active vehicle: #{sid} -- re-open Params to load its parameters")
 
     TRAFFIC_TTL = 60.0        # seconds an ADSB target lingers after its last report
     TRAFFIC_MAX = 2000        # hard ceiling on tracked targets (far above any real airspace)

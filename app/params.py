@@ -60,6 +60,18 @@ class ParamManager(QObject):
         link = self._link()
         return link is not None and link.is_open and link.remote is not None
 
+    def reset(self):
+        """Drop all cached parameter state -- called when the active vehicle changes or on a fresh
+        connect, so vehicle A's params are never shown or written as vehicle B's."""
+        self.values, self.index_of, self.type_of = {}, {}, {}
+        self.received = set()
+        self.pending = {}
+        self.expected = None
+        self.state = "idle"
+        self.retries = 0
+        self.timer.stop()
+        self.set_timer.stop()
+
     def download(self):
         if not self._ready():
             self.finished.emit(False, "no vehicle connected")

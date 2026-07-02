@@ -94,6 +94,27 @@ assert 250 not in win.vehicles
 win._route([fc_hb(sysid=250)])
 assert 250 in win.vehicles, "real FC on a previously-skipped sysid must create the vehicle"
 
+# 8) reconnect + vehicle-switch reset (audit batch 6): no stale sysid/home/params bleed across ------
+win._connect()                                              # first "drone"
+win._route([fc_hb(sysid=1)])
+win._route([Msg(mavlink.GLOBAL_POSITION_INT, sysid=1, lat=474000000, lon=85000000, alt=550000,
+                relative_alt=50000, vx=0, vy=0, vz=0, hdg=9000)])
+win.vehicle.home = (47.40, 8.55)
+win.params.values = {"OLD": 1.0}
+win._connect()                                              # reconnect to a different drone
+assert win.vehicles == {}, "reconnect left stale vehicles"
+assert win.vehicle.home is None, "reconnect kept a stale home (corrupts RTL reference)"
+assert win.params.values == {}, "reconnect kept vehicle A's params"
+assert win.vehicle_combo.count() == 0, "reconnect left stale selector entries"
+win._route([fc_hb(sysid=2)])
+assert win.vehicle.sysid == 2 and win._sysid() == 2, "commands must target the new drone"
+win._route([fc_hb(sysid=3)])                                # now two vehicles: 2 and 3
+win.params.values = {"X": 5.0}
+win.vehicle_combo.setCurrentIndex(win.vehicle_combo.findData(3))
+assert win.vehicle.sysid == 3, "selector switch did not change active vehicle"
+assert win.params.values == {}, "vehicle switch kept the previous vehicle's params"
+
 print("SYSIDFILTER PASSED (peripheral heartbeats don't flap state or mask comm loss; "
-      "no phantom GCS vehicle; telemetry-first creation preserved)", flush=True)
+      "no phantom GCS vehicle; telemetry-first creation preserved; reconnect/switch reset clean)",
+      flush=True)
 os._exit(0)      # skip Qt offscreen teardown (segfault-prone); result already printed + flushed
