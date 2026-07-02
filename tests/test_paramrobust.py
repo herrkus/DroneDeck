@@ -32,7 +32,7 @@ class MockLink:
         self.sent = []
     def request_params(self, tgt): self.sent.append(("list",))
     def request_param_read(self, tgt, param_id="", index=-1): self.sent.append(("read", param_id, index))
-    def set_param(self, tgt, param_id, value, ptype=0): self.sent.append(("set", param_id, value))
+    def set_param(self, tgt, param_id, value, ptype=0, bytewise=True): self.sent.append(("set", param_id, value))
 
 
 def new_mgr():

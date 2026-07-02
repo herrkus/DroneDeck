@@ -34,10 +34,13 @@ class ParamManager(QObject):
     set_result = Signal(str, bool, str)     # PARAM_SET readback: name, confirmed, message
     download_progress = Signal(int, int)    # received, total
 
-    def __init__(self, link_getter, target_getter, parent=None):
+    def __init__(self, link_getter, target_getter, autopilot_getter=None, parent=None):
         super().__init__(parent)
         self._link = link_getter
         self._target = target_getter
+        # integer-param encoding depends on the autopilot (PX4 bytewise vs ArduPilot C-cast);
+        # default PX4 keeps standalone/mock use working.
+        self._autopilot = autopilot_getter or (lambda: mavlink.MAV_AUTOPILOT_PX4)
         self.values = {}                    # name -> float
         self.index_of = {}                  # name -> index
         self.expected = None
@@ -86,7 +89,8 @@ class ParamManager(QObject):
         value = float(value)
         ptype = self.type_of.get(name, mavlink.MAV_PARAM_TYPE_REAL32)
         self.pending[name] = {"value": value, "type": ptype, "tries": 1}
-        self._link().set_param(self._target(), name, value, ptype)
+        self._link().set_param(self._target(), name, value, ptype,
+                               bytewise=mavlink.param_bytewise(self._autopilot()))
         self.progress.emit(f"set {name} = {value:g} ...")
         if not self.set_timer.isActive():
             self.set_timer.start(SET_TIMEOUT_MS)
@@ -132,7 +136,8 @@ class ParamManager(QObject):
         if not name:
             return
         ptype = int(m.fields.get("param_type", mavlink.MAV_PARAM_TYPE_REAL32))
-        val = mavlink.param_decode(float(m.fields.get("param_value", 0.0)), ptype)
+        val = mavlink.param_decode(float(m.fields.get("param_value", 0.0)), ptype,
+                                   bytewise=mavlink.param_bytewise(self._autopilot()))
         idx = int(m.fields.get("param_index", 0))
         cnt = int(m.fields.get("param_count", 0))
         self.values[name] = val

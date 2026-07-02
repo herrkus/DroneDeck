@@ -295,8 +295,11 @@ class Link(QObject):
                        mavlink.enc_param_request_read(param_id, index, target_sys))
 
     def set_param(self, target_sys: int, param_id: str, value: float,
-                  ptype: int = mavlink.MAV_PARAM_TYPE_REAL32):
-        self._send_msg(mavlink.PARAM_SET, mavlink.enc_param_set(param_id, value, ptype, target_sys))
+                  ptype: int = mavlink.MAV_PARAM_TYPE_REAL32, bytewise: bool = True):
+        # bytewise: integer-param encoding -- True for PX4 (union bits), False for ArduPilot /
+        # spec-default C-cast. Callers pass mavlink.param_bytewise(vehicle.autopilot).
+        self._send_msg(mavlink.PARAM_SET,
+                       mavlink.enc_param_set(param_id, value, ptype, target_sys, bytewise=bytewise))
 
     def send_serial_control(self, data=b"", device=mavlink.SERIAL_CONTROL_DEV_SHELL,
                             flags=(mavlink.SERIAL_CONTROL_FLAG_RESPOND

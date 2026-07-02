@@ -294,7 +294,8 @@ class DroneDeck(QMainWindow):
         self.mission = MissionProtocol(lambda: self.link, self._sysid)
 
         # parameter editor
-        self.params = ParamManager(lambda: self.link, self._sysid)
+        self.params = ParamManager(lambda: self.link, self._sysid,
+                                   lambda: self.vehicle.autopilot)
         self.logs = LogManager(lambda: self.link, self._sysid, LOG_DIR)
         self._param_dialog = None
 

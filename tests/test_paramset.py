@@ -46,6 +46,26 @@ assert mavlink.param_decode(mavlink.param_encode(99999.0, 4), 4) == 32767.0  # i
 assert mavlink.param_decode(mavlink.param_encode(-99999.0, 4), 4) == -32768.0
 assert mavlink.param_decode(mavlink.param_encode(1e20, 6), 6) == 2147483647.0  # int32 -> max
 
+# 3b) ArduPilot / spec-default C-CAST encoding (iter113): APM reports typed int params whose
+# param_value is the CAST number, NOT bytewise bits. Decoding must return the value as-is and
+# encoding must send a plain float -- applying bytewise here turned RC5_MIN=1100 into -32768.
+assert mavlink.param_bytewise(12) is True                   # PX4 -> bytewise
+assert mavlink.param_bytewise(3) is False                   # ArduPilot -> C-cast
+assert mavlink.param_bytewise(0) is False                   # generic/unknown -> spec default (cast)
+for name, val, pt in (("RC5_MIN", 1100.0, 4), ("SYSID_THISMAV", 1.0, 2), ("WPNAV_SPEED", 500.0, 6)):
+    assert mavlink.param_decode(val, pt, bytewise=False) == val, (name, val, pt)
+    assert mavlink.param_encode(val, pt, bytewise=False) == val
+# cast encode still rounds + clamps (the iter109 hardening applies in both encodings)
+assert mavlink.param_encode(99999.0, 4, bytewise=False) == 32767.0
+assert mavlink.param_encode(float("nan"), 6, bytewise=False) == 0.0
+assert math.isnan(mavlink.param_encode(float("nan"), REAL32, bytewise=False))   # real32 untouched
+# and the full PARAM_SET frame carries the cast value for APM
+frame = mavlink.enc_param_set("RC5_MIN", 1100.0, 4, bytewise=False)
+import struct as _s
+assert _s.unpack("<f", frame[:4])[0] == 1100.0, "cast PARAM_SET must carry the plain value"
+frame = mavlink.enc_param_set("MC_PITCH_P", 4.0, 6, bytewise=True)              # PX4 unchanged
+assert mavlink.param_decode(_s.unpack("<f", frame[:4])[0], 6, bytewise=True) == 4.0
+
 # 4) _int_range spans exactly match each struct format
 import struct
 for pt, (fmt, _sz) in mavlink._PARAM_INT_FMT.items():

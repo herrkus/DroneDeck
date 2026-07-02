@@ -641,11 +641,21 @@ _PARAM_INT_FMT = {1: ("<B", 1), 2: ("<b", 1), 3: ("<H", 2), 4: ("<h", 2),
                   5: ("<I", 4), 6: ("<i", 4), 7: ("<q", 8), 8: ("<q", 8)}
 
 
-def param_decode(raw_float, ptype):
-    """PX4 'bytewise' params: for integer types the param_value field carries the
-    raw integer bits packed into the float32 slot -- reinterpret them. ArduPilot
-    reports everything as REAL32, so this is a no-op there."""
-    if ptype in _PARAM_INT_FMT:
+def param_bytewise(autopilot):
+    """Which param-protocol encoding does this autopilot use for INTEGER params?
+    PX4 packs the integer's raw bits into the float32 param slot ('bytewise'/union encoding);
+    ArduPilot -- and the MAVLink default -- C-CASTS the value instead (1100 -> 1100.0f) while
+    still reporting the integer param_type. Applying the wrong one turns every integer param
+    into garbage on read and silently corrupts it on write (QGC switches on firmware the same
+    way this does)."""
+    return int(autopilot) == MAV_AUTOPILOT_PX4
+
+
+def param_decode(raw_float, ptype, bytewise=True):
+    """Decode PARAM_VALUE.param_value per the autopilot's integer encoding (see param_bytewise).
+    bytewise=True (PX4): reinterpret the float32 bits as the integer type.
+    bytewise=False (ArduPilot/default C-cast): the float IS the value already."""
+    if ptype in _PARAM_INT_FMT and bytewise:
         fmt, size = _PARAM_INT_FMT[ptype]
         return float(struct.unpack(fmt, (struct.pack("<f", raw_float) + b"\x00" * 8)[:size])[0])
     return raw_float
@@ -658,9 +668,12 @@ def _int_range(fmt):
     return -(1 << (bits - 1)), (1 << (bits - 1)) - 1
 
 
-def param_encode(value, ptype):
-    """Inverse of param_decode: pack an integer value's bits into the float32
-    PARAM_SET slot (PX4). Floats pass straight through."""
+def param_encode(value, ptype, bytewise=True):
+    """Inverse of param_decode: prepare a PARAM_SET value per the autopilot's integer encoding.
+    bytewise=True (PX4): pack the integer's bits into the float32 slot.
+    bytewise=False (ArduPilot/default): C-cast -- send the integer as a plain float value.
+    Integer values are rounded + clamped to the field range either way (a NaN/inf/out-of-range
+    edit must never crash struct.pack or wrap on the vehicle)."""
     if ptype in _PARAM_INT_FMT:
         fmt, size = _PARAM_INT_FMT[ptype]
         try:
@@ -669,13 +682,15 @@ def param_encode(value, ptype):
             iv = 0                              # NaN/inf can't be an integer param -> 0
         lo, hi = _int_range(fmt)
         iv = max(lo, min(hi, iv))              # clamp so an out-of-range edit can't overflow struct.pack
+        if not bytewise:
+            return float(iv)
         return struct.unpack("<f", (struct.pack(fmt, iv) + b"\x00" * 8)[:4])[0]
     return float(value)
 
 
 def enc_param_set(param_id, value, param_type=MAV_PARAM_TYPE_REAL32,
-                  target_system=1, target_component=1):
-    return struct.pack("<fBB16sB", param_encode(value, param_type), target_system & 0xFF,
+                  target_system=1, target_component=1, bytewise=True):
+    return struct.pack("<fBB16sB", param_encode(value, param_type, bytewise), target_system & 0xFF,
                        target_component & 0xFF, _pid(param_id), param_type & 0xFF)
 
 
