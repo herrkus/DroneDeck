@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
-"""test_waypointedit.py -- WaypointEditor per-command editing, focused on the Loiter(turns) + Delay
-mission items added for QGC parity (iter116). Verifies the per-command field enable/relabel logic
-and that apply_to writes the correct command / params / frame for each type. Builds the dialog but
-never exec()s it (modal exec blocks offscreen). No link, no arming."""
+"""test_waypointedit.py -- WaypointEditor per-command editing for the QGC-parity mission items added
+across the loop: Loiter(turns) + Delay (iter116), Set-servo (iter119), Condition-Yaw (iter123) and
+Camera-trigger-distance (iter124). Verifies the per-command field enable/relabel logic and that
+apply_to writes the correct command / params / frame for each type. Builds the dialog but never
+exec()s it (modal exec blocks offscreen). No link, no arming."""
 import os
 import sys
 
@@ -93,7 +94,24 @@ if not (it.command == 115 and it.param1 == 270 and it.param2 == 0 and it.frame =
 if MissionItem(0, 47, 8, 50, command=115).cmd_name != "YAW":
     fail.append("cmd 115 name")
 
-# 6) no regression: a plain waypoint stays georeferenced with the chosen altitude ------------------
+# 6) Camera trig dist 206 (iter124): no position; p1 reused as trigger distance -> param1, frame 2 --
+it, ed = editor_for(16)
+select(ed, 206)
+if ed._p1_label.text() != "Trigger dist (m)":
+    fail.append(f"cam-trigg p1 label = {ed._p1_label.text()!r}")
+if not ed.p1.isEnabled():
+    fail.append("cam-trigg: the trigger-distance field should be enabled")
+if ed.alt.isEnabled() or ed.p3.isEnabled() or ed.p4.isEnabled():
+    fail.append("cam-trigg: position/loiter fields should be disabled")
+ed.p1.setValue(25)
+ed.apply_to(it)
+if not (it.command == 206 and it.param1 == 25 and it.param2 == 0 and it.frame == 2 and it.alt == 0.0):
+    fail.append(f"cam-trigg apply: cmd={it.command} p1={it.param1} p2={it.param2} "
+                f"frame={it.frame} alt={it.alt}")
+if MissionItem(0, 47, 8, 50, command=206).cmd_name != "CAM_TRIGG_DIST":
+    fail.append("cmd 206 name")
+
+# 7) no regression: a plain waypoint stays georeferenced with the chosen altitude ------------------
 it, ed = editor_for(16)
 select(ed, 16)
 ed.alt.setValue(60)
@@ -102,6 +120,6 @@ if not (it.command == 16 and it.alt == 60 and it.frame != 2):
     fail.append(f"waypoint regressed: cmd={it.command} alt={it.alt} frame={it.frame}")
 
 print("WAYPOINTEDIT FAILED: " + "; ".join(fail) if fail else
-      "WAYPOINTEDIT PASSED (Loiter-turns + Delay + Set-servo + Condition-Yaw: fields/labels/params/"
+      "WAYPOINTEDIT PASSED (Loiter-turns + Delay + Set-servo + Condition-Yaw + Cam-trigg: fields/labels/params/"
       "frame correct, no regression)")
 sys.exit(1 if fail else 0)

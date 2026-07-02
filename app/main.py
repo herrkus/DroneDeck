@@ -155,7 +155,7 @@ class WaypointEditor(QDialog):
             ("Land", 21), ("Return to launch", 20),
             ("ROI (point camera)", 195), ("Clear ROI", 197),
             ("Change speed", 178), ("Jump to WP", 177), ("Land start", 189),
-            ("Set servo", 183), ("Condition: Yaw", 115)]
+            ("Set servo", 183), ("Condition: Yaw", 115), ("Camera trig dist", 206)]
 
     def __init__(self, item, parent=None):
         super().__init__(parent)
@@ -226,16 +226,17 @@ class WaypointEditor(QDialog):
     def _sync_fields(self):
         """Grey out the fields that don't apply to the chosen command (QGC-style)."""
         cmd = self.cmd.currentData()
-        # RTL/speed/jump/clear-ROI/land-start/delay/set-servo/yaw carry no position of their own
-        has_pos = cmd not in (20, 178, 177, 197, 189, 93, 183, 115)
+        # RTL/speed/jump/clear-ROI/land-start/delay/set-servo/yaw/cam-trigg carry no position
+        has_pos = cmd not in (20, 178, 177, 197, 189, 93, 183, 115, 206)
         is_loiter = cmd in (17, 19, 18)              # unlim / time / turns
         is_delay = cmd == 93
         is_jump = cmd == 177
         is_servo = cmd == 183
         is_yaw = cmd == 115                          # CONDITION_YAW: only the heading matters
+        is_trigg = cmd == 206                        # DO_SET_CAM_TRIGG_DIST: only the distance
         self.alt.setEnabled(has_pos)
         self.altmode.setEnabled(has_pos)             # AMSL/relative only for georeferenced items
-        self.p1.setEnabled(is_loiter or is_delay)    # loiter time/turns, or delay seconds
+        self.p1.setEnabled(is_loiter or is_delay or is_trigg)   # loiter time/turns, delay s, or trig m
         self.p3.setEnabled(is_loiter)
         self.p4.setEnabled(has_pos or is_yaw)        # reuse the Yaw field as the target heading
         self.spd.setEnabled(cmd == 178)
@@ -246,6 +247,7 @@ class WaypointEditor(QDialog):
         # the multi-purpose p1 field means different things per command -- relabel it like QGC does
         self._p1_label.setText("Loiter turns" if cmd == 18 else
                                "Delay (s)" if is_delay else
+                               "Trigger dist (m)" if is_trigg else
                                "Hold / loiter time (s)")
 
     def apply_to(self, item):
@@ -281,6 +283,12 @@ class WaypointEditor(QDialog):
             item.param3 = 0.0                         # direction: 0 = shortest way round
             item.param4 = 0.0                         # 0 = absolute heading (1 would be relative)
             item.alt = 0.0
+        elif cmd == 206:                              # DO_SET_CAM_TRIGG_DIST: shoot every N metres
+            item.param1 = max(0.0, float(self.p1.value()))  # trigger distance m (0 = stop), reuses p1
+            item.param2 = 0.0                         # shutter integration time: 0 = autopilot default
+            item.param3 = 0.0                         # 0 = do not fire one immediately on receipt
+            item.param4 = 0.0
+            item.alt = 0.0
         else:
             item.alt = self.alt.value()
             item.param1 = self.p1.value()             # loiter time (17/19) or turns (18)
@@ -289,7 +297,7 @@ class WaypointEditor(QDialog):
         # RTL / DO_CHANGE_SPEED / DO_JUMP / clear-ROI / land-start / delay carry no position and must
         # use the MISSION frame (2); PX4 rejects them with a global frame. Georeferenced items take
         # the chosen altitude mode: relative-to-home (6) or AMSL (5).
-        item.frame = 2 if cmd in (20, 178, 177, 197, 189, 93, 183, 115) else self.altmode.currentData()
+        item.frame = 2 if cmd in (20, 178, 177, 197, 189, 93, 183, 115, 206) else self.altmode.currentData()
 
 
 class DroneDeck(QMainWindow):

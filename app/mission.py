@@ -51,7 +51,7 @@ class MissionItem:
                 93: "DELAY", 82: "SPLINE_WP",
                 195: "ROI", 197: "ROI_NONE", 178: "CHANGE_SPEED",
                 177: "JUMP", 189: "LAND_START", 183: "SET_SERVO",
-                115: "YAW"}.get(self.command,
+                115: "YAW", 206: "CAM_TRIGG_DIST"}.get(self.command,
                                                                             f"CMD{self.command}")
 
 
