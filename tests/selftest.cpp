@@ -21,7 +21,10 @@ extern "C" {
                                      uint16_t, const float*, uint8_t*, int);
 }
 
-struct Decoded { uint32_t msgid; uint8_t sysid, compid, seq, nfields; double f[24]; char text[51]; };
+// MUST mirror core/dronecore.cpp's Decoded exactly -- mav_pop copies sizeof(Decoded) bytes into
+// this struct, so a smaller text[] here is an out-of-bounds stack write (text was 51 while the
+// library grew to 96 for LOG_DATA; 40 bytes of the selftest stack were silently overwritten).
+struct Decoded { uint32_t msgid; uint8_t sysid, compid, seq, nfields; double f[24]; char text[96]; };
 extern "C" int mav_pop(void*, Decoded*);
 
 static int failures = 0;

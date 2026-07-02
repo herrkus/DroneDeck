@@ -116,7 +116,7 @@ constexpr MsgInfo MSGS[] = {
     {380, 232, 20},  // TIME_ESTIMATE_TO_TARGET (safe_return/land/mission_next/mission_end/cmd, s)
     {441, 169, 17},  // GNSS_INTEGRITY (jamming/spoofing/RAIM; development dialect)
     {246, 184, 38},  // ADSB_VEHICLE
-    {126, 194, 79},  // SERIAL_CONTROL (PX4 nsh shell passthrough)
+    {126, 220, 79},  // SERIAL_CONTROL (PX4 nsh shell passthrough; seed verified vs generated header + crc_extra_calc)
 };
 
 const MsgInfo* find_info(uint32_t id) {

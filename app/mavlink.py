@@ -172,7 +172,7 @@ CRC_EXTRA = {
     REQUEST_DATA_STREAM: 148,
     LOG_REQUEST_LIST: 128, LOG_ENTRY: 56, LOG_REQUEST_DATA: 116,
     LOG_DATA: 134, LOG_REQUEST_END: 203, ADSB_VEHICLE: 184,
-    SERIAL_CONTROL: 194,
+    SERIAL_CONTROL: 220,
 }
 
 # Decoded-field order. Index i here is index i in Decoded.f[] from the C++ core.
@@ -394,7 +394,10 @@ ARDUROVER_MODES = {
 _PX4_MAIN = {1: "MANUAL", 2: "ALTCTL", 3: "POSCTL", 5: "ACRO", 6: "OFFBOARD",
              7: "STABILIZED", 8: "RATTITUDE", 4: "AUTO"}
 _PX4_AUTO_SUB = {1: "READY", 2: "TAKEOFF", 3: "LOITER", 4: "MISSION", 5: "RTL",
-                 6: "LAND", 7: "RTGS", 8: "FOLLOW", 10: "PRECLAND"}
+                 6: "LAND", 7: "RTGS", 8: "FOLLOW_TARGET", 9: "PRECLAND", 10: "VTOL_TAKEOFF"}
+# sub-mode values from PX4 px4_custom_mode.h (append-only enum): ..., 8=FOLLOW_TARGET,
+# 9=PRECLAND, 10=VTOL_TAKEOFF. The old map had 10->PRECLAND and no 9, so a VTOL auto-takeoff
+# displayed as AUTO.PRECLAND and a real precision landing as AUTO.9.
 # Forward map for SETTING PX4 modes: label -> (main_mode, sub_mode).
 _PX4_MODE_SET = {
     "MANUAL": (1, 0), "ALTCTL": (2, 0), "POSCTL": (3, 0), "ACRO": (5, 0),

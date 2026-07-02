@@ -116,6 +116,11 @@ NEW = {
                            ("uint8_t", "rssi", 0), ("uint8_t", "remrssi", 0),
                            ("uint8_t", "txbuf", 0), ("uint8_t", "noise", 0),
                            ("uint8_t", "remnoise", 0)]),
+    # target_system/target_component are extensions -> excluded. The old table shipped 194 here,
+    # which CRC-killed the nsh shell in both directions against real PX4 (header says 220).
+    "SERIAL_CONTROL": (126, [("uint32_t", "baudrate", 0), ("uint16_t", "timeout", 0),
+                             ("uint8_t", "device", 0), ("uint8_t", "flags", 0),
+                             ("uint8_t", "count", 0), ("uint8_t", "data", 70)]),
     "REQUEST_DATA_STREAM": (148, [("uint16_t", "req_message_rate", 0), ("uint8_t", "target_system", 0),
                                   ("uint8_t", "target_component", 0), ("uint8_t", "req_stream_id", 0),
                                   ("uint8_t", "start_stop", 0)]),
