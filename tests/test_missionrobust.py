@@ -168,4 +168,22 @@ link.is_open = False
 mp._on_timeout()
 assert fin[-1] == (False, "link lost") and mp.state == "idle"
 
-print("MISSIONROBUST PASSED (11 adversarial scenarios)")
+# 12) cross-transfer contamination (audit batch 7): a stale ACK / foreign vehicle item is dropped ---
+# a fence upload must NOT be completed by a leftover mission (type 0) ACK from a prior transfer
+mp, link, fin, dl = new_proto()
+mp.upload(items, 1)                                   # mission_type 1 = FENCE
+mp.handle(Msg(mavlink.MISSION_ACK, type=0, mission_type=0))   # stale ACK for the mission transfer
+assert mp.state == "upload" and not fin, "stale mission-type ACK wrongly completed the fence upload"
+mp.handle(Msg(mavlink.MISSION_ACK, type=0, mission_type=1))   # the correct fence ACK
+assert fin[-1][0] is True and mp.state == "idle"
+# a download must ignore a MISSION_ITEM_INT from a DIFFERENT vehicle (sysid 2 while target is 1)
+mp, link, fin, dl = new_proto()
+mp.download(0)
+mp.handle(Msg(mavlink.MISSION_COUNT, count=2, mission_type=0))
+foreign = item_msg(0); foreign.sysid = 2              # another vehicle on the shared link
+mp.handle(foreign)
+assert mp.next_seq == 0, "accepted a mission item from the wrong vehicle"
+mp.handle(item_msg(0)); mp.handle(item_msg(1))        # correct vehicle (sysid 1)
+assert dl[-1] and len(dl[-1]) == 2 and mp.state == "idle"
+
+print("MISSIONROBUST PASSED (13 adversarial scenarios)")

@@ -383,6 +383,16 @@ class MissionProtocol(QObject):
 
     def handle(self, m):
         mid = m.msgid
+        # Only accept messages for the transfer in flight. On a lossy radio a stale/duplicate
+        # MISSION_ACK from a just-finished mission upload would otherwise complete a fence upload
+        # with zero items transferred, and a second vehicle's MISSION_ITEM_INT (same seq) could be
+        # appended into a download. Match both the mission_type and the source system id.
+        if self.state == "idle":
+            return
+        if "mission_type" in m.fields and int(m.fields["mission_type"]) != self.mtype:
+            return
+        if getattr(m, "sysid", self._target()) not in (0, self._target()):
+            return
         if self.state == "upload" and mid == mavlink.MISSION_REQUEST_INT:
             seq = int(m.fields.get("seq", 0))
             if 0 <= seq < len(self.items):
