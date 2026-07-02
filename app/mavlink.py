@@ -76,6 +76,7 @@ PARAM_VALUE = 22
 PARAM_SET = 23
 # mission protocol
 MISSION_SET_CURRENT = 41     # GCS->vehicle: jump the active mission item (skip to / restart from)
+MAV_CMD_NAV_LOITER_TO_ALT = 31          # circle to a target altitude, then continue (PX4-supported)
 MISSION_CURRENT = 42
 MISSION_REQUEST_LIST = 43
 MISSION_COUNT = 44

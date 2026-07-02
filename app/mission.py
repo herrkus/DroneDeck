@@ -48,7 +48,7 @@ class MissionItem:
     def cmd_name(self):
         return {16: "WAYPOINT", 22: "TAKEOFF", 21: "LAND", 20: "RTL",
                 17: "LOITER_UNLIM", 19: "LOITER_TIME", 18: "LOITER_TURNS",
-                93: "DELAY", 82: "SPLINE_WP",
+                31: "LOITER_TO_ALT", 93: "DELAY", 82: "SPLINE_WP",
                 195: "ROI", 197: "ROI_NONE", 178: "CHANGE_SPEED",
                 177: "JUMP", 189: "LAND_START", 183: "SET_SERVO",
                 115: "YAW", 206: "CAM_TRIGG_DIST"}.get(self.command,

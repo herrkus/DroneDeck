@@ -151,7 +151,7 @@ class WaypointEditor(QDialog):
     """Edit one mission item's command + altitude + the params that matter for it."""
 
     CMDS = [("Waypoint", 16), ("Spline waypoint", 82), ("Takeoff", 22), ("Loiter (time)", 19),
-            ("Loiter (unlim)", 17), ("Loiter (turns)", 18), ("Delay", 93),
+            ("Loiter (unlim)", 17), ("Loiter (turns)", 18), ("Loiter to alt", 31), ("Delay", 93),
             ("Land", 21), ("Return to launch", 20),
             ("ROI (point camera)", 195), ("Clear ROI", 197),
             ("Change speed", 178), ("Jump to WP", 177), ("Land start", 189),
@@ -240,11 +240,12 @@ class WaypointEditor(QDialog):
         is_servo = cmd == 183
         is_yaw = cmd == 115                          # CONDITION_YAW: only the heading matters
         is_trigg = cmd == 206                        # DO_SET_CAM_TRIGG_DIST: only the distance
+        is_loiter_alt = cmd == 31                    # NAV_LOITER_TO_ALT: circle to a target altitude
         self.alt.setEnabled(has_pos)
         self.altmode.setEnabled(has_pos)             # AMSL/relative only for georeferenced items
         self.p1.setEnabled(is_loiter or is_delay or is_trigg)   # loiter time/turns, delay s, or trig m
-        self.p3.setEnabled(is_loiter)
-        self.p4.setEnabled(has_pos or is_yaw)        # reuse the Yaw field as the target heading
+        self.p3.setEnabled(is_loiter or is_loiter_alt)          # loiter radius (also for loiter-to-alt)
+        self.p4.setEnabled((has_pos and not is_loiter_alt) or is_yaw)   # Yaw: not used by loiter-to-alt
         self.spd.setEnabled(cmd == 178)
         self.jump_to.setEnabled(is_jump)
         self.jump_rep.setEnabled(is_jump)
@@ -295,6 +296,12 @@ class WaypointEditor(QDialog):
             item.param3 = 0.0                         # 0 = do not fire one immediately on receipt
             item.param4 = 0.0
             item.alt = 0.0
+        elif cmd == 31:                               # NAV_LOITER_TO_ALT: circle here until at alt
+            item.alt = self.alt.value()               # target altitude (the point of the item)
+            item.param1 = 0.0                         # 0 = heading not required at loiter exit
+            item.param2 = float(self.p3.value())      # loiter radius (m) -- note: radius is param2 here
+            item.param3 = 0.0
+            item.param4 = 0.0                         # xtrack (0); NOT a yaw
         else:
             item.alt = self.alt.value()
             item.param1 = self.p1.value()             # loiter time (17/19) or turns (18)

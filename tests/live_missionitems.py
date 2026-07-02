@@ -100,6 +100,7 @@ cands = [
     ("SPLINE_WP 82", 82, REL, {}),
     ("ROI 195 (georef)", 195, REL, dict(param1=0)),   # DO_SET_ROI_LOCATION needs a real position
     ("JUMP 177", 177, MIS, dict(param1=0, param2=1)),
+    ("LOITER_TO_ALT 31", 31, REL, dict(param1=0, param2=80)),   # radius in param2, alt in z
 ]
 print("=== per-item upload acceptance ===")
 verdict = {}

@@ -112,6 +112,21 @@ if not (it.command == 206 and it.param1 == 25 and it.param2 == 0 and it.frame ==
 if MissionItem(0, 47, 8, 50, command=206).cmd_name != "CAM_TRIGG_DIST":
     fail.append("cmd 206 name")
 
+# 6b) Loiter to alt 31 (iter129, PX4-verified): georeferenced; alt + radius(p3->param2); no p1/p4 -----
+it, ed = editor_for(16)
+select(ed, 31)
+if not (ed.alt.isEnabled() and ed.p3.isEnabled()):
+    fail.append("loiter-to-alt: alt + radius should be enabled")
+if ed.p1.isEnabled() or ed.p4.isEnabled():
+    fail.append("loiter-to-alt: loiter-time (p1) and yaw (p4) should be disabled")
+ed.alt.setValue(120); ed.p3.setValue(90)
+ed.apply_to(it)
+if not (it.command == 31 and it.alt == 120 and it.param2 == 90 and it.param1 == 0 and it.frame != 2):
+    fail.append(f"loiter-to-alt apply: cmd={it.command} alt={it.alt} p2={it.param2} "
+                f"p1={it.param1} frame={it.frame}")
+if MissionItem(0, 47, 8, 50, command=31).cmd_name != "LOITER_TO_ALT":
+    fail.append("cmd 31 name")
+
 # 7) no regression: a plain waypoint stays georeferenced with the chosen altitude ------------------
 it, ed = editor_for(16)
 select(ed, 16)
@@ -143,6 +158,6 @@ if 82 not in combo_cmds(m.WaypointEditor(MissionItem(0, 47, 8, 50, command=82),
     fail.append("PX4: editing an existing spline item must keep spline in the palette")
 
 print("WAYPOINTEDIT FAILED: " + "; ".join(fail) if fail else
-      "WAYPOINTEDIT PASSED (Loiter-turns + Delay + Set-servo + Condition-Yaw + Cam-trigg: fields/labels/params/"
+      "WAYPOINTEDIT PASSED (Loiter-turns + Loiter-to-alt + Delay + Set-servo + Condition-Yaw + Cam-trigg: fields/labels/params/"
       "frame correct, no regression)")
 sys.exit(1 if fail else 0)
