@@ -205,6 +205,11 @@ class Link(QObject):
         self.send_command_long(target_sys, mavlink.MAV_CMD_DO_CHANGE_SPEED,
                                [float(speed_type), float(speed), -1.0, 0, 0, 0, 0])
 
+    def gripper(self, target_sys: int, action: int, instance: int = 1):
+        """DO_GRIPPER: release (0) or grab (1) a payload gripper -- delivery-drone payload drop."""
+        self.send_command_long(target_sys, mavlink.MAV_CMD_DO_GRIPPER,
+                               [float(instance), float(action), 0, 0, 0, 0, 0])
+
     def change_heading(self, target_sys: int, lat: float, lon: float, alt: float, heading_deg: float):
         # DO_REPOSITION holding the current position + altitude, param4 = yaw heading (deg) -> point
         # the nose to `heading_deg`. Same primitive as change_altitude (which passes yaw = NaN to keep

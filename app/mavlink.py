@@ -302,6 +302,9 @@ MAV_CMD_SET_CAMERA_ZOOM = 531           # param1 = zoom type, param2 = value
 CAMERA_MODE_IMAGE = 0
 CAMERA_MODE_VIDEO = 1
 ZOOM_TYPE_STEP = 0                       # param2 = +1 zoom in / -1 zoom out (one step)
+MAV_CMD_DO_GRIPPER = 211                 # param1 = gripper instance, param2 = GRIPPER_ACTION
+GRIPPER_ACTION_RELEASE = 0               # drop the payload
+GRIPPER_ACTION_GRAB = 1                  # close / hold the payload
 MAV_CMD_SET_MESSAGE_INTERVAL = 511      # param1=msgid, param2=interval us (-1 off, 0 default)
 MAV_CMD_REQUEST_MESSAGE = 512           # param1=msgid -- one-shot request (e.g. AUTOPILOT_VERSION)
 

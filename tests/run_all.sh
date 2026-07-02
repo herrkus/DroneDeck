@@ -136,6 +136,7 @@ check "failsafe"            ""                        tests/test_failsafe.py
 check "geofence"            ""                        tests/test_geofence.py
 check "guided"              ""                        tests/test_guided.py
 check "changeheading"       ""                        tests/test_changeheading.py
+check "gripper"             ""                        tests/test_gripper.py
 check "settings"            ""                        tests/test_settings.py
 check "links_manager"       ""                        tests/test_links_manager.py
 check "reconnect"           ""                        tests/test_reconnect.py

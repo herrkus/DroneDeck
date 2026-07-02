@@ -487,6 +487,18 @@ class DroneDeck(QMainWindow):
         self.btn_vtol.setMenu(self._vtol_menu)
         self.btn_vtol.setVisible(False)
         tb2.addWidget(self.btn_vtol)
+        # payload gripper (delivery drones) -- release / grab
+        self.btn_payload = QPushButton("Payload")
+        self.btn_payload.setToolTip("Release or grab the payload gripper (DO_GRIPPER)")
+        self._payload_menu = QMenu(self.btn_payload)
+        self._payload_menu.addAction("Release payload").triggered.connect(
+            lambda: self._gripper(mavlink.GRIPPER_ACTION_RELEASE))
+        self._payload_menu.addAction("Grab payload").triggered.connect(
+            lambda: self._gripper(mavlink.GRIPPER_ACTION_GRAB))
+        self.btn_payload.setMenu(self._payload_menu)
+        self.btn_payload._needs = "conn"
+        tb2.addWidget(self.btn_payload)
+        self._flight_btns.append(self.btn_payload)
         tb2.addSeparator()
         self.btn_joystick = QPushButton("Joystick")
         self.btn_joystick.setCheckable(True)
@@ -1518,6 +1530,13 @@ class DroneDeck(QMainWindow):
         name = "fixed-wing" if state == mavlink.MAV_VTOL_STATE_FW else "multirotor"
         self.link.vtol_transition(self._sysid(), state)
         self._on_info(f"VTOL transition to {name} requested")
+
+    def _gripper(self, action):
+        if not self._has_vehicle():
+            return
+        self.link.gripper(self._sysid(), action)
+        rel = action == mavlink.GRIPPER_ACTION_RELEASE
+        self._on_info(f"payload: {'release' if rel else 'grab'} sent")
 
     def _on_map_click(self, lat, lon):
         if self.btn_ruler.isChecked():          # measure tool takes priority over goto/plan
