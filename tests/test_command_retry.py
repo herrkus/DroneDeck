@@ -150,9 +150,52 @@ try:
 except Exception as e:
     fail.append(f"reactive command_unacked handler crashed the retry loop: {e!r}")
 
+# 9) FINDING 1 regression: ACK matching MUST work on the UDP transport (its own RX loop, not _ingest).
+#    This is the exact path that was dead -- a real COMMAND_ACK datagram must clear _pending. ---------
+import time as _time
+import socket as _socket
+from link import UdpLink
+sys.path.insert(0, os.path.join(ROOT, "tests"))
+from _ports import free_udp_port
+
+uport = free_udp_port()
+udp = UdpLink()
+if not udp.open(port=uport):
+    fail.append(f"UdpLink failed to bind :{uport}")
+else:
+    udp.send_command_long(1, ARM, [1, 0, 0, 0, 0, 0, 0], confirm=True)   # write no-ops (no remote) but _track registers
+    if ARM not in udp._pending:
+        fail.append("UDP: a confirmed command should be tracked")
+    ackf = mavlink.frame(mavlink.COMMAND_ACK, mavlink.enc_command_ack(ARM, 0), 5, 1, 1, crc_fn=core.crc_extra)
+    s = _socket.socket(_socket.AF_INET, _socket.SOCK_DGRAM)
+    s.sendto(ackf, ("127.0.0.1", uport))
+    t0 = _time.monotonic()
+    while ARM in udp._pending and _time.monotonic() - t0 < 3:
+        app.processEvents()
+        _time.sleep(0.01)
+    s.close()
+    if ARM in udp._pending:
+        fail.append("FINDING 1 regression: a COMMAND_ACK over UDP must clear _pending (UDP bypassed _match_acks)")
+    udp.close()
+
+# 10) FINDING 2 regression: a superseding same-id command needs its OWN ack; one stale ack for the
+#     first send must NOT cancel the second's retry (arm then quick disarm, both id 400) -------------
+lk6 = CaptureLink()
+lk6.send_command_long(1, ARM, [1, 0, 0, 0, 0, 0, 0], confirm=True)   # arm
+lk6.send_command_long(1, ARM, [0, 0, 0, 0, 0, 0, 0], confirm=True)   # disarm within the window (same id)
+if lk6._pending[ARM]["issued"] != 2:
+    fail.append(f"supersede should bump issued to 2, got {lk6._pending[ARM].get('issued')}")
+lk6._match_acks([Message(mavlink.COMMAND_ACK, 1, 1, 0, {"command": ARM, "result": 0})])   # ack #1 (the arm)
+if ARM not in lk6._pending:
+    fail.append("FINDING 2: a single ACK must not cancel a superseding same-id command (dropped disarm risk)")
+lk6._match_acks([Message(mavlink.COMMAND_ACK, 1, 1, 0, {"command": ARM, "result": 0})])   # ack #2 (the disarm)
+if ARM in lk6._pending:
+    fail.append("FINDING 2: once every issued invocation is acked, the command should clear")
+
 print("COMMAND_RETRY FAILED: " + "; ".join(fail) if fail else
       "COMMAND_RETRY PASSED (no-track for fire-and-forget; retry schedule + give-up after "
       "ACK_MAX_TRIES + command_unacked; ACK via _match_acks and real frame via _ingest resolves + "
       "stops resends; unrelated ACK ignored; arm/set_mode/land/rtl opt in; COMMAND_INT takeoff "
-      "confirmed + retries; reactive unacked-handler is crash-safe)")
+      "confirmed + retries; reactive unacked-handler crash-safe; ACK works over real UDP [F1]; "
+      "same-id supersede needs its own ack [F2])")
 sys.exit(1 if fail else 0)

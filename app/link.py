@@ -126,10 +126,18 @@ class Link(QObject):
         self._record(data)
         self._note_framing(data)
         batch = self.parser.feed(data)
-        if batch:
-            if self._pending:
-                self._match_acks(batch)
-            self.messages.emit(batch)
+        self._dispatch(batch)
+
+    def _dispatch(self, batch):
+        """Post-parse hook shared by EVERY transport. UDP/TCP/serial each parse in their own RX loop;
+        routing all of them through here keeps the confirmed-command ACK matching alive on every
+        transport, so it can't silently drift (it did on UDP -- ACKs were never matched, so every
+        confirmed command was resent 4x and falsely warned on a healthy link)."""
+        if not batch:
+            return
+        if self._pending:
+            self._match_acks(batch)
+        self.messages.emit(batch)
 
     # -- tx -------------------------------------------------------------------
     def _next_seq(self) -> int:
@@ -161,10 +169,22 @@ class Link(QObject):
             self._track(command, lambda: self._tx_command_long(target_sys, command, params))
 
     def _track(self, command, resend):
-        # (re)register a just-sent command as awaiting ACK; a later send of the same command id
-        # supersedes the earlier one (e.g. disarm after arm).
-        self._pending[int(command)] = {"resend": resend, "tries": 1,
-                                       "deadline": time.monotonic() + self.ACK_INTERVAL}
+        # Register a just-sent command as awaiting ACK. A later send of the SAME command id (e.g.
+        # disarm after arm -- both COMPONENT_ARM_DISARM 400) supersedes the frame we resend, but we
+        # bump `issued` and require that many ACKs before stopping: COMMAND_ACK doesn't echo which
+        # invocation it answers, so a stale ACK for the first send must NOT cancel the second send's
+        # retry (that could leave a dropped disarm un-retried while the GCS reports success).
+        cmd = int(command)
+        now = time.monotonic()
+        p = self._pending.get(cmd)
+        if p is None:
+            self._pending[cmd] = {"resend": resend, "tries": 1, "deadline": now + self.ACK_INTERVAL,
+                                  "issued": 1, "acked": 0}
+        else:
+            p["resend"] = resend          # the newest command's frame is what we now resend
+            p["tries"] = 1
+            p["deadline"] = now + self.ACK_INTERVAL
+            p["issued"] += 1
         if not self._ack_timer.isActive():
             self._ack_timer.start()
 
@@ -172,9 +192,12 @@ class Link(QObject):
         for m in batch:
             if m.msgid == mavlink.COMMAND_ACK:
                 cmd = m.fields.get("command")
-                if cmd in self._pending:
-                    del self._pending[cmd]
-                    self.command_result.emit(int(cmd), int(m.fields.get("result", 0)))
+                p = self._pending.get(cmd)
+                if p is not None:
+                    p["acked"] += 1
+                    if p["acked"] >= p["issued"]:      # every issued invocation acknowledged
+                        del self._pending[cmd]
+                        self.command_result.emit(int(cmd), int(m.fields.get("result", 0)))
         if not self._pending:
             self._ack_timer.stop()
 
@@ -527,8 +550,7 @@ class UdpLink(Link):
                     self._remote_move_t = now
                     self.info.emit(f"telemetry endpoint moved to {addr.toString()}:{aport}")
             batch.extend(self.parser.feed(data))
-        if batch:
-            self.messages.emit(batch)
+        self._dispatch(batch)
 
     def _write(self, data: bytes):
         if self.sock is not None and self.remote is not None:
@@ -673,8 +695,7 @@ class ReplayLink(Link):
             self.rx_bytes += len(fr)
             batch.extend(self.parser.feed(fr))
             self._i += 1
-        if batch:
-            self.messages.emit(batch)
+        self._dispatch(batch)
         if self._i >= len(self._records):
             self._tick.stop()
             self.info.emit("replay complete")
