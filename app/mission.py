@@ -280,15 +280,28 @@ def validate_mission(items):
 
 
 def autopilot_mission_warnings(items, autopilot):
-    """Autopilot-specific advisories that plain validate_mission cannot know. PX4 treats
-    Return-To-Launch as a flight mode, not a mission command, so it rejects a NAV_RETURN_TO_LAUNCH
-    mission item (MAV_MISSION_UNSUPPORTED) -- verified live against PX4. Warn before the upload
-    fails so the user can end with Land or drop the item instead of hitting a cryptic reject."""
+    """Autopilot-specific advisories that plain validate_mission cannot know. PX4 supports a narrower
+    mission-command set than ArduPilot and returns MAV_MISSION_UNSUPPORTED -- rejecting the WHOLE
+    upload -- for commands it does not implement. Warn before that cryptic reject so the user can
+    adjust the plan. The list below was verified LIVE against PX4 SITL (tests/live_missionitems.py):
+    RTL, Loiter-turns, Set-servo and Condition-Yaw all reject; Delay and Cam-trigger-distance are
+    accepted. (These commands are still offered for ArduPilot, which does support them.)"""
+    # command id -> (friendly label, what to do instead)
+    PX4_UNSUPPORTED = {
+        20:  ("Return-To-Launch", "end the mission with Land, or remove the RTL item"),
+        18:  ("Loiter (turns)", "use Loiter (time) or Loiter (unlimited) instead"),
+        183: ("Set servo", "PX4 has no DO_SET_SERVO mission item"),
+        115: ("Condition: Yaw", "PX4 sets heading from the waypoint's own yaw, not CONDITION_YAW"),
+    }
     warns = []
-    if int(autopilot) == mavlink.MAV_AUTOPILOT_PX4 and \
-            any(it.command == mavlink.MAV_CMD_NAV_RETURN_TO_LAUNCH for it in items):
-        warns.append("PX4 will reject Return-To-Launch as a mission item -- end the mission with "
-                     "Land, or remove the RTL item.")
+    if int(autopilot) == mavlink.MAV_AUTOPILOT_PX4:
+        seen = set()
+        for it in items:
+            info = PX4_UNSUPPORTED.get(it.command)
+            if info and it.command not in seen:
+                seen.add(it.command)
+                label, advice = info
+                warns.append(f"PX4 will reject '{label}' as a mission item -- {advice}.")
     return warns
 
 
