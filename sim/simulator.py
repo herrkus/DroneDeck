@@ -71,7 +71,22 @@ def step_toward(clat, clon, tlat, tlon, max_m, cos_lat):
             math.degrees(math.atan2(de, dn)) % 360.0)
 
 
+def _die_with_parent():
+    """Ask the kernel to SIGTERM us if our parent (the test/GUI that launched us) dies -- even if
+    the parent is SIGKILLed and never runs its own teardown. This makes an orphaned simulator
+    impossible on Linux, so the test harness needs no `pkill` sweep (which risked collateral kills).
+    Best-effort: silently a no-op on non-Linux or if prctl is unavailable."""
+    try:
+        import ctypes
+        import signal as _sig
+        PR_SET_PDEATHSIG = 1
+        ctypes.CDLL("libc.so.6", use_errno=True).prctl(PR_SET_PDEATHSIG, _sig.SIGTERM)
+    except Exception:
+        pass
+
+
 def main():
+    _die_with_parent()
     ap = argparse.ArgumentParser()
     ap.add_argument("--target", default="127.0.0.1:14550")
     ap.add_argument("--sysid", type=int, default=1)

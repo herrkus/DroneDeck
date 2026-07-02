@@ -75,8 +75,13 @@ assert all(math.isfinite(c) for c in win.map.center)
 # 4) corrupt links/configs JSON -> falls back to [] (not a crash, not a partial object) -----------
 load_with({"links/configs": "{broken"})
 assert win.link_configs == []
-load_with({"links/configs": '[{"name":"real","transport":"UDP"}]'})   # valid still parses
+# a COMPLETE config (name+transport+target, exactly what LinkEditDialog emits) still parses
+load_with({"links/configs": '[{"name":"real","transport":"UDP","target":"127.0.0.1:14550"}]'})
 assert isinstance(win.link_configs, list) and win.link_configs
+# batch 9: a well-formed-JSON but SHAPE-broken value must be dropped, not crash the Links dialog
+# (which does dict(c) + c['name']/['transport']/['target']). Old code passed these straight through.
+load_with({"links/configs": '[1, 2, "x", {"name":"partial","transport":"UDP"}]'})   # no 'target'
+assert win.link_configs == [], f"malformed link configs not filtered: {win.link_configs}"
 
 # 5) corrupt telem/hidden JSON and a wrong-type (list where dict/str expected) -> no crash --------
 load_with({"telem/hidden": "[1,2,3,unquoted]"})
