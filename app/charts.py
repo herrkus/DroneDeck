@@ -5,6 +5,7 @@ line charts with QPainter. Fed by sample(vehicle) from the UI refresh loop;
 repaints on its own modest timer so it costs nothing when hidden.
 """
 from __future__ import annotations
+import math
 import time
 from collections import deque
 
@@ -39,7 +40,15 @@ class ChartPanel(QWidget):
         vals = {"alt_rel": ve.alt_rel, "groundspeed": ve.groundspeed,
                 "voltage": ve.voltage, "climb": ve.climb}
         for k, dq in self.data.items():
-            dq.append((t, float(vals.get(k, 0.0))))
+            try:
+                v = float(vals.get(k, 0.0))
+            except (TypeError, ValueError):
+                v = None
+            # Drop non-finite samples: a single NaN (PX4 streams NaN climb/speed before EKF
+            # convergence) would make min/max/pad NaN and feed NaN QPointFs to drawPolyline --
+            # the same NaN-painter crash class hardened across the rest of the UI.
+            if v is not None and math.isfinite(v):
+                dq.append((t, v))
             cut = t - WINDOW
             while dq and dq[0][0] < cut:
                 dq.popleft()

@@ -8,6 +8,7 @@ No 3D model -- the vehicle is a simple heading-rotated marker.
 from __future__ import annotations
 import math
 import os
+import time
 
 from PySide6.QtCore import Qt, QRectF, QPointF, QUrl, Signal
 from PySide6.QtGui import (QPainter, QColor, QPen, QBrush, QPixmap, QPolygonF,
@@ -96,12 +97,15 @@ class MapView(QWidget):
         self.current_wp = -1                  # live mission target (MISSION_CURRENT)
         self.ruler = None                     # ((lat,lon)a, (lat,lon)b|None, label) or None
         self._wp_drag = None
-        self._pending = set()
+        self._pending = set()                 # (provider, z, x, y) in-flight requests
+        self._failed = {}                     # (provider, z, x, y) -> (last_try_monotonic, tries)
+        self._tiles_written = 0               # triggers periodic disk-cache pruning
         self._drag = None
         self._press = None
         self._dragged = False
         QPixmapCache.setCacheLimit(40 * 1024)
         os.makedirs(_CACHE, exist_ok=True)
+        self._prune_disk_cache()
         self.net = QNetworkAccessManager(self) if _HAVE_NET else None
         if self.net:
             self.net.finished.connect(self._on_tile)
@@ -141,7 +145,8 @@ class MapView(QWidget):
     def fit_bounds(self, points, pad_px=48):
         """Centre + zoom to frame all (lat, lon) points within the widget (with padding).
         A single point just recentres at the current zoom. Returns False if no valid points."""
-        pts = [(la, lo) for la, lo in points if abs(la) > 1e-9 or abs(lo) > 1e-9]
+        pts = [(la, lo) for la, lo in points
+               if math.isfinite(la) and math.isfinite(lo) and (abs(la) > 1e-9 or abs(lo) > 1e-9)]
         if not pts:
             return False
         lats = [p[0] for p in pts]
@@ -241,12 +246,22 @@ class MapView(QWidget):
         return None
 
     def _request(self, z, x, y):
-        if not self.net or (z, x, y) in self._pending:
+        if not self.net:
+            return
+        key = (self.provider, z, x, y)
+        if key in self._pending:
             return
         n = 2 ** z
         if not (0 <= x < n and 0 <= y < n):
             return
-        self._pending.add((z, x, y))
+        # negative cache with exponential backoff: without this, a tile that 403/429s (OSM policy)
+        # or 404s (OpenTopoMap has no zoom >17) or fails offline is re-requested on EVERY repaint --
+        # hundreds of requests/second across the visible tiles, which gets the IP blocked and burns
+        # CPU/sockets. A failed tile now waits 5s, 10s, 20s ... capped at 5 min before a retry.
+        fail = self._failed.get(key)
+        if fail is not None and time.monotonic() - fail[0] < min(300.0, 5.0 * 2 ** min(fail[1], 6)):
+            return
+        self._pending.add(key)
         url = QUrl(PROVIDERS[self.provider].format(z=z, x=x, y=y))
         req = QNetworkRequest(url)
         req.setHeader(QNetworkRequest.KnownHeaders.UserAgentHeader, "DroneDeck/1.0 (local GCS demo)")
@@ -261,20 +276,52 @@ class MapView(QWidget):
         except Exception:
             reply.deleteLater()
             return
-        self._pending.discard((z, x, y))
+        pkey = (prov, z, x, y)
+        self._pending.discard(pkey)
         if reply.error() == QNetworkReply.NetworkError.NoError:
             data = bytes(reply.readAll())
             pm = QPixmap()
             if pm.loadFromData(data):
+                self._failed.pop(pkey, None)                    # success clears any backoff mark
                 QPixmapCache.insert(key, pm)
                 try:
                     os.makedirs(os.path.dirname(self._tile_path(prov, z, x, y)), exist_ok=True)
                     with open(self._tile_path(prov, z, x, y), "wb") as fh:
                         fh.write(data)
+                    self._tiles_written += 1
+                    if self._tiles_written % 250 == 0:          # bound disk growth over a session
+                        self._prune_disk_cache()
                 except OSError:
                     pass
                 self.update()
+            else:
+                self._failed[pkey] = (time.monotonic(), self._failed.get(pkey, (0, 0))[1] + 1)
+        else:
+            self._failed[pkey] = (time.monotonic(), self._failed.get(pkey, (0, 0))[1] + 1)
         reply.deleteLater()
+
+    def _prune_disk_cache(self, max_files=6000):
+        """Cap the on-disk tile cache (it otherwise grows without bound across providers/zooms over
+        long sessions). Deletes the oldest tiles by mtime when over the cap. Cheap + best-effort."""
+        try:
+            files = []
+            for root, _dirs, names in os.walk(_CACHE):
+                for nm in names:
+                    fp = os.path.join(root, nm)
+                    try:
+                        files.append((os.path.getmtime(fp), fp))
+                    except OSError:
+                        pass
+            if len(files) <= max_files:
+                return
+            files.sort()                                        # oldest first
+            for _mt, fp in files[:len(files) - max_files]:
+                try:
+                    os.remove(fp)
+                except OSError:
+                    pass
+        except OSError:
+            pass
 
     # -- geometry helpers -----------------------------------------------------
     def _ll_to_px(self, lat, lon, cfx, cfy):

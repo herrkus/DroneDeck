@@ -67,4 +67,29 @@ ve2.cells = [4.1, 3.9, 3.6]
 ve2.servo_raw = [1500, 1900, 1100, 1000, 0, 0, 0, 0]
 sp.update_from(ve2); sp.grab()
 
-print("WIDGETFUZZ PASSED (bar/status/health widgets survive NaN/Inf/extreme; SystemsPanel integ ok)")
+# -- audit batch 8: the two UI paths the NaN sweep had missed --------------------------------------
+import math as _math
+from charts import ChartPanel
+from instruments import AttitudeIndicator
+
+
+class _VE:                                               # minimal chart source
+    alt_rel = groundspeed = voltage = climb = 0.0
+
+
+cp = ChartPanel()
+_v = _VE()
+_v.climb, _v.groundspeed, _v.voltage, _v.alt_rel = NAN, INF, 16.2, 50.0   # PX4 pre-EKF NaN burst
+cp.sample(_v)
+_v.climb, _v.groundspeed = 1.0, 5.0
+cp.sample(_v); cp.sample(_v)
+stored = [v for dq in cp.data.values() for _t, v in dq]
+assert stored and all(_math.isfinite(v) for v in stored), "charts stored a non-finite sample"
+cp.resize(320, 240); cp.grab()                           # NaN-free polyline -> no painter crash
+
+adi = AttitudeIndicator(); adi.resize(200, 200)
+for pd in (-85.0, -60.0, 0.0, 60.0, 85.0):               # steep dive/climb must still fill the ball
+    adi.set_attitude(0.0, _math.radians(pd)); adi.grab()
+
+print("WIDGETFUZZ PASSED (bar/status/health widgets survive NaN/Inf/extreme; SystemsPanel integ ok; "
+      "charts drop non-finite samples; ADI fills at extreme pitch)")

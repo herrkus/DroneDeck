@@ -79,7 +79,10 @@ class AttitudeIndicator(QWidget):
         p.translate(cx, cy)
         p.rotate(-roll_deg)
         horizon_y = pitch_deg * ppd
-        big = R * 3
+        # Fill must always cover the whole clip circle: at extreme pitch the horizon line sits far
+        # outside the ball (|horizon_y| up to ~3.46R at 90 deg). R*3 was too small below ~-52 deg,
+        # leaving the ADI half dark in a steep dive. Size the fill to the actual offset.
+        big = abs(horizon_y) + 2 * R
         p.fillRect(QRectF(-big, -big, 2 * big, big + horizon_y), QBrush(SKY))
         p.fillRect(QRectF(-big, horizon_y, 2 * big, big), QBrush(GROUND))
         p.setPen(QPen(LINE, 2))
