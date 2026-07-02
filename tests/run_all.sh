@@ -62,6 +62,7 @@ check "missionreached"      ""                        tests/test_missionreached.
 check "missionrobust"       ""                        tests/test_missionrobust.py
 check "scalemission"        ""                        tests/test_scalemission.py
 check "paramset"            ""                        tests/test_paramset.py
+check "reboot"              ""                        tests/test_reboot.py
 check "linklifecycle"       ""                        tests/test_linklifecycle.py
 check "sysidfilter"         ""                        tests/test_sysidfilter.py
 check "spline"              ""                        tests/test_spline.py

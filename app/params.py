@@ -94,6 +94,13 @@ class ParamManager(QObject):
         for name in names:
             link.request_param_read(tgt, param_id=name)
 
+    def reboot(self):
+        """Reboot the autopilot -- to apply parameters that need a restart to take effect."""
+        if not self._ready():
+            return False
+        self._link().reboot_vehicle(self._target())
+        return True
+
     def set(self, name, value):
         if not self._ready():
             self.finished.emit(False, "no vehicle connected")
@@ -239,12 +246,16 @@ class ParamDialog(QDialog):
         self.btn_compare.setToolTip("Compare a .params file against the vehicle -- shows "
                                     "differences without writing anything")
         self.btn_compare.clicked.connect(self._compare_file)
+        self.btn_reboot = QPushButton("Reboot vehicle")
+        self.btn_reboot.setToolTip("Reboot the autopilot to apply parameters that need a restart")
+        self.btn_reboot.clicked.connect(self._reboot)
         top.addWidget(self.search, 1)
         top.addWidget(self.btn_refresh)
         top.addWidget(self.btn_write)
         top.addWidget(self.btn_save)
         top.addWidget(self.btn_load)
         top.addWidget(self.btn_compare)
+        top.addWidget(self.btn_reboot)
         lay.addLayout(top)
 
         self.table = QTableWidget(0, 2)
@@ -327,6 +338,18 @@ class ParamDialog(QDialog):
         for name, val in list(self.edited.items()):
             self.mgr.set(name, val)
         self.status.setText(f"writing {len(self.edited)} parameter(s)...")
+
+    def _reboot(self):
+        if QMessageBox.question(
+                self, "Reboot vehicle",
+                "Reboot the autopilot now?\n\nDo this only on the ground -- never while flying. "
+                "The link will drop and reconnect once it comes back up.") \
+                != QMessageBox.StandardButton.Yes:
+            return
+        if self.mgr.reboot():
+            self.status.setText("reboot command sent -- waiting for the vehicle to come back...")
+        else:
+            self.status.setText("no vehicle connected")
 
     # -- file save / load (QGC-compatible .params) ---------------------------
     def save_params_to(self, path):

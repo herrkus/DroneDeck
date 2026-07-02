@@ -205,6 +205,12 @@ class Link(QObject):
         self.send_command_long(target_sys, mavlink.MAV_CMD_DO_CHANGE_SPEED,
                                [float(speed_type), float(speed), -1.0, 0, 0, 0, 0])
 
+    def reboot_vehicle(self, target_sys: int):
+        """PREFLIGHT_REBOOT_SHUTDOWN with param1=1: reboot the autopilot -- e.g. to apply parameters
+        that need a restart. Firmware refuses it while armed, which is the safety we want."""
+        self.send_command_long(target_sys, mavlink.MAV_CMD_PREFLIGHT_REBOOT_SHUTDOWN,
+                               [1, 0, 0, 0, 0, 0, 0])
+
     def gripper(self, target_sys: int, action: int, instance: int = 1):
         """DO_GRIPPER: release (0) or grab (1) a payload gripper -- delivery-drone payload drop."""
         self.send_command_long(target_sys, mavlink.MAV_CMD_DO_GRIPPER,
