@@ -63,7 +63,22 @@ if MissionItem(0, 47, 8, 50, command=18).cmd_name != "LOITER_TURNS":
 if MissionItem(0, 47, 8, 50, command=93).cmd_name != "DELAY":
     fail.append("cmd 93 name")
 
-# 4) no regression: a plain waypoint stays georeferenced with the chosen altitude ------------------
+# 4) Set servo 183 (iter119): no position; servo channel + PWM enabled; params -> p1/p2, frame 2 ----
+it, ed = editor_for(16)
+select(ed, 183)
+if not (ed.servo_ch.isEnabled() and ed.servo_pwm.isEnabled()):
+    fail.append("set-servo: servo channel/PWM should be enabled")
+if ed.alt.isEnabled() or ed.p1.isEnabled() or ed.p3.isEnabled():
+    fail.append("set-servo: position/loiter fields should be disabled")
+ed.servo_ch.setValue(9); ed.servo_pwm.setValue(1800)
+ed.apply_to(it)
+if not (it.command == 183 and it.param1 == 9 and it.param2 == 1800 and it.frame == 2 and it.alt == 0.0):
+    fail.append(f"set-servo apply: cmd={it.command} p1={it.param1} p2={it.param2} "
+                f"frame={it.frame} alt={it.alt}")
+if MissionItem(0, 47, 8, 50, command=183).cmd_name != "SET_SERVO":
+    fail.append("cmd 183 name")
+
+# 5) no regression: a plain waypoint stays georeferenced with the chosen altitude ------------------
 it, ed = editor_for(16)
 select(ed, 16)
 ed.alt.setValue(60)
@@ -72,5 +87,6 @@ if not (it.command == 16 and it.alt == 60 and it.frame != 2):
     fail.append(f"waypoint regressed: cmd={it.command} alt={it.alt} frame={it.frame}")
 
 print("WAYPOINTEDIT FAILED: " + "; ".join(fail) if fail else
-      "WAYPOINTEDIT PASSED (Loiter-turns + Delay: fields/labels/params/frame correct, no regression)")
+      "WAYPOINTEDIT PASSED (Loiter-turns + Delay + Set-servo: fields/labels/params/frame correct, "
+      "no regression)")
 sys.exit(1 if fail else 0)

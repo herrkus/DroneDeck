@@ -154,7 +154,8 @@ class WaypointEditor(QDialog):
             ("Loiter (unlim)", 17), ("Loiter (turns)", 18), ("Delay", 93),
             ("Land", 21), ("Return to launch", 20),
             ("ROI (point camera)", 195), ("Clear ROI", 197),
-            ("Change speed", 178), ("Jump to WP", 177), ("Land start", 189)]
+            ("Change speed", 178), ("Jump to WP", 177), ("Land start", 189),
+            ("Set servo", 183)]
 
     def __init__(self, item, parent=None):
         super().__init__(parent)
@@ -190,6 +191,13 @@ class WaypointEditor(QDialog):
         self.jump_rep.setRange(-1, 999)
         self.jump_rep.setSpecialValueText("forever")      # shown when value == -1
         self.jump_rep.setValue(int(item.param2) if item.command == 177 else 1)
+        self.servo_ch = QSpinBox()
+        self.servo_ch.setRange(1, 16)
+        self.servo_ch.setValue(int(item.param1) if item.command == 183 else 5)
+        self.servo_pwm = QSpinBox()
+        self.servo_pwm.setRange(800, 2200)
+        self.servo_pwm.setSuffix(" us")
+        self.servo_pwm.setValue(int(item.param2) if item.command == 183 else 1500)
         self.altmode = QComboBox()
         self.altmode.addItem("Relative (home)", mavlink.MAV_FRAME_GLOBAL_RELATIVE_ALT_INT)
         self.altmode.addItem("AMSL", mavlink.MAV_FRAME_GLOBAL_INT)
@@ -206,6 +214,8 @@ class WaypointEditor(QDialog):
         form.addRow("Speed", self.spd)
         form.addRow("Jump to WP #", self.jump_to)
         form.addRow("Repeat count", self.jump_rep)
+        form.addRow("Servo channel", self.servo_ch)
+        form.addRow("Servo PWM", self.servo_pwm)
         bb = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         bb.accepted.connect(self.accept)
         bb.rejected.connect(self.reject)
@@ -216,11 +226,12 @@ class WaypointEditor(QDialog):
     def _sync_fields(self):
         """Grey out the fields that don't apply to the chosen command (QGC-style)."""
         cmd = self.cmd.currentData()
-        # RTL/speed/jump/clear-ROI/land-start/delay carry no position of their own
-        has_pos = cmd not in (20, 178, 177, 197, 189, 93)
+        # RTL/speed/jump/clear-ROI/land-start/delay/set-servo carry no position of their own
+        has_pos = cmd not in (20, 178, 177, 197, 189, 93, 183)
         is_loiter = cmd in (17, 19, 18)              # unlim / time / turns
         is_delay = cmd == 93
         is_jump = cmd == 177
+        is_servo = cmd == 183
         self.alt.setEnabled(has_pos)
         self.altmode.setEnabled(has_pos)             # AMSL/relative only for georeferenced items
         self.p1.setEnabled(is_loiter or is_delay)    # loiter time/turns, or delay seconds
@@ -229,6 +240,8 @@ class WaypointEditor(QDialog):
         self.spd.setEnabled(cmd == 178)
         self.jump_to.setEnabled(is_jump)
         self.jump_rep.setEnabled(is_jump)
+        self.servo_ch.setEnabled(is_servo)
+        self.servo_pwm.setEnabled(is_servo)
         # the multi-purpose p1 field means different things per command -- relabel it like QGC does
         self._p1_label.setText("Loiter turns" if cmd == 18 else
                                "Delay (s)" if is_delay else
@@ -256,6 +269,11 @@ class WaypointEditor(QDialog):
             item.param1 = self.p1.value()             # delay seconds (>=0; -1 would use hh/mm/ss)
             item.param2 = item.param3 = item.param4 = 0.0
             item.alt = 0.0
+        elif cmd == 183:                              # DO_SET_SERVO: drive a servo/actuator channel
+            item.param1 = float(self.servo_ch.value())    # servo output channel (1-16)
+            item.param2 = float(self.servo_pwm.value())    # PWM microseconds (typ. 1000-2000)
+            item.param3 = item.param4 = 0.0
+            item.alt = 0.0
         else:
             item.alt = self.alt.value()
             item.param1 = self.p1.value()             # loiter time (17/19) or turns (18)
@@ -264,7 +282,7 @@ class WaypointEditor(QDialog):
         # RTL / DO_CHANGE_SPEED / DO_JUMP / clear-ROI / land-start / delay carry no position and must
         # use the MISSION frame (2); PX4 rejects them with a global frame. Georeferenced items take
         # the chosen altitude mode: relative-to-home (6) or AMSL (5).
-        item.frame = 2 if cmd in (20, 178, 177, 197, 189, 93) else self.altmode.currentData()
+        item.frame = 2 if cmd in (20, 178, 177, 197, 189, 93, 183) else self.altmode.currentData()
 
 
 class DroneDeck(QMainWindow):
