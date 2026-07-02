@@ -367,9 +367,21 @@ class UdpLink(Link):
             self.rx_bytes += len(data)
             self._record(data)
             self._note_framing(data)
+            addr, aport = dg.senderAddress(), dg.senderPort()
             if self.remote is None:
-                self.remote = (dg.senderAddress(), dg.senderPort())
-                self.info.emit(f"telemetry from {dg.senderAddress().toString()}:{dg.senderPort()}")
+                self.remote = (addr, aport)
+                self.info.emit(f"telemetry from {addr.toString()}:{aport}")
+            elif self.remote[1] != aport or self.remote[0] != addr:
+                # Re-target TX at the most recent sender (QGC does the same). A radio bridge or
+                # SITL restart resumes telemetry from a NEW source port; keeping the old endpoint
+                # means RX looks alive while every command + GCS heartbeat goes to a dead port
+                # (the vehicle then declares GCS-loss). Info is throttled -- two interleaved
+                # senders on one port would otherwise spam it every datagram.
+                self.remote = (addr, aport)
+                now = time.monotonic()
+                if now - getattr(self, "_remote_move_t", 0.0) > 5.0:
+                    self._remote_move_t = now
+                    self.info.emit(f"telemetry endpoint moved to {addr.toString()}:{aport}")
             batch.extend(self.parser.feed(data))
         if batch:
             self.messages.emit(batch)
@@ -393,8 +405,8 @@ class TcpLink(Link):
         self.sock = QTcpSocket(self)
         self.sock.readyRead.connect(lambda: self._ingest(bytes(self.sock.readAll())))
         self.sock.connected.connect(self._on_connected)
-        self.sock.errorOccurred.connect(
-            lambda _e: self.info.emit(f"TCP error: {self.sock.errorString()}"))
+        self.sock.disconnected.connect(self._on_dropped)
+        self.sock.errorOccurred.connect(self._on_error)
         self._begin()
         self.info.emit(f"connecting TCP {host}:{port} ...")
         self.sock.connectToHost(str(host), int(port))
@@ -404,6 +416,20 @@ class TcpLink(Link):
     def _on_connected(self):
         self.remote = True
         self.info.emit("TCP connected")
+
+    def _on_error(self, _e):
+        # connection refused / host unreachable / remote closed: without this the UI shows the
+        # link open forever while heartbeats are written into a dead socket.
+        if not self._open:
+            return
+        msg = self.sock.errorString() if self.sock is not None else "socket error"
+        self.info.emit(f"TCP error: {msg} -- link closed")
+        self.close()
+
+    def _on_dropped(self):
+        if self._open:
+            self.info.emit("TCP connection closed by remote -- link closed")
+            self.close()
 
     def _write(self, data: bytes):
         if self.sock is not None:
