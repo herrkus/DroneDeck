@@ -286,10 +286,13 @@ def autopilot_mission_warnings(items, autopilot):
     adjust the plan. The list below was verified LIVE against PX4 SITL (tests/live_missionitems.py):
     RTL, Loiter-turns, Set-servo and Condition-Yaw all reject; Delay and Cam-trigger-distance are
     accepted. (These commands are still offered for ArduPilot, which does support them.)"""
-    # command id -> (friendly label, what to do instead)
+    # command id -> (friendly label, what to do instead).  All verified live against PX4 SITL
+    # (tests/live_missionitems.py) -- ROI(195)/Jump(177)/Delay(93)/Cam-trigg(206) were checked and DO
+    # upload, so they are deliberately absent here.
     PX4_UNSUPPORTED = {
         20:  ("Return-To-Launch", "end the mission with Land, or remove the RTL item"),
         18:  ("Loiter (turns)", "use Loiter (time) or Loiter (unlimited) instead"),
+        82:  ("Spline waypoint", "PX4 has no spline waypoints -- use plain waypoints"),
         183: ("Set servo", "PX4 has no DO_SET_SERVO mission item"),
         115: ("Condition: Yaw", "PX4 sets heading from the waypoint's own yaw, not CONDITION_YAW"),
     }

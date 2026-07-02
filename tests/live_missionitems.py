@@ -97,6 +97,9 @@ cands = [
     ("SET_SERVO 183", 183, MIS, dict(param1=5, param2=1600)),
     ("CONDITION_YAW 115", 115, MIS, dict(param1=90)),
     ("CAM_TRIGG_DIST 206", 206, MIS, dict(param1=25)),
+    ("SPLINE_WP 82", 82, REL, {}),
+    ("ROI 195 (georef)", 195, REL, dict(param1=0)),   # DO_SET_ROI_LOCATION needs a real position
+    ("JUMP 177", 177, MIS, dict(param1=0, param2=1)),
 ]
 print("=== per-item upload acceptance ===")
 verdict = {}

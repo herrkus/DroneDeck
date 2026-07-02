@@ -44,13 +44,13 @@ assert autopilot_mission_warnings(with_rtl, 0) == []
 assert autopilot_mission_warnings([], PX4) == []
 
 # each live-verified PX4-unsupported item warns (once), and mentions the item -----------------------
-for cmd, needle in ((18, "Loiter"), (183, "servo"), (115, "Yaw")):
+for cmd, needle in ((18, "Loiter"), (82, "Spline"), (183, "servo"), (115, "Yaw")):
     w = autopilot_mission_warnings([wp(0, WP), wp(1, cmd)], PX4)
     assert len(w) == 1 and needle.lower() in w[0].lower(), (cmd, w)
     assert autopilot_mission_warnings([wp(0, WP), wp(1, cmd)], ARDU) == [], f"ArduPilot cmd {cmd}"
 
-# live-verified PX4-ACCEPTED items must NOT warn (Delay 93, Cam-trigger-distance 206) ---------------
-for cmd in (93, 206):
+# live-verified PX4-ACCEPTED items must NOT warn (Delay 93, Cam-trigg 206, ROI 195, Jump 177) -------
+for cmd in (93, 206, 195, 177):
     assert autopilot_mission_warnings([wp(0, WP), wp(1, cmd)], PX4) == [], f"cmd {cmd} should not warn"
 
 # a mission hitting several unsupported items -> one advisory each, deduped by command --------------
