@@ -279,28 +279,34 @@ def validate_mission(items):
     return warns
 
 
+# command id -> (friendly label, what to do instead).  Mission commands PX4 does NOT accept (it
+# returns MAV_MISSION_UNSUPPORTED and rejects the WHOLE upload); ArduPilot does support them. Every
+# entry -- and the palette items deliberately absent from it (ROI 195, Jump 177, Delay 93,
+# Cam-trigg 206, waypoint/takeoff/land/loiter-time/unlim/change-speed/land-start) -- was verified
+# LIVE against PX4 SITL via tests/live_missionitems.py.
+PX4_UNSUPPORTED_MISSION_CMDS = {
+    20:  ("Return-To-Launch", "end the mission with Land, or remove the RTL item"),
+    18:  ("Loiter (turns)", "use Loiter (time) or Loiter (unlimited) instead"),
+    82:  ("Spline waypoint", "PX4 has no spline waypoints -- use plain waypoints"),
+    183: ("Set servo", "PX4 has no DO_SET_SERVO mission item"),
+    115: ("Condition: Yaw", "PX4 sets heading from the waypoint's own yaw, not CONDITION_YAW"),
+}
+
+
+def px4_unsupported_cmds():
+    """The set of mission-command ids PX4 rejects -- used to filter the editor palette for PX4."""
+    return set(PX4_UNSUPPORTED_MISSION_CMDS)
+
+
 def autopilot_mission_warnings(items, autopilot):
-    """Autopilot-specific advisories that plain validate_mission cannot know. PX4 supports a narrower
-    mission-command set than ArduPilot and returns MAV_MISSION_UNSUPPORTED -- rejecting the WHOLE
-    upload -- for commands it does not implement. Warn before that cryptic reject so the user can
-    adjust the plan. The list below was verified LIVE against PX4 SITL (tests/live_missionitems.py):
-    RTL, Loiter-turns, Set-servo and Condition-Yaw all reject; Delay and Cam-trigger-distance are
-    accepted. (These commands are still offered for ArduPilot, which does support them.)"""
-    # command id -> (friendly label, what to do instead).  All verified live against PX4 SITL
-    # (tests/live_missionitems.py) -- ROI(195)/Jump(177)/Delay(93)/Cam-trigg(206) were checked and DO
-    # upload, so they are deliberately absent here.
-    PX4_UNSUPPORTED = {
-        20:  ("Return-To-Launch", "end the mission with Land, or remove the RTL item"),
-        18:  ("Loiter (turns)", "use Loiter (time) or Loiter (unlimited) instead"),
-        82:  ("Spline waypoint", "PX4 has no spline waypoints -- use plain waypoints"),
-        183: ("Set servo", "PX4 has no DO_SET_SERVO mission item"),
-        115: ("Condition: Yaw", "PX4 sets heading from the waypoint's own yaw, not CONDITION_YAW"),
-    }
+    """Autopilot-specific advisories that plain validate_mission cannot know: warn before PX4's
+    cryptic MAV_MISSION_UNSUPPORTED reject (see PX4_UNSUPPORTED_MISSION_CMDS). A safety net for items
+    loaded from an ArduPilot .plan -- the editor palette also hides these when connected to PX4."""
     warns = []
     if int(autopilot) == mavlink.MAV_AUTOPILOT_PX4:
         seen = set()
         for it in items:
-            info = PX4_UNSUPPORTED.get(it.command)
+            info = PX4_UNSUPPORTED_MISSION_CMDS.get(it.command)
             if info and it.command not in seen:
                 seen.add(it.command)
                 label, advice = info

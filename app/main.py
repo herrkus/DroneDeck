@@ -31,7 +31,7 @@ from vehicle import Vehicle
 from link import UdpLink, TcpLink, SerialLink, ReplayLink
 from mission import (MissionProtocol, MissionItem, survey_grid, corridor_scan,
                      structure_scan, fence_from_mission, validate_mission,
-                     autopilot_mission_warnings)
+                     autopilot_mission_warnings, px4_unsupported_cmds)
 from params import ParamManager, ParamDialog
 from tlog import TlogWriter
 from logdownload import LogManager
@@ -157,14 +157,20 @@ class WaypointEditor(QDialog):
             ("Change speed", 178), ("Jump to WP", 177), ("Land start", 189),
             ("Set servo", 183), ("Condition: Yaw", 115), ("Camera trig dist", 206)]
 
-    def __init__(self, item, parent=None):
+    def __init__(self, item, parent=None, autopilot=None):
         super().__init__(parent)
         self.setWindowTitle(f"Edit WP {item.seq}")
         form = QFormLayout(self)
         self.cmd = QComboBox()
-        for name, cid in self.CMDS:
+        # On PX4, hide the commands its firmware rejects (QGC does the same) so the user can't build a
+        # mission that fails to upload -- but always keep THIS item's own command visible, so an item
+        # loaded from an ArduPilot .plan can still be seen/edited on a PX4 link.
+        hide = px4_unsupported_cmds() if autopilot == mavlink.MAV_AUTOPILOT_PX4 else set()
+        palette = [(name, cid) for name, cid in self.CMDS
+                   if cid not in hide or cid == item.command]
+        for name, cid in palette:
             self.cmd.addItem(name, cid)
-        idx = next((i for i, (_, c) in enumerate(self.CMDS) if c == item.command), -1)
+        idx = next((i for i, (_, c) in enumerate(palette) if c == item.command), -1)
         if idx < 0:                                   # unknown command -> keep it as an option
             self.cmd.addItem(item.cmd_name, item.command)
             idx = self.cmd.count() - 1
@@ -1782,7 +1788,7 @@ class DroneDeck(QMainWindow):
         i = self.mission_list.currentRow()
         if not (0 <= i < len(self.mission_items)):
             return
-        dlg = WaypointEditor(self.mission_items[i], self)
+        dlg = WaypointEditor(self.mission_items[i], self, autopilot=self.vehicle.autopilot)
         if dlg.exec() == QDialog.Accepted:
             dlg.apply_to(self.mission_items[i])
             self._update_wp_row(i)

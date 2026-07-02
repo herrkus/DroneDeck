@@ -13,6 +13,7 @@ sys.path.insert(0, os.path.join(ROOT, "app"))
 
 from PySide6.QtWidgets import QApplication
 import main as m
+import mavlink
 from mission import MissionItem
 
 app = QApplication.instance() or QApplication([])
@@ -118,6 +119,28 @@ ed.alt.setValue(60)
 ed.apply_to(it)
 if not (it.command == 16 and it.alt == 60 and it.frame != 2):
     fail.append(f"waypoint regressed: cmd={it.command} alt={it.alt} frame={it.frame}")
+
+# 8) autopilot-aware palette (iter128): PX4 hides the items it rejects, ArduPilot shows all ---------
+def combo_cmds(ed):
+    return [ed.cmd.itemData(i) for i in range(ed.cmd.count())]
+
+
+plain = MissionItem(0, 47, 8, 50, command=16)
+cmds_px4 = combo_cmds(m.WaypointEditor(plain, autopilot=mavlink.MAV_AUTOPILOT_PX4))
+for bad in (20, 18, 82, 183, 115):                  # RTL, loiter-turns, spline, set-servo, cond-yaw
+    if bad in cmds_px4:
+        fail.append(f"PX4 palette should hide unsupported cmd {bad}")
+for good in (16, 22, 21, 19, 93, 206, 195, 177):    # standard + live-verified PX4-accepted
+    if good not in cmds_px4:
+        fail.append(f"PX4 palette dropped supported cmd {good}")
+cmds_ardu = combo_cmds(m.WaypointEditor(plain, autopilot=mavlink.MAV_AUTOPILOT_ARDUPILOTMEGA))
+for c in (20, 18, 82, 183, 115):                    # ArduPilot supports them -> all offered
+    if c not in cmds_ardu:
+        fail.append(f"ArduPilot palette should offer cmd {c}")
+# editing an EXISTING spline item on a PX4 link must still show spline (so it stays editable)
+if 82 not in combo_cmds(m.WaypointEditor(MissionItem(0, 47, 8, 50, command=82),
+                                         autopilot=mavlink.MAV_AUTOPILOT_PX4)):
+    fail.append("PX4: editing an existing spline item must keep spline in the palette")
 
 print("WAYPOINTEDIT FAILED: " + "; ".join(fail) if fail else
       "WAYPOINTEDIT PASSED (Loiter-turns + Delay + Set-servo + Condition-Yaw + Cam-trigg: fields/labels/params/"
