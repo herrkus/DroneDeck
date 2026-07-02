@@ -168,6 +168,11 @@ class ParamManager(QObject):
             # with param_index 65535 (the MAVLink "by name" convention) for read-by-name replies;
             # counting those would inflate `received` and complete the download prematurely, dropping
             # real params (the value is still stored + `updated` emitted above -- see test_paramrobust).
+            if self.expected is not None and cnt != self.expected:
+                # the vehicle's param_count changed mid-download (reboot / dynamic table): the old
+                # indices no longer mean the same params, and stale ones >= new cnt would let
+                # len(received) reach cnt while real params are still missing. Restart the tally.
+                self.received = set()
             self.expected = cnt
             self.received.add(idx)
             self.retries = 0

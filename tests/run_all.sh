@@ -119,6 +119,7 @@ check "video"               ""                        tests/test_video.py
 check "adsb"                ""                        tests/test_adsb.py
 check "multivehicle"        ""                        tests/test_multivehicle.py
 check "rc_calibration"      ""                        tests/test_rc_calibration.py
+check "logrobust"           ""                        tests/test_logrobust.py
 check "sensor_calibration"  ""                        tests/test_sensor_calibration.py
 check "cellbars"            ""                        tests/test_cellbars.py
 check "systems"             ""                        tests/test_systems.py

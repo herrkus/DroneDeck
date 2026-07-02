@@ -11,6 +11,8 @@ from PySide6.QtCore import QObject, Signal, QTimer
 import mavlink
 
 CHUNK = 90
+DL_TIMEOUT_MS = 1500
+DL_MAX_RETRIES = 8
 
 
 class LogManager(QObject):
@@ -28,12 +30,16 @@ class LogManager(QObject):
         self._num_logs = None
         self.dl_id = None
         self.dl_size = 0
-        self.dl_got = 0
+        self.dl_got = 0        # highest contiguous byte received from 0 (the true progress)
+        self.dl_retries = 0
         self.fh = None
         self.path = ""
         self._list_timer = QTimer(self)
         self._list_timer.setSingleShot(True)
         self._list_timer.timeout.connect(self._finalize_list)
+        self._dl_timer = QTimer(self)
+        self._dl_timer.setSingleShot(True)
+        self._dl_timer.timeout.connect(self._on_dl_timeout)
 
     def _ready(self):
         link = self._link()
@@ -54,6 +60,11 @@ class LogManager(QObject):
         if not self._ready():
             self.finished.emit(False, "", "no vehicle connected")
             return
+        if self.state == "downloading":
+            # busy guard: abandoning a download without closing leaked the file handle and
+            # corrupted the first file. Cleanly cancel the in-flight one first.
+            self._close_fh()
+            self._dl_timer.stop()
         ent = self._entries.get(log_id)
         if ent is None:
             self.finished.emit(False, "", f"log {log_id} not in list")
@@ -68,9 +79,11 @@ class LogManager(QObject):
         self.dl_id = log_id
         self.dl_size = int(ent["size"])
         self.dl_got = 0
+        self.dl_retries = 0
         self.state = "downloading"
         self.progress.emit(0, self.dl_size)
         self._link().request_log_data(self._target(), log_id, 0, 0xFFFFFFFF)
+        self._dl_timer.start(DL_TIMEOUT_MS)
 
     # -- inbound --------------------------------------------------------------
     def handle_messages(self, batch):
@@ -99,12 +112,34 @@ class LogManager(QObject):
             ofs = int(m.fields.get("ofs", 0))
             count = int(m.fields.get("count", 0))
             data = bytes(m.fields.get("data", b""))[:count]
-            self.fh.seek(ofs)
-            self.fh.write(data)
-            self.dl_got = max(self.dl_got, ofs + count)
+            if self.fh is not None:
+                self.fh.seek(ofs)
+                self.fh.write(data)
+            # advance the contiguous-from-zero high-water mark. A chunk that lands past dl_got is
+            # written but does NOT advance it -- the gap before it is re-requested on timeout, so a
+            # dropped mid-stream chunk can't leave a silent zero-filled hole in the log.
+            if ofs <= self.dl_got:
+                self.dl_got = max(self.dl_got, ofs + count)
+            self.dl_retries = 0
             self.progress.emit(min(self.dl_got, self.dl_size), self.dl_size)
-            if count < CHUNK or self.dl_got >= self.dl_size:
-                self._finish_download()
+            # done only when the whole file is contiguously present (a short final chunk with no gap
+            # also completes it); a short chunk sitting AFTER a gap must NOT end the download.
+            if self.dl_got >= self.dl_size or (count < CHUNK and ofs + count >= self.dl_size):
+                self._finish_download(True)
+            else:
+                self._dl_timer.start(DL_TIMEOUT_MS)
+
+    def _on_dl_timeout(self):
+        if self.state != "downloading":
+            return
+        self.dl_retries += 1
+        if self.dl_retries > DL_MAX_RETRIES or not self._ready():
+            self._finish_download(False)
+            return
+        # re-request from the first missing byte (the contiguous high-water mark), filling the gap
+        # forward instead of hanging with the file open forever when a chunk (or the last one) drops.
+        self._link().request_log_data(self._target(), self.dl_id, self.dl_got, 0xFFFFFFFF)
+        self._dl_timer.start(DL_TIMEOUT_MS)
 
     def _finalize_list(self):
         if self.state != "listing":
@@ -112,13 +147,24 @@ class LogManager(QObject):
         self.state = "idle"
         self.entries.emit(sorted(self._entries.values(), key=lambda e: e["id"]))
 
-    def _finish_download(self):
+    def _close_fh(self):
         try:
-            self.fh.close()
+            if self.fh is not None:
+                self.fh.close()
         except Exception:
             pass
         self.fh = None
+
+    def _finish_download(self, ok):
+        self._dl_timer.stop()
+        self._close_fh()
         self.state = "idle"
         if self._ready():
             self._link().log_request_end(self._target())
-        self.finished.emit(True, self.path, f"saved {self.dl_got} bytes -> {os.path.basename(self.path)}")
+        if ok:
+            self.finished.emit(True, self.path,
+                               f"saved {self.dl_got} bytes -> {os.path.basename(self.path)}")
+        else:
+            self.finished.emit(False, self.path,
+                               f"log download incomplete ({self.dl_got}/{self.dl_size} bytes) -- "
+                               f"gave up after {self.dl_retries} retries")

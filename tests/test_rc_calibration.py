@@ -73,5 +73,22 @@ if params.get("RC1_MIN", 0) >= params.get("RC1_MAX", 1):
 if len(params) != 3 * len(lo):
     fail.append(f"expected {3 * len(lo)} params, got {len(params)}")
 
-print("RC CAL FAILED: " + "; ".join(fail) if fail else "RC CAL PASSED")
+# -- audit batch 10: a channel that never moved must NOT be written as MIN==MAX==TRIM --------------
+# (degenerate cal = a dead/failsafe axis + divide-by-range risk on a real vehicle). Inject a
+# synthetic capture: ch1 swept a full range, ch2 sat still. Only ch1 must be written.
+dlg.radio.bars.lo = {1: 1000, 2: 1498}
+dlg.radio.bars.hi = {1: 2000, 2: 1502}
+dlg.radio.bars.cur = {1: 1500, 2: 1500}
+degen = {}
+dlg.radio.saveRequested.connect(lambda p: degen.update(p))
+dlg.radio._save()
+if "RC1_MIN" not in degen:
+    fail.append("moved channel 1 was not written")
+if "RC2_MIN" in degen:
+    fail.append("unmoved channel 2 was written (degenerate MIN==MAX==TRIM)")
+if degen.get("RC1_MIN", 0) >= degen.get("RC1_MAX", 1):
+    fail.append("degenerate-guard: RC1_MIN >= RC1_MAX")
+
+print("RC CAL FAILED: " + "; ".join(fail) if fail else
+      "RC CAL PASSED (+ batch 10: unmoved channel skipped, not written as zero-span)")
 sys.exit(1 if fail else 0)

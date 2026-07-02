@@ -119,4 +119,18 @@ mgr.handle_messages([pv("MPC_Z", 5.0, 3, 100)])              # wrong value echoe
 assert "MPC_Z" in mgr.pending, "wrong-value echo falsely confirmed the set"
 assert not any(ok for (_, ok, _) in sr), sr
 
-print("PARAMROBUST PASSED (8 adversarial scenarios)")
+# 9) param_count CHANGES mid-download (vehicle reboot / dynamic table) -- audit batch 10 -----------
+# Old bug: stale indices kept `received` inflated, so len(received) could reach the NEW (smaller)
+# count while real params were still missing -> download "completed" with a truncated table.
+mgr, link, fin, sr = new_mgr()
+mgr.download()
+mgr.handle_messages([pv("P0", 0, 0, 10), pv("P1", 1, 1, 10), pv("P2", 2, 2, 10)])
+assert len(mgr.received) == 3 and mgr.expected == 10 and mgr.state == "download"
+mgr.handle_messages([pv("Q0", 0, 0, 3)])                    # count dropped 10 -> 3 (reboot)
+assert mgr.expected == 3, "did not adopt the new param_count"
+assert len(mgr.received) == 1 and mgr.state == "download", \
+    "stale indices were not cleared -> would complete a truncated download"
+mgr.handle_messages([pv("Q1", 1, 1, 3), pv("Q2", 2, 2, 3)])  # now genuinely complete
+assert fin[-1][0] is True and mgr.state == "idle"
+
+print("PARAMROBUST PASSED (9 adversarial scenarios)")

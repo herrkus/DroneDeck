@@ -21,6 +21,10 @@ import mavlink
 _MONO = QFont("DejaVu Sans Mono", 9)
 SEV_COLOR = {0: "#ff5050", 1: "#ff5050", 2: "#ff6a3d", 3: "#ff6a3d",
              4: "#e0a030", 5: "#39c0d0", 6: "#c4c8d0", 7: "#7a8090"}
+# min PWM travel (us) for an RC channel to count as "moved" during calibration. A real stick/switch
+# sweeps ~800-1000 us end to end; an untouched channel only jitters a few us. 200 us cleanly separates
+# them and guards against writing a degenerate MIN==MAX==TRIM calibration.
+RC_MIN_TRAVEL = 200
 
 
 class RcBars(QWidget):
@@ -135,13 +139,30 @@ class RcCalibrationWidget(QWidget):
 
     def _save(self):
         params = {}
+        skipped = []
         for i in sorted(self.bars.lo):
-            params[f"RC{i}_MIN"] = float(self.bars.lo[i])
-            params[f"RC{i}_MAX"] = float(self.bars.hi[i])
-            params[f"RC{i}_TRIM"] = float(self.bars.cur.get(i, (self.bars.lo[i] + self.bars.hi[i]) // 2))
+            lo, hi = int(self.bars.lo[i]), int(self.bars.hi[i])
+            # Only write a channel that actually swept a usable range. An untouched channel sits at
+            # a near-constant value, giving MIN==MAX==TRIM -- a zero-span RC calibration that on a
+            # real vehicle means a dead/failsafe axis (and MIN==MAX invites divide-by-range bugs in
+            # the autopilot's RC scaling). Require >=RC_MIN_TRAVEL us of travel; skip the rest.
+            if hi - lo < RC_MIN_TRAVEL:
+                skipped.append(i)
+                continue
+            trim = int(self.bars.cur.get(i, (lo + hi) // 2))
+            trim = max(lo, min(hi, trim))                # keep TRIM within [MIN, MAX]
+            params[f"RC{i}_MIN"] = float(lo)
+            params[f"RC{i}_MAX"] = float(hi)
+            params[f"RC{i}_TRIM"] = float(trim)
         if params:
             self.saveRequested.emit(params)
-            self.hint.setText(f"Wrote {len(params)} parameters for {len(self.bars.lo)} channels.")
+            msg = f"Wrote {len(params)} parameters for {len(params) // 3} channel(s)."
+            if skipped:
+                msg += f" Skipped unmoved channel(s): {', '.join(str(s) for s in skipped)}."
+            self.hint.setText(msg)
+        else:
+            self.hint.setText("No channel swept a usable range -- move every stick and switch to its "
+                              "extremes during capture, then Save.")
 
 
 class SensorCalibrationWidget(QWidget):
