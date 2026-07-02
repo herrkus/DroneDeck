@@ -357,6 +357,12 @@ class Link(QObject):
         self._send_msg(mavlink.MISSION_REQUEST_INT,
                        mavlink.enc_mission_request_int(seq, target_sys, mission_type=mission_type))
 
+    def set_current_wp(self, target_sys: int, seq: int):
+        """MISSION_SET_CURRENT: make waypoint `seq` the active mission item -- skip ahead to it or
+        restart the mission from it while flying (the vehicle echoes MISSION_CURRENT back)."""
+        self._send_msg(mavlink.MISSION_SET_CURRENT,
+                       mavlink.enc_mission_set_current(seq, target_sys))
+
     def send_mission_ack(self, target_sys: int, result: int = 0, mission_type: int = 0):
         self._send_msg(mavlink.MISSION_ACK,
                        mavlink.enc_mission_ack(result, target_sys, mission_type=mission_type))

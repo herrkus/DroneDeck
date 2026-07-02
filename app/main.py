@@ -639,6 +639,8 @@ class DroneDeck(QMainWindow):
         self.mission_list.setFont(QFont("DejaVu Sans Mono", 9))
         self.mission_list.itemSelectionChanged.connect(self._wp_list_selected)
         self.mission_list.itemDoubleClicked.connect(self._wp_edit)
+        self.mission_list.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.mission_list.customContextMenuRequested.connect(self._wp_context_menu)
         mwrap = QWidget()
         mv = QVBoxLayout(mwrap)
         mv.setContentsMargins(2, 2, 2, 2)
@@ -1687,6 +1689,30 @@ class DroneDeck(QMainWindow):
         if dlg.exec() == QDialog.Accepted:
             dlg.apply_to(self.mission_items[i])
             self._update_wp_row(i)
+
+    def _wp_context_menu(self, pos):
+        """Right-click a mission-list row: edit it, or make it the vehicle's active waypoint."""
+        row = self.mission_list.currentRow()
+        has_row = 0 <= row < len(self.mission_items)
+        menu = QMenu(self.mission_list)
+        menu.addAction("Edit...").triggered.connect(self._wp_edit)
+        act = menu.addAction(f"Set as current waypoint  (#{row})" if has_row
+                             else "Set as current waypoint")
+        act.setEnabled(has_row)
+        act.triggered.connect(lambda: self._set_current_wp(row))
+        menu.exec(self.mission_list.mapToGlobal(pos))
+
+    def _set_current_wp(self, seq):
+        """MISSION_SET_CURRENT: jump the flying vehicle's active mission item to `seq` (skip ahead
+        to it, or restart the mission from it). The vehicle echoes MISSION_CURRENT, refreshing the
+        map's green target ring + the list highlight."""
+        if not self._has_vehicle():
+            QMessageBox.information(self, "No vehicle", "Connect to a vehicle first.")
+            return
+        if not (0 <= seq < len(self.mission_items)):
+            return
+        self.link.set_current_wp(self._sysid(), seq)
+        self._on_info(f"set current waypoint -> #{seq}")
 
     def _on_wp_action(self, action, idx):
         """Right-click-a-waypoint actions from the map: edit / insert-before / delete."""

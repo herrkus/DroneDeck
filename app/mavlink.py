@@ -75,6 +75,7 @@ PARAM_REQUEST_LIST = 21
 PARAM_VALUE = 22
 PARAM_SET = 23
 # mission protocol
+MISSION_SET_CURRENT = 41     # GCS->vehicle: jump the active mission item (skip to / restart from)
 MISSION_CURRENT = 42
 MISSION_REQUEST_LIST = 43
 MISSION_COUNT = 44
@@ -139,6 +140,7 @@ MSG_NAME = {
     PARAM_VALUE: "PARAM_VALUE",
     PARAM_SET: "PARAM_SET",
     MISSION_CURRENT: "MISSION_CURRENT",
+    MISSION_SET_CURRENT: "MISSION_SET_CURRENT",
     MISSION_REQUEST_LIST: "MISSION_REQUEST_LIST",
     MISSION_COUNT: "MISSION_COUNT",
     MISSION_CLEAR_ALL: "MISSION_CLEAR_ALL",
@@ -162,7 +164,7 @@ CRC_EXTRA = {
     COMMAND_INT: 158, COMMAND_LONG: 152,
     COMMAND_ACK: 143, STATUSTEXT: 83, SET_POSITION_TARGET_GLOBAL_INT: 5,
     PARAM_REQUEST_READ: 214, PARAM_REQUEST_LIST: 159, PARAM_VALUE: 220, PARAM_SET: 168,
-    MISSION_CURRENT: 28, MISSION_REQUEST_LIST: 132, MISSION_COUNT: 221,
+    MISSION_SET_CURRENT: 28, MISSION_CURRENT: 28, MISSION_REQUEST_LIST: 132, MISSION_COUNT: 221,
     MISSION_CLEAR_ALL: 232, MISSION_ITEM_REACHED: 11, MISSION_ACK: 153,
     MISSION_REQUEST_INT: 196, MISSION_ITEM_INT: 38, MANUAL_CONTROL: 243, RC_CHANNELS: 118,
     ALTITUDE: 47, BATTERY_STATUS: 154, VIBRATION: 90, RADIO_STATUS: 185,
@@ -736,6 +738,11 @@ def enc_mission_request_list(target_system=1, target_component=1, mission_type=0
 def enc_mission_request_int(seq, target_system=1, target_component=1, mission_type=0):
     return struct.pack("<HBBB", int(seq) & 0xFFFF, target_system & 0xFF,
                        target_component & 0xFF, mission_type & 0xFF)
+
+
+def enc_mission_set_current(seq, target_system=1, target_component=1):
+    # wire order is size-sorted: seq (uint16) then the two uint8 target fields
+    return struct.pack("<HBB", int(seq) & 0xFFFF, target_system & 0xFF, target_component & 0xFF)
 
 
 def enc_mission_ack(result=0, target_system=1, target_component=1, mission_type=0):
