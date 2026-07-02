@@ -55,7 +55,7 @@ assert len(console_hits()) == 2                            # re-armed and fired 
 # exclusion circle: entering the 100 m circle breaches
 win.fence_inc = []
 win.fence_circles = [{"lat": 47.0, "lon": 8.0, "radius": 100.0, "incl": False}]
-win._fence_breached = False
+win._fence_breached = {}
 notes.clear()
 at(47.02, 8.0)                                             # ~2.2 km away -> clear
 assert not notes
@@ -64,7 +64,7 @@ assert any("exclusion circle" in n for n in console_hits())
 
 # inclusion circle: leaving the 100 m circle breaches
 win.fence_circles = [{"lat": 47.0, "lon": 8.0, "radius": 100.0, "incl": True}]
-win._fence_breached = False
+win._fence_breached = {}
 notes.clear()
 at(47.0, 8.0)
 assert not notes
@@ -73,7 +73,7 @@ assert any("inclusion circle" in n for n in console_hits())
 
 # no fence defined -> never warns
 win.fence_inc, win.fence_exc, win.fence_circles = [], [], []
-win._fence_breached = False
+win._fence_breached = {}
 notes.clear()
 at(48.0, 9.0)
 assert not notes
@@ -86,7 +86,7 @@ import time
 # degenerate inclusion polygons (0 / 1 / 2 vertices) -> _point_in_poly returns False (n<3), no div0
 for f in ([], [(47.0, 8.0)], [(47.0, 8.0), (47.01, 8.01)]):
     win.fence_inc, win.fence_exc, win.fence_circles = f, [], []
-    win._fence_breached = False
+    win._fence_breached = {}
     at(47.0, 8.0)                                             # must not raise
 
 # NaN/inf fence vertices and NaN/inf circle radius -> comparisons just evaluate False, no crash

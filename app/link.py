@@ -151,9 +151,12 @@ class Link(QObject):
         self.send_command_int(target_sys, mavlink.MAV_CMD_DO_SET_ROI_LOCATION,
                               [0, 0, 0, 0], int(lat * 1e7), int(lon * 1e7), alt)
 
-    def set_home(self, target_sys, lat, lon, alt):
+    def set_home(self, target_sys, lat, lon, alt_amsl):
+        # z is the HOME ELEVATION in metres AMSL (frame 0 = GLOBAL). The old code sent the
+        # vehicle's RELATIVE altitude in frame 6, corrupting the RTL/altitude reference by the
+        # field elevation (home at "30 m AMSL" on a 500 m-elevation field).
         self.send_command_int(target_sys, mavlink.MAV_CMD_DO_SET_HOME,
-                              [0, 0, 0, 0], int(lat * 1e7), int(lon * 1e7), alt)
+                              [0, 0, 0, 0], int(lat * 1e7), int(lon * 1e7), alt_amsl, frame=0)
 
     # -- commands -------------------------------------------------------------
     def arm(self, target_sys: int, arm: bool = True):
@@ -282,9 +285,19 @@ class Link(QObject):
         self._send_msg(mavlink.LOG_REQUEST_END, mavlink.enc_log_request_end(target_sys, 1))
 
     def goto(self, target_sys: int, lat: float, lon: float, alt_rel: float):
+        # One-shot guided position target: honored by ArduPilot in GUIDED mode. PX4 IGNORES this
+        # outside an OFFBOARD setpoint stream -- use reposition() for PX4 (main._guided_goto picks).
         self._send_msg(mavlink.SET_POSITION_TARGET_GLOBAL_INT,
                        mavlink.enc_set_position_target_global_int(lat, lon, alt_rel,
                                                                   target_system=target_sys))
+
+    def reposition(self, target_sys: int, lat: float, lon: float, alt_rel: float):
+        # Guided "fly to" via DO_REPOSITION + MAV_DO_REPOSITION_FLAGS_CHANGE_MODE (param2=1) --
+        # the primitive PX4 actually honors from Hold/Position (same one the PX4-verified
+        # change_altitude uses); param1=-1 default speed, yaw NaN = unchanged.
+        self.send_command_int(target_sys, mavlink.MAV_CMD_DO_REPOSITION,
+                              [-1.0, 1.0, 0.0, float("nan")],
+                              int(lat * 1e7), int(lon * 1e7), alt_rel, frame=6)
 
     # -- parameter protocol ---------------------------------------------------
     def request_params(self, target_sys: int):

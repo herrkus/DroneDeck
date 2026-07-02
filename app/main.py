@@ -279,7 +279,7 @@ class DroneDeck(QMainWindow):
         self._arm_t0 = None
         self._flight_time = 0.0
         self._failsafe_prev = {}                # sysid -> last MAV_STATE (failsafe edge detect)
-        self._fence_breached = False            # geofence breach edge detect
+        self._fence_breached = {}               # geofence breach edge detect, keyed by sysid
 
         # mission planning state
         self.plan_mode = False
@@ -941,10 +941,17 @@ class DroneDeck(QMainWindow):
             self.link_edit.setPlaceholderText("port:baud")
 
     def _on_command_ack(self, command, result):
+        # attribute the ACK to the vehicle that emitted it (sender() = the Vehicle, direct
+        # connection) -- in a multi-vehicle session a rejection from a NON-selected vehicle used
+        # to pop an unattributed toast with a reason scraped from the WRONG vehicle's log.
+        src = self.sender()
+        if not isinstance(src, Vehicle):
+            src = self.vehicle
+        tag = f"#{src.sysid} " if (src is not self.vehicle and src.sysid) else ""
         name = self.CMD_NAMES.get(command, f"CMD {command}")
         res = mavlink.MAV_RESULT.get(result, str(result))
         ok = (result == 0)
-        line = f"{name}: {res}"
+        line = f"{tag}{name}: {res}"
         self._on_info(line)
         self.console.add_note(line, "#37d67a" if ok else "#e05050")
         # A rejected safety-critical command (arm, takeoff, ...) is easy to miss in the
@@ -954,9 +961,9 @@ class DroneDeck(QMainWindow):
                     mavlink.MAV_CMD_NAV_LAND, mavlink.MAV_CMD_NAV_RETURN_TO_LAUNCH,
                     mavlink.MAV_CMD_DO_SET_MODE}
         if not ok and command in critical:
-            reason = next((txt for sev, txt in reversed(self.vehicle.messages[-12:])
+            reason = next((txt for sev, txt in reversed(src.messages[-12:])
                            if sev <= 4), "")
-            self._notify(f"{name} REJECTED: {res}" + (f"  --  {reason}" if reason else ""),
+            self._notify(f"{tag}{name} REJECTED: {res}" + (f"  --  {reason}" if reason else ""),
                          "#c02020")
 
     def _on_mission_reached(self, seq):
@@ -1427,8 +1434,17 @@ class DroneDeck(QMainWindow):
         if QMessageBox.question(self, "Goto",
                                 f"Fly to:\n{lat:.6f}, {lon:.6f}\nat {alt:.0f} m relative altitude?"
                                 ) == QMessageBox.StandardButton.Yes:
-            self.link.goto(self._sysid(), lat, lon, alt)
+            self._guided_goto(lat, lon, alt)
             self._on_info(f"goto {lat:.5f}, {lon:.5f} @ {alt:.0f} m")
+
+    def _guided_goto(self, lat, lon, alt):
+        """Autopilot-correct guided 'fly to': PX4 ignores a one-shot SET_POSITION_TARGET outside an
+        OFFBOARD stream, so it gets DO_REPOSITION(+CHANGE_MODE) -- the primitive QGC uses and the
+        one change-altitude already live-verified. ArduPilot keeps the guided position target."""
+        if self.vehicle.autopilot == mavlink.MAV_AUTOPILOT_PX4:
+            self.link.reposition(self._sysid(), lat, lon, alt)
+        else:
+            self.link.goto(self._sysid(), lat, lon, alt)
 
     def _on_map_context(self, action, lat, lon):
         if action == "add_roi":                        # a mission item, not a live command
@@ -1454,7 +1470,7 @@ class DroneDeck(QMainWindow):
         alt = max(self.vehicle.alt_rel, 30.0)
         sysid = self._sysid()
         if action == "goto":
-            self.link.goto(sysid, lat, lon, alt)
+            self._guided_goto(lat, lon, alt)
             self._on_info(f"goto {lat:.5f}, {lon:.5f} @ {alt:.0f} m")
         elif action == "orbit":
             self.link.orbit(sysid, lat, lon, 50.0, alt)
@@ -1463,8 +1479,13 @@ class DroneDeck(QMainWindow):
             self.link.set_roi(sysid, lat, lon, alt)
             self._on_info(f"ROI {lat:.5f}, {lon:.5f}")
         elif action == "sethome":
-            self.link.set_home(sysid, lat, lon, alt)
-            self._on_info(f"set home {lat:.5f}, {lon:.5f}")
+            # home altitude = ground elevation AMSL, not the vehicle's relative alt: use the
+            # authoritative HOME_POSITION elevation when known, else derive ground level from
+            # the vehicle's own AMSL minus its height above home.
+            ve = self.vehicle
+            alt_amsl = ve.home_alt if ve.have_home_position else (ve.alt_msl - ve.alt_rel)
+            self.link.set_home(sysid, lat, lon, alt_amsl)
+            self._on_info(f"set home {lat:.5f}, {lon:.5f} @ {alt_amsl:.0f} m AMSL")
 
     # -- mission planning -----------------------------------------------------
     def _toggle_plan(self, on):
@@ -2034,10 +2055,14 @@ class DroneDeck(QMainWindow):
             elif not c.get("incl", True) and d < c["radius"]:
                 breaches.append(f"entered exclusion circle ({d:.0f}<{c['radius']:.0f} m)")
         now = bool(breaches)
-        if now and not self._fence_breached:
-            self.console.add_note("GEOFENCE BREACH: " + "; ".join(breaches), "#e05050")
-            self._notify("GEOFENCE BREACH", "#e05050")
-        self._fence_breached = now
+        # edge flag keyed per sysid: with several vehicles checked each refresh, one shared flag
+        # would flip between them and either re-fire every tick or swallow a second breach.
+        was = self._fence_breached.get(ve.sysid, False)
+        if now and not was:
+            tag = f"vehicle #{ve.sysid}: " if len(self.vehicles) > 1 else ""
+            self.console.add_note("GEOFENCE BREACH: " + tag + "; ".join(breaches), "#e05050")
+            self._notify(f"GEOFENCE BREACH{' #' + str(ve.sysid) if tag else ''}", "#e05050")
+        self._fence_breached[ve.sysid] = now
 
     def _check_failsafe(self, ve):
         """Raise a one-shot console note + toast when a vehicle transitions INTO a
@@ -2057,8 +2082,11 @@ class DroneDeck(QMainWindow):
 
     def _refresh(self):
         ve = self.vehicle
-        self._check_failsafe(ve)
-        self._check_geofence(ve)
+        # failsafe + geofence watch EVERY tracked vehicle (state is keyed per-sysid) -- a
+        # non-selected vehicle entering CRITICAL or breaching the fence must still alert.
+        for v in (list(self.vehicles.values()) or [ve]):
+            self._check_failsafe(v)
+            self._check_geofence(v)
         self.adi.set_data(ve.roll, ve.pitch, ve.airspeed or ve.groundspeed,
                           ve.alt_rel, ve.heading, ve.climb)
         self.compass.set_heading(ve.heading)
@@ -2079,7 +2107,9 @@ class DroneDeck(QMainWindow):
 
         # other vehicles + ADSB traffic on the map (traffic expires after 10 s)
         now_t = time.monotonic()
-        self.traffic = {k: v for k, v in self.traffic.items() if now_t - v["t"] < 10.0}
+        # expire by the ONE documented TTL -- the old hardcoded 10 s here overrode TRAFFIC_TTL=60,
+        # blinking real ADSB targets (sporadic reception at range) off the map 6x too fast.
+        self.traffic = {k: v for k, v in self.traffic.items() if now_t - v["t"] < self.TRAFFIC_TTL}
         self.map.set_traffic([{"lat": v["lat"], "lon": v["lon"], "heading": v["heading"],
                                "callsign": v["callsign"]} for v in self.traffic.values()])
         self._refresh_traffic(ve)
