@@ -1005,8 +1005,15 @@ class DroneDeck(QMainWindow):
         link.messages.connect(self.shell.handle_messages)
         link.info.connect(self._on_info)
         link.state.connect(self._on_state)
+        link.command_unacked.connect(self._on_command_unacked)
         link.recorder = self._recorder        # keep recording across reconnects
         return link
+
+    def _on_command_unacked(self, command):
+        # a safety-critical command (arm/mode/land/rtl) was resent ACK_MAX_TRIES times with no
+        # COMMAND_ACK -- warn loudly; on a real RF link this means it may not have been received.
+        self._notify(f"No acknowledgement for command {int(command)} after retries -- "
+                     f"the link may be lossy; it may not have been received", "#e07030")
 
     def _shell_send(self, data):
         if self._has_vehicle():

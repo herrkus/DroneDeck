@@ -26,6 +26,13 @@ class Link(QObject):
     messages = Signal(list)        # list[core.Message]
     state = Signal(bool)           # open / closed
     info = Signal(str)             # human-readable status line
+    command_result = Signal(int, int)   # a tracked command was acknowledged: (command, result)
+    command_unacked = Signal(int)       # a tracked command got no ACK after all retries: (command)
+
+    # Confirmed-command delivery. Critical commands are resent until the vehicle returns a
+    # COMMAND_ACK, so a frame dropped on a lossy RF link doesn't silently fail (QGC/MAVSDK do this).
+    ACK_INTERVAL = 1.0             # seconds between resends of an unacknowledged command
+    ACK_MAX_TRIES = 4              # total transmissions before giving up (~3 s of retries)
 
     def __init__(self, gcs_sysid=255, gcs_compid=mavlink.MAV_COMP_ID_MISSIONPLANNER):
         super().__init__()
@@ -42,6 +49,10 @@ class Link(QObject):
         self.hb = QTimer(self)
         self.hb.setInterval(1000)
         self.hb.timeout.connect(self._send_heartbeat)
+        self._pending = {}         # confirmed commands awaiting ACK: command id -> {resend, tries, deadline}
+        self._ack_timer = QTimer(self)
+        self._ack_timer.setInterval(250)   # poll finer than ACK_INTERVAL so deadlines land promptly
+        self._ack_timer.timeout.connect(self._check_acks)
 
     # -- transport hooks (overridden) ----------------------------------------
     def open(self, **kw) -> bool:
@@ -96,6 +107,8 @@ class Link(QObject):
 
     def close(self):
         self.hb.stop()
+        self._ack_timer.stop()
+        self._pending.clear()
         self._teardown()
         self.remote = None
         self._open = False
@@ -114,6 +127,8 @@ class Link(QObject):
         self._note_framing(data)
         batch = self.parser.feed(data)
         if batch:
+            if self._pending:
+                self._match_acks(batch)
             self.messages.emit(batch)
 
     # -- tx -------------------------------------------------------------------
@@ -133,9 +148,53 @@ class Link(QObject):
         self._send(mavlink.frame(msgid, payload, self._next_seq(),
                                  self.gcs_sysid, self.gcs_compid, crc_fn=core.crc_extra))
 
-    def send_command_long(self, target_sys: int, command: int, params):
+    def _tx_command_long(self, target_sys, command, params):
         self._send(core.encode_command_long(self.gcs_sysid, self.gcs_compid, self._next_seq(),
                                             target_sys, 1, command, params))
+
+    def send_command_long(self, target_sys: int, command: int, params, confirm=False):
+        """Send a COMMAND_LONG. With confirm=True the command is resent until the vehicle ACKs it
+        (up to ACK_MAX_TRIES), so a dropped frame on a lossy link doesn't silently fail; on failure
+        command_unacked fires, on success command_result. Safe only for idempotent commands."""
+        self._tx_command_long(target_sys, command, params)
+        if confirm:
+            self._track(command, lambda: self._tx_command_long(target_sys, command, params))
+
+    def _track(self, command, resend):
+        # (re)register a just-sent command as awaiting ACK; a later send of the same command id
+        # supersedes the earlier one (e.g. disarm after arm).
+        self._pending[int(command)] = {"resend": resend, "tries": 1,
+                                       "deadline": time.monotonic() + self.ACK_INTERVAL}
+        if not self._ack_timer.isActive():
+            self._ack_timer.start()
+
+    def _match_acks(self, batch):
+        for m in batch:
+            if m.msgid == mavlink.COMMAND_ACK:
+                cmd = m.fields.get("command")
+                if cmd in self._pending:
+                    del self._pending[cmd]
+                    self.command_result.emit(int(cmd), int(m.fields.get("result", 0)))
+        if not self._pending:
+            self._ack_timer.stop()
+
+    def _check_acks(self, now=None):
+        """Resend commands still awaiting a COMMAND_ACK; give up (and signal) after ACK_MAX_TRIES."""
+        if now is None:
+            now = time.monotonic()
+        for command in list(self._pending):
+            p = self._pending[command]
+            if now < p["deadline"]:
+                continue
+            if p["tries"] >= self.ACK_MAX_TRIES:
+                del self._pending[command]
+                self.command_unacked.emit(int(command))
+            else:
+                p["resend"]()
+                p["tries"] += 1
+                p["deadline"] = now + self.ACK_INTERVAL
+        if not self._pending:
+            self._ack_timer.stop()
 
     def send_command_int(self, target_sys, command, params4, x, y, z, frame=6):
         # frame 6 = MAV_FRAME_GLOBAL_RELATIVE_ALT_INT; x/y are lat/lon * 1e7 (int, precise)
@@ -160,20 +219,23 @@ class Link(QObject):
 
     # -- commands -------------------------------------------------------------
     def arm(self, target_sys: int, arm: bool = True):
+        # confirm=True: arm/disarm is safety-critical -- resend until ACKed so a dropped frame
+        # doesn't leave the operator thinking it armed (or disarmed) when it didn't.
         self.send_command_long(target_sys, mavlink.MAV_CMD_COMPONENT_ARM_DISARM,
-                               [1.0 if arm else 0.0, 0, 0, 0, 0, 0, 0])
+                               [1.0 if arm else 0.0, 0, 0, 0, 0, 0, 0], confirm=True)
 
     def force_disarm(self, target_sys: int):
         # param2 = 21196 is the MAVLink force magic: disarm even with motors spinning
         # (emergency motor kill). A plain disarm (param2=0) is refused mid-flight -- PX4-verified.
         self.send_command_long(target_sys, mavlink.MAV_CMD_COMPONENT_ARM_DISARM,
-                               [0.0, 21196.0, 0, 0, 0, 0, 0])
+                               [0.0, 21196.0, 0, 0, 0, 0, 0], confirm=True)
 
     def set_mode(self, target_sys: int, custom_mode, sub_mode=0):
         # ArduPilot: custom_mode is the mode number (sub_mode 0). PX4: custom_mode is the
         # main mode and sub_mode the sub mode -- both ride in DO_SET_MODE param2/param3.
         self.send_command_long(target_sys, mavlink.MAV_CMD_DO_SET_MODE,
-                               [mavlink.MAV_MODE_FLAG_CUSTOM_MODE_ENABLED, custom_mode, sub_mode, 0, 0, 0, 0])
+                               [mavlink.MAV_MODE_FLAG_CUSTOM_MODE_ENABLED, custom_mode, sub_mode, 0, 0, 0, 0],
+                               confirm=True)
 
     def takeoff(self, target_sys: int, alt: float, lat: float = 0.0, lon: float = 0.0):
         # COMMAND_INT + GLOBAL_RELATIVE_ALT so `alt` is metres above the launch point.
@@ -183,10 +245,10 @@ class Link(QObject):
                               int(lat * 1e7), int(lon * 1e7), alt, frame=6)
 
     def land(self, target_sys: int):
-        self.send_command_long(target_sys, mavlink.MAV_CMD_NAV_LAND, [0, 0, 0, 0, 0, 0, 0])
+        self.send_command_long(target_sys, mavlink.MAV_CMD_NAV_LAND, [0, 0, 0, 0, 0, 0, 0], confirm=True)
 
     def rtl(self, target_sys: int):
-        self.send_command_long(target_sys, mavlink.MAV_CMD_NAV_RETURN_TO_LAUNCH, [0] * 7)
+        self.send_command_long(target_sys, mavlink.MAV_CMD_NAV_RETURN_TO_LAUNCH, [0] * 7, confirm=True)
 
     def pause(self, target_sys: int, cont: bool = False):
         self.send_command_long(target_sys, mavlink.MAV_CMD_DO_PAUSE_CONTINUE,
