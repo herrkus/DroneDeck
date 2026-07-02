@@ -47,7 +47,8 @@ class MissionItem:
     @property
     def cmd_name(self):
         return {16: "WAYPOINT", 22: "TAKEOFF", 21: "LAND", 20: "RTL",
-                17: "LOITER_UNLIM", 19: "LOITER_TIME", 82: "SPLINE_WP",
+                17: "LOITER_UNLIM", 19: "LOITER_TIME", 18: "LOITER_TURNS",
+                93: "DELAY", 82: "SPLINE_WP",
                 195: "ROI", 197: "ROI_NONE", 178: "CHANGE_SPEED",
                 177: "JUMP", 189: "LAND_START"}.get(self.command,
                                                                             f"CMD{self.command}")

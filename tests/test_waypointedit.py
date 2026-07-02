@@ -1,0 +1,76 @@
+#!/usr/bin/env python3
+"""test_waypointedit.py -- WaypointEditor per-command editing, focused on the Loiter(turns) + Delay
+mission items added for QGC parity (iter116). Verifies the per-command field enable/relabel logic
+and that apply_to writes the correct command / params / frame for each type. Builds the dialog but
+never exec()s it (modal exec blocks offscreen). No link, no arming."""
+import os
+import sys
+
+os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.join(ROOT, "app"))
+
+from PySide6.QtWidgets import QApplication
+import main as m
+from mission import MissionItem
+
+app = QApplication.instance() or QApplication([])
+fail = []
+
+
+def editor_for(cmd):
+    it = MissionItem(3, 47.0, 8.0, 50.0, command=cmd)
+    return it, m.WaypointEditor(it)
+
+
+def select(ed, cmd):
+    idx = ed.cmd.findData(cmd)
+    assert idx >= 0, f"command {cmd} missing from the palette"
+    ed.cmd.setCurrentIndex(idx)                 # fires currentIndexChanged -> _sync_fields
+
+
+# 1) Loiter (turns) 18: georeferenced; p1(turns)+p3(radius)+alt enabled; p1 relabelled ------------
+it, ed = editor_for(16)
+select(ed, 18)
+if ed._p1_label.text() != "Loiter turns":
+    fail.append(f"turns p1 label = {ed._p1_label.text()!r}")
+if not (ed.p1.isEnabled() and ed.p3.isEnabled() and ed.alt.isEnabled()):
+    fail.append("turns: alt/p1/p3 should be enabled")
+ed.alt.setValue(80); ed.p1.setValue(3); ed.p3.setValue(40)
+ed.apply_to(it)
+if not (it.command == 18 and it.param1 == 3 and it.param3 == 40 and it.alt == 80):
+    fail.append(f"turns apply: cmd={it.command} p1={it.param1} p3={it.param3} alt={it.alt}")
+if it.frame == 2:
+    fail.append("turns should be georeferenced (frame != 2)")
+
+# 2) Delay 93: no position; p1(delay) enabled + relabelled; alt/p3 disabled; frame = mission (2) ---
+it, ed = editor_for(16)
+select(ed, 93)
+if ed._p1_label.text() != "Delay (s)":
+    fail.append(f"delay p1 label = {ed._p1_label.text()!r}")
+if not ed.p1.isEnabled():
+    fail.append("delay: p1 should be enabled")
+if ed.alt.isEnabled() or ed.p3.isEnabled():
+    fail.append("delay: alt/p3 should be disabled (no position)")
+ed.p1.setValue(12)
+ed.apply_to(it)
+if not (it.command == 93 and it.param1 == 12 and it.frame == 2 and it.alt == 0.0):
+    fail.append(f"delay apply: cmd={it.command} p1={it.param1} frame={it.frame} alt={it.alt}")
+
+# 3) friendly names in the mission list (not CMD18 / CMD93) ----------------------------------------
+if MissionItem(0, 47, 8, 50, command=18).cmd_name != "LOITER_TURNS":
+    fail.append("cmd 18 name")
+if MissionItem(0, 47, 8, 50, command=93).cmd_name != "DELAY":
+    fail.append("cmd 93 name")
+
+# 4) no regression: a plain waypoint stays georeferenced with the chosen altitude ------------------
+it, ed = editor_for(16)
+select(ed, 16)
+ed.alt.setValue(60)
+ed.apply_to(it)
+if not (it.command == 16 and it.alt == 60 and it.frame != 2):
+    fail.append(f"waypoint regressed: cmd={it.command} alt={it.alt} frame={it.frame}")
+
+print("WAYPOINTEDIT FAILED: " + "; ".join(fail) if fail else
+      "WAYPOINTEDIT PASSED (Loiter-turns + Delay: fields/labels/params/frame correct, no regression)")
+sys.exit(1 if fail else 0)

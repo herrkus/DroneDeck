@@ -151,7 +151,8 @@ class WaypointEditor(QDialog):
     """Edit one mission item's command + altitude + the params that matter for it."""
 
     CMDS = [("Waypoint", 16), ("Spline waypoint", 82), ("Takeoff", 22), ("Loiter (time)", 19),
-            ("Loiter (unlim)", 17), ("Land", 21), ("Return to launch", 20),
+            ("Loiter (unlim)", 17), ("Loiter (turns)", 18), ("Delay", 93),
+            ("Land", 21), ("Return to launch", 20),
             ("ROI (point camera)", 195), ("Clear ROI", 197),
             ("Change speed", 178), ("Jump to WP", 177), ("Land start", 189)]
 
@@ -198,7 +199,8 @@ class WaypointEditor(QDialog):
         form.addRow("Command", self.cmd)
         form.addRow("Altitude", self.alt)
         form.addRow("Altitude mode", self.altmode)
-        form.addRow("Hold / loiter time (s)", self.p1)
+        self._p1_label = QLabel("Hold / loiter time (s)")   # relabelled per command (QGC-style)
+        form.addRow(self._p1_label, self.p1)
         form.addRow("Loiter radius (m)", self.p3)
         form.addRow("Yaw", self.p4)
         form.addRow("Speed", self.spd)
@@ -214,17 +216,23 @@ class WaypointEditor(QDialog):
     def _sync_fields(self):
         """Grey out the fields that don't apply to the chosen command (QGC-style)."""
         cmd = self.cmd.currentData()
-        has_pos = cmd not in (20, 178, 177, 197, 189)  # RTL/speed/jump/clear-ROI/land-start: no pos
-        is_loiter = cmd in (17, 19)
+        # RTL/speed/jump/clear-ROI/land-start/delay carry no position of their own
+        has_pos = cmd not in (20, 178, 177, 197, 189, 93)
+        is_loiter = cmd in (17, 19, 18)              # unlim / time / turns
+        is_delay = cmd == 93
         is_jump = cmd == 177
         self.alt.setEnabled(has_pos)
         self.altmode.setEnabled(has_pos)             # AMSL/relative only for georeferenced items
-        self.p1.setEnabled(is_loiter)
+        self.p1.setEnabled(is_loiter or is_delay)    # loiter time/turns, or delay seconds
         self.p3.setEnabled(is_loiter)
         self.p4.setEnabled(has_pos)
         self.spd.setEnabled(cmd == 178)
         self.jump_to.setEnabled(is_jump)
         self.jump_rep.setEnabled(is_jump)
+        # the multi-purpose p1 field means different things per command -- relabel it like QGC does
+        self._p1_label.setText("Loiter turns" if cmd == 18 else
+                               "Delay (s)" if is_delay else
+                               "Hold / loiter time (s)")
 
     def apply_to(self, item):
         cmd = self.cmd.currentData()
@@ -244,15 +252,19 @@ class WaypointEditor(QDialog):
         elif cmd in (197, 189):                       # DO_SET_ROI_NONE / DO_LAND_START markers
             item.param1 = item.param2 = item.param3 = item.param4 = 0.0
             item.alt = 0.0
+        elif cmd == 93:                               # NAV_DELAY: hold at the current point
+            item.param1 = self.p1.value()             # delay seconds (>=0; -1 would use hh/mm/ss)
+            item.param2 = item.param3 = item.param4 = 0.0
+            item.alt = 0.0
         else:
             item.alt = self.alt.value()
-            item.param1 = self.p1.value()
+            item.param1 = self.p1.value()             # loiter time (17/19) or turns (18)
             item.param3 = self.p3.value()
             item.param4 = self.p4.value()
-        # RTL / DO_CHANGE_SPEED / DO_JUMP / clear-ROI carry no position and must use the
-        # MISSION frame (2); PX4 rejects them with a global frame. Georeferenced items take
+        # RTL / DO_CHANGE_SPEED / DO_JUMP / clear-ROI / land-start / delay carry no position and must
+        # use the MISSION frame (2); PX4 rejects them with a global frame. Georeferenced items take
         # the chosen altitude mode: relative-to-home (6) or AMSL (5).
-        item.frame = 2 if cmd in (20, 178, 177, 197, 189) else self.altmode.currentData()
+        item.frame = 2 if cmd in (20, 178, 177, 197, 189, 93) else self.altmode.currentData()
 
 
 class DroneDeck(QMainWindow):
