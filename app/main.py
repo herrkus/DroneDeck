@@ -495,6 +495,10 @@ class DroneDeck(QMainWindow):
             lambda: self._gripper(mavlink.GRIPPER_ACTION_RELEASE))
         self._payload_menu.addAction("Grab payload").triggered.connect(
             lambda: self._gripper(mavlink.GRIPPER_ACTION_GRAB))
+        self._payload_menu.addSeparator()
+        self._payload_menu.addAction("Winch (lower / raise)...").triggered.connect(self._winch)
+        self._payload_menu.addAction("Winch relax").triggered.connect(
+            lambda: self._winch_relax())
         self.btn_payload.setMenu(self._payload_menu)
         self.btn_payload._needs = "conn"
         tb2.addWidget(self.btn_payload)
@@ -1537,6 +1541,22 @@ class DroneDeck(QMainWindow):
         self.link.gripper(self._sysid(), action)
         rel = action == mavlink.GRIPPER_ACTION_RELEASE
         self._on_info(f"payload: {'release' if rel else 'grab'} sent")
+
+    def _winch(self):
+        if not self._has_vehicle():
+            return
+        length, ok = QInputDialog.getDouble(self, "Winch",
+                                            "Cable length -- lower + / raise - (m):",
+                                            0.0, -100.0, 100.0, 1)
+        if ok and length != 0.0:
+            self.link.winch(self._sysid(), mavlink.WINCH_LENGTH_CONTROL, length=length, rate=1.0)
+            self._on_info(f"winch {length:+.1f} m")
+
+    def _winch_relax(self):
+        if not self._has_vehicle():
+            return
+        self.link.winch(self._sysid(), mavlink.WINCH_RELAXED)
+        self._on_info("winch relaxed (free spool)")
 
     def _on_map_click(self, lat, lon):
         if self.btn_ruler.isChecked():          # measure tool takes priority over goto/plan

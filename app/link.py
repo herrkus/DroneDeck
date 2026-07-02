@@ -210,6 +210,13 @@ class Link(QObject):
         self.send_command_long(target_sys, mavlink.MAV_CMD_DO_GRIPPER,
                                [float(instance), float(action), 0, 0, 0, 0, 0])
 
+    def winch(self, target_sys: int, action: int, length: float = 0.0, rate: float = 1.0,
+              instance: int = 1):
+        """DO_WINCH: pay out / reel in a payload winch. action 1 = length control (length metres,
+        + lowers), rate m/s; action 0 = relax (free spool)."""
+        self.send_command_long(target_sys, mavlink.MAV_CMD_DO_WINCH,
+                               [float(instance), float(action), float(length), float(rate), 0, 0, 0])
+
     def change_heading(self, target_sys: int, lat: float, lon: float, alt: float, heading_deg: float):
         # DO_REPOSITION holding the current position + altitude, param4 = yaw heading (deg) -> point
         # the nose to `heading_deg`. Same primitive as change_altitude (which passes yaw = NaN to keep
