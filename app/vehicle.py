@@ -161,6 +161,13 @@ class Vehicle(QObject):
             self.updated.emit()
 
     def _on_heartbeat(self, f):
+        # Only the flight controller's heartbeat carries vehicle state. Real drones commonly have
+        # more components beating on the SAME sysid (gimbal, companion computer, camera -- all with
+        # autopilot=MAV_AUTOPILOT_INVALID and base_mode=0); without this filter their heartbeats
+        # flip armed/mode/type back and forth every second, and a dead FC would still look "alive"
+        # because the gimbal keeps beating.
+        if int(f.get("autopilot", 0)) == mavlink.MAV_AUTOPILOT_INVALID:
+            return
         self.base_mode = int(f.get("base_mode", 0))
         self.custom_mode = int(f.get("custom_mode", 0))
         self.mav_type = int(f.get("type", 0))

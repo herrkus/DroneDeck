@@ -1050,6 +1050,13 @@ class DroneDeck(QMainWindow):
             bysys.setdefault(m.sysid, []).append(m)
         for sysid, msgs in bysys.items():
             is_new = sysid not in self.vehicles
+            # A neighbouring GCS / lone peripheral is not a vehicle: don't create one for a sysid
+            # whose only traffic is autopilot-INVALID heartbeats (QGC applies the same rule). A real
+            # vehicle still gets created from its first telemetry even if its heartbeat is late.
+            if is_new and all(m.msgid == mavlink.HEARTBEAT and
+                              int(m.fields.get("autopilot", 0)) == mavlink.MAV_AUTOPILOT_INVALID
+                              for m in msgs):
+                continue
             veh = self._ensure_vehicle(sysid)
             veh.consume(msgs)
             if self.link is not None:
