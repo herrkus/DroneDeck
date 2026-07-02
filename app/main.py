@@ -461,14 +461,15 @@ class DroneDeck(QMainWindow):
         # _needs: "armed" buttons only make sense while the vehicle is armed/flying;
         # the rest just need a live connection (Takeoff arms-if-needed itself).
         needs = {"Land": "armed", "RTL": "armed", "Pause": "armed",
-                 "Alt": "armed", "Speed": "armed"}
+                 "Alt": "armed", "Speed": "armed", "Head": "armed"}
         for label, slot, tip in (
                 ("Takeoff", self._takeoff, "Arm if needed and climb to a set altitude  (Ctrl+T)"),
                 ("Land", self._land, "Land at the current position  (Ctrl+L)"),
                 ("RTL", self._rtl, "Return to launch and land  (Ctrl+R)"),
                 ("Pause", self._pause, "Hold / loiter in place  (Ctrl+Space)"),
                 ("Alt", self._change_alt, "Fly to a new altitude at the current position"),
-                ("Speed", self._change_speed, "Set the cruise / ground speed (m/s)")):
+                ("Speed", self._change_speed, "Set the cruise / ground speed (m/s)"),
+                ("Head", self._change_heading, "Point the nose to a compass heading (deg)")):
             b = QPushButton(label)
             b.clicked.connect(slot)
             b.setToolTip(tip)
@@ -1498,6 +1499,18 @@ class DroneDeck(QMainWindow):
         if ok:
             self.link.change_speed(self._sysid(), spd)
             self._on_info(f"change speed to {spd:.1f} m/s")
+
+    def _change_heading(self):
+        if not self._has_vehicle():
+            return
+        cur = round(self.vehicle.heading) % 360
+        hdg, ok = QInputDialog.getInt(self, "Change Heading",
+                                      "Point the nose to (deg, 0=N 90=E):", int(cur), 0, 359, 1)
+        if ok:
+            # hold current position + altitude, only rotate to the new heading (DO_REPOSITION yaw)
+            self.link.change_heading(self._sysid(), self.vehicle.lat, self.vehicle.lon,
+                                     self.vehicle.alt_rel, float(hdg))
+            self._on_info(f"change heading to {hdg}deg")
 
     def _vtol_transition(self, state):
         if not self._has_vehicle():

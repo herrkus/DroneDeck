@@ -205,6 +205,14 @@ class Link(QObject):
         self.send_command_long(target_sys, mavlink.MAV_CMD_DO_CHANGE_SPEED,
                                [float(speed_type), float(speed), -1.0, 0, 0, 0, 0])
 
+    def change_heading(self, target_sys: int, lat: float, lon: float, alt: float, heading_deg: float):
+        # DO_REPOSITION holding the current position + altitude, param4 = yaw heading (deg) -> point
+        # the nose to `heading_deg`. Same primitive as change_altitude (which passes yaw = NaN to keep
+        # heading); param2 = 1 (CHANGE_MODE) switches PX4 into guided reposition.
+        self.send_command_int(target_sys, mavlink.MAV_CMD_DO_REPOSITION,
+                              [-1.0, 1.0, 0.0, float(heading_deg) % 360.0],
+                              int(lat * 1e7), int(lon * 1e7), alt, frame=6)
+
     def vtol_transition(self, target_sys: int, state: int):
         # DO_VTOL_TRANSITION: param1 = MAV_VTOL_STATE (3 = multicopter, 4 = fixed-wing).
         # param2 = 0 -> normal (non-immediate) transition.
