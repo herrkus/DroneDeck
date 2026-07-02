@@ -63,6 +63,7 @@ check "missionrobust"       ""                        tests/test_missionrobust.p
 check "scalemission"        ""                        tests/test_scalemission.py
 check "paramset"            ""                        tests/test_paramset.py
 check "reboot"              ""                        tests/test_reboot.py
+check "parachute"           ""                        tests/test_parachute.py
 check "linklifecycle"       ""                        tests/test_linklifecycle.py
 check "sysidfilter"         ""                        tests/test_sysidfilter.py
 check "spline"              ""                        tests/test_spline.py

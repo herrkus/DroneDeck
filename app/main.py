@@ -862,6 +862,10 @@ class DroneDeck(QMainWindow):
         act_vinfo = tools.addAction("Vehicle Info...")
         act_vinfo.triggered.connect(self._show_vehicle_info)
         tools.addAction("Export Track (GPX)...").triggered.connect(self._export_track)
+        tools.addSeparator()
+        act_chute = tools.addAction("Deploy Parachute (emergency)")
+        act_chute.setToolTip("Emergency: deploy the parachute now (irreversible)")
+        act_chute.triggered.connect(self._deploy_parachute)
         self._help_menu = helpm = self.menuBar().addMenu("&Help")
         helpm.addAction("Quick Help").triggered.connect(self._show_help)
         helpm.addAction("About DroneDeck...").triggered.connect(self._show_about)
@@ -1569,6 +1573,19 @@ class DroneDeck(QMainWindow):
         self.link.gripper(self._sysid(), action)
         rel = action == mavlink.GRIPPER_ACTION_RELEASE
         self._on_info(f"payload: {'release' if rel else 'grab'} sent")
+
+    def _deploy_parachute(self):
+        if not self._has_vehicle():
+            QMessageBox.information(self, "Parachute", "No vehicle connected.")
+            return
+        box = QMessageBox(QMessageBox.Warning, "Deploy parachute",
+                          "Deploy the parachute NOW?\n\nThis is an emergency action -- it ends the "
+                          "flight and cannot be undone.",
+                          QMessageBox.Yes | QMessageBox.Cancel, self)
+        box.setDefaultButton(QMessageBox.Cancel)      # never the destructive option by default
+        if box.exec() == QMessageBox.Yes:
+            self.link.deploy_parachute(self._sysid())
+            self._on_info("PARACHUTE DEPLOY sent")
 
     def _winch(self):
         if not self._has_vehicle():

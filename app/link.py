@@ -211,6 +211,12 @@ class Link(QObject):
         self.send_command_long(target_sys, mavlink.MAV_CMD_PREFLIGHT_REBOOT_SHUTDOWN,
                                [1, 0, 0, 0, 0, 0, 0])
 
+    def deploy_parachute(self, target_sys: int):
+        """DO_PARACHUTE with action RELEASE (2): deploy the parachute NOW -- emergency recovery.
+        Irreversible in flight; callers must confirm first."""
+        self.send_command_long(target_sys, mavlink.MAV_CMD_DO_PARACHUTE,
+                               [mavlink.PARACHUTE_RELEASE, 0, 0, 0, 0, 0, 0])
+
     def gripper(self, target_sys: int, action: int, instance: int = 1):
         """DO_GRIPPER: release (0) or grab (1) a payload gripper -- delivery-drone payload drop."""
         self.send_command_long(target_sys, mavlink.MAV_CMD_DO_GRIPPER,

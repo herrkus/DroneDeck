@@ -310,6 +310,8 @@ GRIPPER_ACTION_GRAB = 1                  # close / hold the payload
 MAV_CMD_DO_WINCH = 42600                 # p1 instance, p2 action, p3 length(m), p4 rate(m/s)
 WINCH_RELAXED = 0                        # spool freely
 WINCH_LENGTH_CONTROL = 1                 # deliver a set length of cable (p3 = delta m, + down)
+MAV_CMD_DO_PARACHUTE = 208               # param1 = PARACHUTE_ACTION
+PARACHUTE_RELEASE = 2                    # deploy the chute NOW (0 disable, 1 enable auto)
 MAV_CMD_SET_MESSAGE_INTERVAL = 511      # param1=msgid, param2=interval us (-1 off, 0 default)
 MAV_CMD_REQUEST_MESSAGE = 512           # param1=msgid -- one-shot request (e.g. AUTOPILOT_VERSION)
 
