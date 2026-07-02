@@ -274,6 +274,11 @@ MAV_CMD_DO_SET_ROI_NONE = 197           # cancel any active region-of-interest
 MAV_CMD_DO_LAND_START = 189             # marks where the landing sequence begins
 MAV_CMD_DO_REPOSITION = 192
 MAV_CMD_DO_CHANGE_SPEED = 178           # param1=type (0 air / 1 ground), param2=speed m/s
+MAV_CMD_DO_MOTOR_TEST = 209             # p1=motor(1-based) p2=throttle-type p3=throttle
+#                                         p4=timeout s  p5=motor count (0=one)  p6=test order
+MOTOR_TEST_THROTTLE_PERCENT = 0         # param2: interpret param3 as 0..100 percent
+MOTOR_TEST_ORDER_DEFAULT = 0            # param6
+MOTOR_TEST_ORDER_SEQUENCE = 1
 MAV_CMD_DO_PAUSE_CONTINUE = 193
 MAV_CMD_DO_VTOL_TRANSITION = 3000       # param1 = MAV_VTOL_STATE (3 = MC, 4 = FW)
 MAV_VTOL_STATE_MC = 3                    # multicopter / hover

@@ -253,6 +253,18 @@ class Link(QObject):
                else mavlink.MAV_CMD_VIDEO_STOP_CAPTURE)
         self.send_command_long(target_sys, cmd, [0, 0, 0, 0, 0, 0, 0])
 
+    # -- motor test (Vehicle Setup > Motors) ----------------------------------
+    def motor_test(self, target_sys, motor, throttle_pct, duration_s, count=0):
+        """Spin motor(s) at a throttle % to verify motor order/direction (props OFF).
+        motor = 1-based motor number; count = 0 tests just that motor, count > 0 tests `count`
+        motors in sequence starting from `motor`. Throttle is always sent as a percent (0..100)."""
+        order = (mavlink.MOTOR_TEST_ORDER_SEQUENCE if count > 0
+                 else mavlink.MOTOR_TEST_ORDER_DEFAULT)
+        self.send_command_long(target_sys, mavlink.MAV_CMD_DO_MOTOR_TEST,
+                               [float(int(motor)), float(mavlink.MOTOR_TEST_THROTTLE_PERCENT),
+                                float(throttle_pct), float(duration_s), float(int(count)),
+                                float(order), 0.0])
+
     def set_gimbal(self, target_sys, pitch_deg, yaw_deg):
         # DO_MOUNT_CONTROL: param1=pitch, param2=roll, param3=yaw, param7=mode
         self.send_command_long(target_sys, mavlink.MAV_CMD_DO_MOUNT_CONTROL,

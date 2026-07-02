@@ -1035,7 +1035,16 @@ class DroneDeck(QMainWindow):
         dlg = CalibrationDialog(lambda: self.link, self.params, self)
         dlg.radio.saveRequested.connect(self._cal_write_params)
         dlg.sensor.calRequested.connect(self._cal_sensor)
+        dlg.motors.motorTestRequested.connect(self._motor_test)
         dlg.exec()
+
+    def _motor_test(self, motor, throttle_pct, duration_s, count):
+        if not self._has_vehicle():
+            QMessageBox.information(self, "No vehicle", "Connect to a vehicle first.")
+            return
+        self.link.motor_test(self._sysid(), motor, throttle_pct, duration_s, count)
+        what = f"all {count} motors in sequence" if count else f"motor {motor}"
+        self._on_info(f"motor test: {what} at {throttle_pct:.0f}% for {duration_s:.0f}s")
 
     def _cal_write_params(self, params):
         if not self._has_vehicle():

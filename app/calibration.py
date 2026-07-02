@@ -14,7 +14,7 @@ from PySide6.QtCore import Qt, Signal, QRectF
 from PySide6.QtGui import QPainter, QColor, QPen, QFont
 from PySide6.QtWidgets import (QDialog, QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
                                QLabel, QTabWidget, QListWidget, QListWidgetItem,
-                               QLineEdit, QFormLayout)
+                               QLineEdit, QFormLayout, QCheckBox, QSpinBox, QGridLayout)
 
 import mavlink
 
@@ -394,6 +394,90 @@ class AirframeWidget(ParamPage):
     ]
 
 
+class MotorTestWidget(QWidget):
+    """Vehicle Setup > Motors (QGroundControl-style): spin one motor, or all motors in sequence, at
+    a low throttle for a few seconds to verify motor order and rotation direction before flight.
+    Every spin button is disabled until the operator confirms the propellers are removed -- a spun
+    prop is a serious hazard, so this widget refuses to command a motor without that acknowledgement.
+    Emits motorTestRequested(motor, throttle_pct, duration_s, count); count=0 tests one motor."""
+    motorTestRequested = Signal(int, float, float, int)   # motor(1-based), throttle%, seconds, count
+
+    MAX_THROTTLE = 50            # cap the UI throttle: bench-testing motor order needs only a nudge
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        v = QVBoxLayout(self)
+        self.safety = QCheckBox("Propellers are REMOVED — safe to spin motors")
+        self.safety.setStyleSheet("color:#e0a030; font-weight:bold;")
+        self.safety.toggled.connect(self._on_safety)
+        v.addWidget(self.safety)
+
+        form = QHBoxLayout()
+        form.addWidget(QLabel("Motors:"))
+        self.count = QSpinBox(); self.count.setRange(1, 12); self.count.setValue(4)
+        self.count.valueChanged.connect(self._rebuild_buttons)
+        form.addWidget(self.count)
+        form.addWidget(QLabel("Throttle %:"))
+        self.throttle = QSpinBox(); self.throttle.setRange(1, self.MAX_THROTTLE); self.throttle.setValue(8)
+        form.addWidget(self.throttle)
+        form.addWidget(QLabel("Seconds:"))
+        self.duration = QSpinBox(); self.duration.setRange(1, 10); self.duration.setValue(2)
+        form.addWidget(self.duration)
+        form.addStretch(1)
+        v.addLayout(form)
+
+        self._grid = QGridLayout()
+        self._motor_btns = []
+        v.addLayout(self._grid)
+
+        self.btn_all = QPushButton("Test ALL in sequence")
+        self.btn_all.clicked.connect(self._test_all)
+        v.addWidget(self.btn_all)
+
+        self.hint = QLabel("Remove propellers, tick the box, then test each motor. Motor 1 should be "
+                           "the one your autopilot calls motor 1 (check your airframe diagram).")
+        self.hint.setWordWrap(True)
+        self.hint.setStyleSheet("color:#8fa3bf;")
+        v.addWidget(self.hint)
+        v.addStretch(1)
+
+        self._rebuild_buttons()
+        self._on_safety(False)
+
+    def _rebuild_buttons(self):
+        for b in self._motor_btns:
+            b.setParent(None)
+        self._motor_btns = []
+        for i in range(self.count.value()):
+            b = QPushButton(f"Motor {i + 1}")
+            b.clicked.connect(lambda _=False, n=i + 1: self._test_one(n))
+            self._grid.addWidget(b, i // 4, i % 4)
+            self._motor_btns.append(b)
+        self._on_safety(self.safety.isChecked())
+
+    def _on_safety(self, ok):
+        for b in self._motor_btns:
+            b.setEnabled(ok)
+        self.btn_all.setEnabled(ok)
+
+    def _test_one(self, motor):
+        if not self.safety.isChecked():
+            return
+        self.motorTestRequested.emit(motor, float(self.throttle.value()),
+                                     float(self.duration.value()), 0)
+        self.hint.setText(f"Spinning motor {motor} at {self.throttle.value()}% for "
+                          f"{self.duration.value()}s. Confirm it spins in the expected direction.")
+
+    def _test_all(self):
+        if not self.safety.isChecked():
+            return
+        n = self.count.value()
+        self.motorTestRequested.emit(1, float(self.throttle.value()),
+                                     float(self.duration.value()), n)
+        self.hint.setText(f"Spinning all {n} motors in sequence at {self.throttle.value()}% -- watch "
+                          f"the order matches your airframe's numbering.")
+
+
 class CalibrationDialog(QDialog):
     """Setup view: Radio + Sensors tabs, fed live from the link while open."""
 
@@ -404,9 +488,11 @@ class CalibrationDialog(QDialog):
         self._link = link_getter
         self.radio = RcCalibrationWidget()
         self.sensor = SensorCalibrationWidget()
+        self.motors = MotorTestWidget()
         tabs = QTabWidget()
         tabs.addTab(self.radio, "Radio")
         tabs.addTab(self.sensor, "Sensors")
+        tabs.addTab(self.motors, "Motors")
         if param_mgr is not None and hasattr(param_mgr, "updated"):
             self.safety = SafetyWidget(param_mgr)
             tabs.addTab(self.safety, "Safety")
