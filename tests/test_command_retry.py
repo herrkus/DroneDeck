@@ -134,9 +134,25 @@ else:
         fail.append(f"confirmed takeoff should resend (sent {before}->{len(lk4.sent)}, "
                     f"tries={lk4._pending.get(TKO, {}).get('tries')})")
 
+# 8) a command_unacked handler that reacts by mutating _pending (e.g. disconnects on link loss)
+#    must not crash the retry loop mid-iteration ----------------------------------------------------
+lk5 = CaptureLink()
+lk5.command_unacked.connect(lambda cmd: lk5.close())   # realistic reaction: drop the link -> clears _pending
+lk5.send_command_long(1, ARM, [1, 0, 0, 0, 0, 0, 0], confirm=True)
+lk5.send_command_long(1, MODE, [1, 4, 3, 0, 0, 0, 0], confirm=True)
+for p in lk5._pending.values():
+    p["tries"] = lk5.ACK_MAX_TRIES                      # force both to give up in one pass
+deadline = max(p["deadline"] for p in lk5._pending.values()) + 1
+try:
+    lk5._check_acks(deadline)                           # ARM's handler clears _pending; MODE must not KeyError
+    if lk5._pending:
+        fail.append("close() in the handler should have cleared _pending")
+except Exception as e:
+    fail.append(f"reactive command_unacked handler crashed the retry loop: {e!r}")
+
 print("COMMAND_RETRY FAILED: " + "; ".join(fail) if fail else
       "COMMAND_RETRY PASSED (no-track for fire-and-forget; retry schedule + give-up after "
       "ACK_MAX_TRIES + command_unacked; ACK via _match_acks and real frame via _ingest resolves + "
       "stops resends; unrelated ACK ignored; arm/set_mode/land/rtl opt in; COMMAND_INT takeoff "
-      "confirmed + retries)")
+      "confirmed + retries; reactive unacked-handler is crash-safe)")
 sys.exit(1 if fail else 0)

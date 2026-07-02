@@ -183,7 +183,9 @@ class Link(QObject):
         if now is None:
             now = time.monotonic()
         for command in list(self._pending):
-            p = self._pending[command]
+            p = self._pending.get(command)      # a signal handler below may have mutated _pending
+            if p is None:
+                continue
             if now < p["deadline"]:
                 continue
             if p["tries"] >= self.ACK_MAX_TRIES:
