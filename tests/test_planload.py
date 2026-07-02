@@ -102,4 +102,25 @@ assert len(back) == 2 and abs(back[0].lat - 47.1) < 1e-6 and back[0].command == 
 assert len(inc) == 2 and len(circ) == 1 and abs(circ[0]["radius"] - 100.0) < 1e-6
 assert all(math.isfinite(x) for it in back for x in (it.lat, it.lon, it.alt))
 
-print("PLANLOAD PASSED (NaN/Inf coords sanitised, malformed files raise cleanly, round-trip intact)")
+# -- audit batch 9: QGC survey nesting + fence polygon selection ------------------------------------
+# QGC nests survey/corridor transects under TransectStyleComplexItem.Items -- must not be dropped.
+survey = {"mission": {"items": [
+    {"type": "SimpleItem", "command": 22, "frame": 3, "params": [0, 0, 0, 0, 47.40, 8.54, 30]},
+    {"type": "ComplexItem", "complexItemType": "survey", "TransectStyleComplexItem": {"Items": [
+        {"type": "SimpleItem", "command": 16, "frame": 3, "params": [0, 0, 0, 0, 47.41, 8.55, 50]},
+        {"type": "SimpleItem", "command": 16, "frame": 3, "params": [0, 0, 0, 0, 47.42, 8.56, 50]},
+    ]}},
+]}}
+exp = planfile.plan_to_mission(survey)
+assert len(exp) == 3, f"QGC survey transects dropped: got {len(exp)} items"
+assert abs(exp[1].lat - 47.41) < 1e-6 and abs(exp[2].lat - 47.42) < 1e-6
+# two inclusion polygons -> keep the FIRST (primary), not the last
+twofence = {"geoFence": {"polygons": [
+    {"inclusion": True, "polygon": [[47.0, 8.0], [47.1, 8.0], [47.1, 8.1]]},
+    {"inclusion": True, "polygon": [[40.0, -3.0], [40.1, -3.0], [40.1, -3.1]]},
+]}}
+inc2, _e, _c = planfile.plan_to_fence(twofence)
+assert abs(inc2[0][0] - 47.0) < 1e-6, "fence kept the wrong (last) inclusion polygon"
+
+print("PLANLOAD PASSED (NaN/Inf coords sanitised, malformed files raise cleanly, round-trip intact; "
+      "QGC survey transects expanded; fence keeps the primary polygon)")

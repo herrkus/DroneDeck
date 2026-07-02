@@ -427,10 +427,11 @@ def main():
                                     send(mavlink.STATUSTEXT,
                                          mavlink.enc_statustext(6, "Manual control (ALT_HOLD)"))
                             elif m.msgid == mavlink.LOG_REQUEST_LIST:
-                                last = SIM_LOGS[-1][0]
+                                last_log = SIM_LOGS[-1][0]   # NOT `last` -- that is the physics-dt
+                                #   timer in the main loop; rebinding it teleported the vehicle
                                 for lid, sz, utc in SIM_LOGS:
                                     send(mavlink.LOG_ENTRY,
-                                         mavlink.enc_log_entry(lid, len(SIM_LOGS), last, sz, utc))
+                                         mavlink.enc_log_entry(lid, len(SIM_LOGS), last_log, sz, utc))
                             elif m.msgid == mavlink.LOG_REQUEST_DATA:
                                 lid = int(m.fields.get("id", 0))
                                 match = [s for s in SIM_LOGS if s[0] == lid]
@@ -460,9 +461,11 @@ def main():
                                     send(mavlink.MISSION_REQUEST_INT,
                                          mavlink.enc_mission_request_int(0, mission_type=up_mtype))
                             elif m.msgid == mavlink.MISSION_ITEM_INT:
-                                seq = int(m.fields.get("seq", -1))
-                                if up_expected and seq == up_next:
-                                    up_items.append({"seq": seq,
+                                wseq = int(m.fields.get("seq", -1))   # NOT `seq` -- that is the tx
+                                #   sequence counter used by send(); rebinding it corrupted our
+                                #   outgoing seq and made the GCS report phantom packet loss
+                                if up_expected and wseq == up_next:
+                                    up_items.append({"seq": wseq,
                                                      "lat": m.fields["x"] / 1e7,
                                                      "lon": m.fields["y"] / 1e7,
                                                      "alt": float(m.fields["z"]),
@@ -492,16 +495,16 @@ def main():
                                      mavlink.enc_mission_count(len(missions.get(mt, [])), mission_type=mt))
                             elif m.msgid == mavlink.MISSION_REQUEST_INT:
                                 mt = int(m.fields.get("mission_type", 0))
-                                seq = int(m.fields.get("seq", 0))
+                                rseq = int(m.fields.get("seq", 0))    # NOT `seq` (tx counter)
                                 lst = missions.get(mt, [])
-                                if 0 <= seq < len(lst):
-                                    it = lst[seq]
+                                if 0 <= rseq < len(lst):
+                                    it = lst[rseq]
                                     send(mavlink.MISSION_ITEM_INT, mavlink.enc_mission_item_int(
                                         it["seq"], it["lat"], it["lon"], it["alt"],
                                         command=it["command"], frame=it.get("frame", 6),
                                         param1=it.get("p1", 0.0), param2=it.get("p2", 0.0),
                                         param3=it.get("p3", 0.0), param4=it.get("p4", 0.0),
-                                        current=1 if seq == 0 else 0, mission_type=mt))
+                                        current=1 if rseq == 0 else 0, mission_type=mt))
                             elif m.msgid == mavlink.MISSION_CLEAR_ALL:
                                 mt = int(m.fields.get("mission_type", 0))
                                 missions[mt] = []

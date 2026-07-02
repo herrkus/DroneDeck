@@ -2380,9 +2380,14 @@ class DroneDeck(QMainWindow):
         raw = s.value("links/configs")
         if raw:
             try:
-                self.link_configs = json.loads(raw)
+                loaded = json.loads(raw)
             except (ValueError, TypeError):
-                self.link_configs = []
+                loaded = []
+            # keep only well-formed entries: the Links dialog does dict(c) + c['name'] and would
+            # otherwise raise on every launch on a corrupt-but-valid-JSON value (e.g. "[1,2]").
+            self.link_configs = [c for c in loaded
+                                 if isinstance(c, dict) and {"name", "transport", "target"} <= c.keys()] \
+                if isinstance(loaded, list) else []
         hidden = s.value("telem/hidden")
         if hidden:
             try:

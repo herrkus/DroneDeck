@@ -43,10 +43,13 @@ def plan_to_fence(data):
     inc, exc, circles = [], [], []
     for poly in gf.get("polygons", []):
         pts = [(_f(p[0]), _f(p[1])) for p in poly.get("polygon", [])]
+        # DroneDeck models one inclusion + one exclusion polygon, so keep the FIRST of each rather
+        # than letting a later polygon silently overwrite it (the old `inc = pts` kept the LAST,
+        # dropping the primary fence). Extra polygons of the same kind aren't representable here.
         if poly.get("inclusion", True):
-            inc = pts
+            inc = inc or pts
         else:
-            exc = pts
+            exc = exc or pts
     for c in gf.get("circles", []):
         cir = c.get("circle", {})
         ctr = (list(cir.get("center", [])) + [0.0, 0.0])[:2]
@@ -101,7 +104,13 @@ def plan_to_mission(data):
     out = []
     seq = 0
     for it in mission.get("items", []):
-        simples = [it] if it.get("type") == "SimpleItem" else it.get("Items", [])
+        if it.get("type") == "SimpleItem":
+            simples = [it]
+        else:
+            # ComplexItem transects: QGC nests Survey/CorridorScan/StructureScan child SimpleItems
+            # under "TransectStyleComplexItem"->"Items"; older/other complex items use a top-level
+            # "Items". Check both, else a QGC survey loads with ALL its transects silently dropped.
+            simples = it.get("TransectStyleComplexItem", {}).get("Items") or it.get("Items", [])
         for s in simples:
             if s.get("type") != "SimpleItem":
                 continue
