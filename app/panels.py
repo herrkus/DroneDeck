@@ -298,6 +298,8 @@ class CameraPanel(QWidget):
     videoToggled = Signal(bool)
     triggerDistance = Signal(float)
     gimbalChanged = Signal(float, float)        # pitch, yaw degrees
+    cameraMode = Signal(int)                    # 0 = photo/image, 1 = video
+    cameraZoom = Signal(float)                  # +1 zoom in / -1 zoom out (one step)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -342,12 +344,31 @@ class CameraPanel(QWidget):
         btn_center = QPushButton("Center gimbal")
         btn_center.clicked.connect(self._center)
         g.addWidget(btn_center, 4, 0, 1, 2)
-        g.setRowStretch(5, 1)
+
+        # camera mode (photo/video) + zoom -- SET_CAMERA_MODE / SET_CAMERA_ZOOM
+        self.btn_mode = QPushButton("Mode: Photo")
+        self.btn_mode.setCheckable(True)
+        self.btn_mode.toggled.connect(self._on_mode)
+        g.addWidget(self.btn_mode, 5, 0, 1, 2)
+        zrow = QHBoxLayout()
+        zrow.addWidget(QLabel("Zoom"))
+        btn_zoom_out = QPushButton("−")
+        btn_zoom_out.clicked.connect(lambda: self.cameraZoom.emit(-1.0))
+        btn_zoom_in = QPushButton("+")
+        btn_zoom_in.clicked.connect(lambda: self.cameraZoom.emit(1.0))
+        zrow.addWidget(btn_zoom_out)
+        zrow.addWidget(btn_zoom_in)
+        g.addLayout(zrow, 6, 0, 1, 2)
+        g.setRowStretch(7, 1)
 
     def _on_video(self, on):
         self.btn_video.setText("Video ■" if on else "Video ●")
         self.btn_video.setStyleSheet("color:#e05050;" if on else "")
         self.videoToggled.emit(on)
+
+    def _on_mode(self, video):
+        self.btn_mode.setText("Mode: Video" if video else "Mode: Photo")
+        self.cameraMode.emit(1 if video else 0)
 
     def _on_gimbal_label(self):
         self.lbl_pitch.setText(f"pitch {self.pitch.value():4d}°")

@@ -297,6 +297,11 @@ MAV_CMD_DO_DIGICAM_CONTROL = 203        # param5=1 -> trigger one shot
 MAV_CMD_IMAGE_START_CAPTURE = 2000      # param3=count (1 = single)
 MAV_CMD_VIDEO_START_CAPTURE = 2500
 MAV_CMD_VIDEO_STOP_CAPTURE = 2501
+MAV_CMD_SET_CAMERA_MODE = 530           # param2 = CAMERA_MODE (0 image, 1 video, 2 image survey)
+MAV_CMD_SET_CAMERA_ZOOM = 531           # param1 = zoom type, param2 = value
+CAMERA_MODE_IMAGE = 0
+CAMERA_MODE_VIDEO = 1
+ZOOM_TYPE_STEP = 0                       # param2 = +1 zoom in / -1 zoom out (one step)
 MAV_CMD_SET_MESSAGE_INTERVAL = 511      # param1=msgid, param2=interval us (-1 off, 0 default)
 MAV_CMD_REQUEST_MESSAGE = 512           # param1=msgid -- one-shot request (e.g. AUTOPILOT_VERSION)
 

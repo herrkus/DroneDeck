@@ -694,6 +694,8 @@ class DroneDeck(QMainWindow):
         self.camera.videoToggled.connect(self._cam_video)
         self.camera.triggerDistance.connect(self._cam_trigdist)
         self.camera.gimbalChanged.connect(self._cam_gimbal)
+        self.camera.cameraMode.connect(self._cam_mode)
+        self.camera.cameraZoom.connect(self._cam_zoom)
 
         # onboard log download, tabbed at the bottom
         self.log_panel = LogPanel()
@@ -1286,6 +1288,16 @@ class DroneDeck(QMainWindow):
         if self._has_vehicle():
             self.link.video_capture(self._sysid(), on)
             self._on_info(f"camera: video {'start' if on else 'stop'} sent")
+
+    def _cam_mode(self, mode):
+        if self._has_vehicle():
+            self.link.set_camera_mode(self._sysid(), mode)
+            self._on_info(f"camera: {'video' if mode else 'photo'} mode sent")
+
+    def _cam_zoom(self, step):
+        if self._has_vehicle():
+            self.link.camera_zoom(self._sysid(), step)
+            self._on_info(f"camera: zoom {'in' if step > 0 else 'out'} sent")
 
     def _cam_trigdist(self, metres):
         if self._has_vehicle():

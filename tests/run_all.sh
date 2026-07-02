@@ -127,6 +127,7 @@ check "adsb"                ""                        tests/test_adsb.py
 check "multivehicle"        ""                        tests/test_multivehicle.py
 check "rc_calibration"      ""                        tests/test_rc_calibration.py
 check "motortest"           ""                        tests/test_motortest.py
+check "cameractl"           ""                        tests/test_cameractl.py
 check "logrobust"           ""                        tests/test_logrobust.py
 check "sensor_calibration"  ""                        tests/test_sensor_calibration.py
 check "cellbars"            ""                        tests/test_cellbars.py

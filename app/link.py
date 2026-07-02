@@ -253,6 +253,16 @@ class Link(QObject):
                else mavlink.MAV_CMD_VIDEO_STOP_CAPTURE)
         self.send_command_long(target_sys, cmd, [0, 0, 0, 0, 0, 0, 0])
 
+    def set_camera_mode(self, target_sys, mode):
+        """Switch the camera between photo (0) and video (1) capture mode (SET_CAMERA_MODE)."""
+        self.send_command_long(target_sys, mavlink.MAV_CMD_SET_CAMERA_MODE,
+                               [0, float(mode), 0, 0, 0, 0, 0])
+
+    def camera_zoom(self, target_sys, step):
+        """Step the camera zoom in (+1) or out (-1) by one increment (SET_CAMERA_ZOOM, step type)."""
+        self.send_command_long(target_sys, mavlink.MAV_CMD_SET_CAMERA_ZOOM,
+                               [float(mavlink.ZOOM_TYPE_STEP), float(step), 0, 0, 0, 0, 0])
+
     # -- motor test (Vehicle Setup > Motors) ----------------------------------
     def motor_test(self, target_sys, motor, throttle_pct, duration_s, count=0):
         """Spin motor(s) at a throttle % to verify motor order/direction (props OFF).
