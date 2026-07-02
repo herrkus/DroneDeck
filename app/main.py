@@ -947,9 +947,17 @@ class DroneDeck(QMainWindow):
         tag = f"#{src.sysid} " if (src is not self.vehicle and src.sysid) else ""
         name = self.CMD_NAMES.get(command, f"CMD {command}")
         res = mavlink.MAV_RESULT.get(result, str(result))
-        ok = (result == 0)
         line = f"{tag}{name}: {res}"
         self._on_info(line)
+        # MAV_RESULT_IN_PROGRESS is NOT a final result: the command was accepted and is still
+        # executing (the vehicle may send it repeatedly, then a final ACCEPTED/FAILED -- e.g. a slow
+        # arm sequence, takeoff, or calibration). Treating it as "not ACCEPTED == failure" used to
+        # log it red and fire a false "REJECTED" toast for a command that was proceeding fine. Show
+        # it as neutral progress and wait for the real result.
+        if result == mavlink.MAV_RESULT_IN_PROGRESS:
+            self.console.add_note(line, "#39c0d0")
+            return
+        ok = (result == mavlink.MAV_RESULT_ACCEPTED)
         self.console.add_note(line, "#37d67a" if ok else "#e05050")
         # A rejected safety-critical command (arm, takeoff, ...) is easy to miss in the
         # console -- pop a prominent toast with the autopilot's own reason (the most

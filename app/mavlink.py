@@ -374,6 +374,8 @@ MAV_SEVERITY = {0: "EMERGENCY", 1: "ALERT", 2: "CRITICAL", 3: "ERROR",
                 4: "WARNING", 5: "NOTICE", 6: "INFO", 7: "DEBUG"}
 MAV_RESULT = {0: "ACCEPTED", 1: "TEMP REJECTED", 2: "DENIED", 3: "UNSUPPORTED",
               4: "FAILED", 5: "IN PROGRESS", 6: "CANCELLED"}
+MAV_RESULT_ACCEPTED = 0
+MAV_RESULT_IN_PROGRESS = 5      # accepted + still executing; NOT a final result (may repeat)
 
 MAV_AUTOPILOT_PX4 = 12
 

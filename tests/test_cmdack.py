@@ -79,4 +79,23 @@ assert acks, "COMMAND_ACK frame did not decode"
 assert acks[0].fields.get("command") == 400 and acks[0].fields.get("result") == 0
 ve.consume(acks)                                        # feed the genuinely-parsed message
 
-print("CMDACK PASSED (adversarial ACKs: unknown cmd/result, storm, real wire -- no crash, decoded)")
+# 6) IN_PROGRESS (result 5) is NOT a final result: no red note, no false "REJECTED" toast ----------
+# A vehicle sends IN_PROGRESS while a critical command (arm/takeoff/mode) is still executing, then a
+# final ACCEPTED/FAILED. The old handler treated "not ACCEPTED" as failure -> reddened it and popped
+# a scary REJECTED toast for a command that was proceeding fine.
+toasts = []
+win._notify = lambda t, *a, **k: toasts.append(t)
+notes = []
+_orig_add = win.console.add_note
+win.console.add_note = lambda t, c=None: notes.append((t, c))
+win._on_command_ack(400, mavlink.MAV_RESULT_IN_PROGRESS)   # ARM in progress (a critical cmd)
+win._on_command_ack(22, mavlink.MAV_RESULT_IN_PROGRESS)    # TAKEOFF in progress
+assert not toasts, f"IN_PROGRESS wrongly fired a critical toast: {toasts}"
+assert notes and all("REJECTED" not in t and c != "#e05050" for t, c in notes), \
+    f"IN_PROGRESS was logged as a failure: {notes}"
+win._on_command_ack(400, 4)                                # a genuine FAILED must still toast
+assert toasts, "a real rejection must still fire the critical toast"
+win.console.add_note = _orig_add
+
+print("CMDACK PASSED (adversarial ACKs: unknown cmd/result, storm, real wire, IN_PROGRESS not a "
+      "failure -- no crash, decoded)")
