@@ -36,7 +36,7 @@ from params import ParamManager, ParamDialog
 from tlog import TlogWriter
 from logdownload import LogManager
 from charts import ChartPanel
-from joystick import VirtualJoystick
+from joystick import VirtualJoystick, HwJoystick, list_joysticks
 from video import VideoPane
 from links_manager import LinksDialog
 from calibration import CalibrationDialog
@@ -373,9 +373,10 @@ class DroneDeck(QMainWindow):
         self.timer.timeout.connect(self._refresh)
         self.timer.start(50)
 
-        # manual control (virtual joystick + keyboard)
+        # manual control (virtual joystick + keyboard, or a real hardware gamepad)
         self.manual_on = False
         self._manual_keys = set()
+        self.hw_joystick = None            # HwJoystick when a real device is selected, else virtual
         self.manual_timer = QTimer(self)
         self.manual_timer.timeout.connect(self._send_manual)
 
@@ -538,6 +539,12 @@ class DroneDeck(QMainWindow):
         self.btn_joystick._needs = "conn"
         tb2.addWidget(self.btn_joystick)
         self._flight_btns.append(self.btn_joystick)
+        # manual-control source: on-screen virtual pad, or a real hardware gamepad/stick
+        self.joy_source = QComboBox()
+        self.joy_source.setToolTip("Manual control input device")
+        self.joy_source.currentIndexChanged.connect(self._select_joystick)
+        tb2.addWidget(self.joy_source)
+        self._refresh_joysticks()
         tb2.addSeparator()
         self.map_hint = QLabel(" click map = Goto ")
         self.map_hint.setStyleSheet("color:#8a90a0;")
@@ -1408,8 +1415,49 @@ class DroneDeck(QMainWindow):
     def _send_manual(self):
         if not (self.manual_on and self._has_vehicle()):
             return
-        x, y, z, r = self.joystick.values()
+        if self.hw_joystick is not None:
+            self.hw_joystick.poll()               # drain real-device events into its axis state
+            if not self.hw_joystick.is_open:      # unplugged mid-flight -> fall back to the pad
+                self._fall_back_to_virtual()
+                x, y, z, r = self.joystick.values()
+            else:
+                x, y, z, r = self.hw_joystick.values()
+        else:
+            x, y, z, r = self.joystick.values()
         self.link.send_manual_control(self._sysid(), x, y, z, r)
+
+    def _refresh_joysticks(self):
+        """Populate the input-source dropdown: the on-screen pad plus any real /dev/input/jsN."""
+        self.joy_source.blockSignals(True)
+        self.joy_source.clear()
+        self.joy_source.addItem("Virtual pad", None)
+        for path in list_joysticks():
+            self.joy_source.addItem(f"HW {path.rsplit('/', 1)[-1]}", path)
+        self.joy_source.blockSignals(False)
+
+    def _select_joystick(self, _idx):
+        """Switch the manual-control source to the chosen device (or the virtual pad)."""
+        path = self.joy_source.currentData()
+        if self.hw_joystick is not None:
+            self.hw_joystick.close()
+            self.hw_joystick = None
+        if path:
+            js = HwJoystick(path)
+            if js.is_open:
+                self.hw_joystick = js
+                self._on_info(f"manual input: hardware {path}")
+            else:
+                self._notify(f"Could not open {path} -- using the virtual pad", "#e0a030")
+                self.joy_source.setCurrentIndex(0)
+        else:
+            self._on_info("manual input: virtual pad")
+
+    def _fall_back_to_virtual(self):
+        if self.hw_joystick is not None:
+            self.hw_joystick.close()
+            self.hw_joystick = None
+        self.joy_source.setCurrentIndex(0)
+        self._notify("Joystick disconnected -- reverted to the virtual pad", "#e0a030")
 
     _MANUAL_KEYS = {Qt.Key_W, Qt.Key_S, Qt.Key_A, Qt.Key_D,
                     Qt.Key_Up, Qt.Key_Down, Qt.Key_Left, Qt.Key_Right}

@@ -1,16 +1,112 @@
-"""joystick.py -- on-screen virtual joystick for manual control.
+"""joystick.py -- manual control input: an on-screen virtual joystick plus a real hardware
+gamepad/stick reader.
 
-Two spring-centred thumbsticks like QGroundControl's virtual joystick:
-left = throttle (vertical) + yaw (horizontal), right = pitch (vertical) +
-roll (horizontal). Axes are read by the manual-control send loop in main; the
-pads can also be driven from the keyboard via set().
+The virtual joystick is two spring-centred thumbsticks like QGroundControl's: left = throttle
+(vertical) + yaw (horizontal), right = pitch (vertical) + roll (horizontal). HwJoystick reads a
+real Linux joystick (/dev/input/jsN) and maps its axes to the same value contract, so the
+manual-control send loop can source from either. Axes are read by that loop in main; the virtual
+pads can also be driven from the keyboard via set_keys().
 """
 from __future__ import annotations
+import glob
 import math
+import os
+import struct
 
 from PySide6.QtCore import Qt, QSize, QPointF, QRectF
 from PySide6.QtGui import QPainter, QColor, QPen, QRadialGradient, QBrush, QFont
 from PySide6.QtWidgets import QWidget, QHBoxLayout
+
+# Linux legacy joystick API (/dev/input/jsN): fixed 8-byte events, no external deps needed.
+JS_EVENT_BUTTON = 0x01
+JS_EVENT_AXIS = 0x02
+JS_EVENT_INIT = 0x80
+_JS_EVENT = struct.Struct("<IhBB")      # time(u32), value(i16), type(u8), number(u8)
+
+
+def list_joysticks():
+    """Paths of connected legacy-API joysticks, e.g. ['/dev/input/js0']."""
+    return sorted(glob.glob("/dev/input/js*"))
+
+
+class HwJoystick:
+    """Reads a real Linux joystick (/dev/input/jsN) and maps its axes to MANUAL_CONTROL
+    (x=pitch, y=roll, z=thrust, r=yaw, each -1000..1000) -- the SAME contract as
+    VirtualJoystick.values(), so main's send loop can use either interchangeably.
+
+    Dependency-free: parses the 8-byte js_event struct directly and reads non-blocking, so a
+    missing/slow device never stalls the UI. Unplugging the device closes it cleanly (values()
+    then returns neutral). The default axis map suits a common Mode-2 gamepad; override for others.
+    """
+
+    # role -> (axis index, invert).  Xbox-style: L-stick = throttle+yaw, R-stick = pitch+roll.
+    DEFAULT_MAP = {
+        "yaw":      (0, False),     # left stick X   -> yaw (right = +)
+        "throttle": (1, True),      # left stick Y   -> thrust (up = -raw = climb)
+        "roll":     (3, False),     # right stick X  -> roll (right = +)
+        "pitch":    (4, True),      # right stick Y  -> pitch (up = -raw = forward)
+    }
+
+    def __init__(self, path, axis_map=None, deadzone=0.06):
+        self.path = path
+        self.axis_map = dict(axis_map or self.DEFAULT_MAP)
+        self.deadzone = max(0.0, min(0.9, deadzone))
+        self._axes = {}             # axis index -> raw value (-32767..32767)
+        self._fd = None
+        self.open()
+
+    def open(self):
+        try:
+            self._fd = os.open(self.path, os.O_RDONLY | os.O_NONBLOCK)
+        except OSError:
+            self._fd = None
+
+    @property
+    def is_open(self):
+        return self._fd is not None
+
+    def close(self):
+        if self._fd is not None:
+            try:
+                os.close(self._fd)
+            except OSError:
+                pass
+            self._fd = None
+
+    def feed(self, data):
+        """Fold raw js_event bytes into the current axis state (also the test seam)."""
+        for i in range(0, len(data) - 7, 8):
+            _t, value, etype, number = _JS_EVENT.unpack_from(data, i)
+            if etype & JS_EVENT_AXIS:               # ignore buttons + init-only flags for axes
+                self._axes[number] = value
+
+    def poll(self):
+        """Drain pending events without blocking. Closes on unplug (read raises OSError)."""
+        if self._fd is None:
+            return
+        try:
+            while True:
+                chunk = os.read(self._fd, 8 * 64)
+                if not chunk:
+                    break
+                self.feed(chunk)
+        except BlockingIOError:
+            pass                                    # no more events queued -- normal
+        except OSError:
+            self.close()                            # device went away
+
+    def _axis(self, role):
+        idx, invert = self.axis_map[role]
+        v = max(-1.0, min(1.0, self._axes.get(idx, 0) / 32767.0))
+        if abs(v) < self.deadzone:
+            return 0.0
+        return (-v if invert else v) * 1000.0
+
+    def values(self):
+        """(x=pitch, y=roll, z=thrust, r=yaw), each -1000..1000 -- matches VirtualJoystick."""
+        if self._fd is None:
+            return 0.0, 0.0, 0.0, 0.0               # disconnected -> neutral (fail safe)
+        return self._axis("pitch"), self._axis("roll"), self._axis("throttle"), self._axis("yaw")
 
 
 class JoystickPad(QWidget):
