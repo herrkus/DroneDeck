@@ -87,10 +87,12 @@ class FtpClient:
 
     def __init__(self, send):
         self._send = send
+        self.seq = 0             # monotonic across operations so a stale response can't match a new one
+        self._expect = -1        # seq the current outstanding request expects back (req seq + 1)
         self.reset()
 
     def reset(self):
-        self.seq = 0
+        self._expect = -1        # NB: self.seq is intentionally NOT reset (keeps responses unambiguous)
         self.session = 0
         self.op = None
         self.path = ""
@@ -112,6 +114,7 @@ class FtpClient:
     def _issue(self, opcode, offset=0, data=b"", size=None, session=None):
         s = self.session if session is None else session
         self._last = (opcode, offset, bytes(data), size, s)
+        self._expect = (self.seq + 1) & 0xFFFF          # the ACK/NAK for THIS request
         self._send(self.seq, s, opcode, offset, bytes(data), size)
         self.seq = (self.seq + 1) & 0xFFFF
 
@@ -119,6 +122,7 @@ class FtpClient:
         """Re-issue the last request (call on a response timeout); reads are idempotent per offset."""
         if self._last and not self.done:
             opcode, offset, data, size, s = self._last
+            self._expect = (self.seq + 1) & 0xFFFF      # now expect the resend's response
             self._send(self.seq, s, opcode, offset, data, size)
             self.seq = (self.seq + 1) & 0xFFFF
 
@@ -143,6 +147,8 @@ class FtpClient:
 
     def handle(self, pkt):
         if not self.active:
+            return
+        if pkt.get("seq") != self._expect:      # stale/duplicate/foreign response -> ignore
             return
         op = pkt.get("opcode")
         if op == OP_NAK:

@@ -873,6 +873,9 @@ class DroneDeck(QMainWindow):
         act_fence_off.triggered.connect(lambda: self._fence_enable(False))
         act_vinfo = tools.addAction("Vehicle Info...")
         act_vinfo.triggered.connect(self._show_vehicle_info)
+        act_ftp = tools.addAction("Vehicle Files (FTP)...")
+        act_ftp.setToolTip("Browse + download the vehicle's filesystem over MAVLink FTP (PX4 logs, params)")
+        act_ftp.triggered.connect(self._open_ftp)
         tools.addAction("Export Track (GPX)...").triggered.connect(self._export_track)
         tools.addSeparator()
         act_chute = tools.addAction("Deploy Parachute (emergency)")
@@ -885,6 +888,15 @@ class DroneDeck(QMainWindow):
     def _open_analyze(self):
         from analyze import AnalyzeDialog
         AnalyzeDialog(self, LOG_DIR).exec()
+
+    def _open_ftp(self):
+        if not self._has_vehicle():
+            QMessageBox.information(self, "No vehicle",
+                                   "Connect to a vehicle first to browse its files over MAVLink FTP.")
+            return
+        from ftpbrowser import FtpBrowserDialog
+        os.makedirs(LOG_DIR, exist_ok=True)
+        FtpBrowserDialog(lambda: self.link, self._sysid, LOG_DIR, self).exec()
 
     def _export_track(self):
         trail = list(self.vehicle.trail) if self.vehicle else []
