@@ -415,15 +415,21 @@ class CameraPanel(QWidget):
         self.yaw.setValue(0)
         self._emit_gimbal()
 
+    _CAM_MODE = {0: "PHOTO", 1: "VIDEO", 2: "SURVEY"}
+
     def update_status(self, ve):
-        """Refresh the storage + capture readout from the vehicle's camera telemetry (or blank)."""
+        """Refresh the mode + storage + capture readout from the vehicle's camera telemetry (or blank)."""
         parts = []
+        if ve is not None and ve.cam_mode is not None:
+            parts.append(self._CAM_MODE.get(ve.cam_mode, f"mode {ve.cam_mode}"))
         if ve is not None and ve.storage_available_mb is not None:
             total = (ve.storage_total_mb or 0.0) / 1024.0
             avail = ve.storage_available_mb / 1024.0
             parts.append(f"SD {avail:.1f}/{total:.1f} GB")
         if ve is not None and ve.cam_recording is not None:
             parts.append(f"REC {int(ve.cam_recording_time_s or 0)}s" if ve.cam_recording else "not rec")
+        if ve is not None and ve.cam_images_captured is not None:
+            parts.append(f"img {ve.cam_images_captured}")
         self.cam_status.setText("   ".join(parts))
 
 

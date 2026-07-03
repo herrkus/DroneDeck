@@ -127,6 +127,8 @@ constexpr MsgInfo MSGS[] = {
     {127,  25, 35},  // GPS_RTK (RTK baseline mm + accuracy + nsats + rtk_health, primary receiver)
     {128, 226, 35},  // GPS2_RTK (2nd RTK receiver, identical layout)
     {136,   1, 22},  // TERRAIN_REPORT (terrain-follow: height above terrain + tiles pending/loaded)
+    {260, 146,  5},  // CAMERA_SETTINGS (current camera mode; zoom/focus are extensions)
+    {263, 133, 50},  // CAMERA_IMAGE_CAPTURED (prefix only: index+result+position; skips file_url[205])
 };
 
 const MsgInfo* find_info(uint32_t id) {
@@ -228,6 +230,15 @@ void decode(uint32_t msgid, const uint8_t* pl, Decoded& d) {
         push(rd_i32(pl + 0)); push(rd_i32(pl + 4));
         push(rd_f32(pl + 8)); push(rd_f32(pl + 12));
         push(rd_u16(pl + 16)); push(rd_u16(pl + 18)); push(rd_u16(pl + 20));
+        break;
+    case 260: // CAMERA_SETTINGS: time_boot_ms (u32), mode_id (u8)
+        push(rd_u32(pl + 0)); push(pl[4]);
+        break;
+    case 263: // CAMERA_IMAGE_CAPTURED (prefix): time_utc, time_boot_ms, lat, lon, alt, relative_alt, q0..3, image_index, camera_id, capture_result
+        push(rd_u64(pl + 0)); push(rd_u32(pl + 8));
+        push(rd_i32(pl + 12)); push(rd_i32(pl + 16)); push(rd_i32(pl + 20)); push(rd_i32(pl + 24));
+        push(rd_f32(pl + 28)); push(rd_f32(pl + 32)); push(rd_f32(pl + 36)); push(rd_f32(pl + 40));
+        push(rd_i32(pl + 44)); push(pl[48]); push(int8_t(pl[49]));
         break;
     case 141: // ALTITUDE: time_usec, monotonic, amsl, local, relative, terrain, bottom_clearance
         push(rd_u64(pl + 0));

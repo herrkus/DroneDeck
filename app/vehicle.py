@@ -86,6 +86,9 @@ class Vehicle(QObject):
         self.cam_image_status = None        # 0 idle, 1 capture in progress, ...
         self.cam_recording = None           # bool: video capture running
         self.cam_recording_time_s = None
+        self.cam_mode = None                # CAMERA_SETTINGS mode_id: 0 photo, 1 video, 2 image survey
+        self.cam_images_captured = None     # CAMERA_IMAGE_CAPTURED image_index of the last photo
+        self.cam_last_capture_ok = None     # bool: last CAMERA_IMAGE_CAPTURED capture_result was success
         # compass onboard calibration (MAG_CAL_PROGRESS / MAG_CAL_REPORT); None = not calibrating
         self.mag_cal_pct = None             # completion 0..100
         self.mag_cal_status = None          # cal_status enum (1 running .. 4 success, 5 failed)
@@ -321,6 +324,13 @@ class Vehicle(QObject):
         self.cam_recording = int(f.get("video_status", 0)) != 0
         self.cam_recording_time_s = int(f.get("recording_time_ms", 0)) / 1000.0
 
+    def _on_camera_settings(self, f):
+        self.cam_mode = int(f.get("mode_id", 0))           # 0 photo / 1 video / 2 image survey
+
+    def _on_camera_image_captured(self, f):
+        self.cam_images_captured = int(f.get("image_index", 0))
+        self.cam_last_capture_ok = int(f.get("capture_result", 0)) == 1
+
     def _on_mag_cal_progress(self, f):
         self.mag_cal_pct = int(f.get("completion_pct", 0))
         self.mag_cal_status = int(f.get("cal_status", 0))
@@ -553,6 +563,8 @@ class Vehicle(QObject):
         mavlink.TERRAIN_REPORT: _on_terrain_report,
         mavlink.STORAGE_INFORMATION: _on_storage_information,
         mavlink.CAMERA_CAPTURE_STATUS: _on_camera_capture_status,
+        mavlink.CAMERA_SETTINGS: _on_camera_settings,
+        mavlink.CAMERA_IMAGE_CAPTURED: _on_camera_image_captured,
         mavlink.MAG_CAL_PROGRESS: _on_mag_cal_progress,
         mavlink.MAG_CAL_REPORT: _on_mag_cal_report,
         mavlink.RC_CHANNELS: _on_rc_channels,

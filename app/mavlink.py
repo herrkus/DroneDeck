@@ -68,6 +68,8 @@ POWER_STATUS = 125           # 5V rail (Vcc) + servo rail (Vservo) voltage + pow
 DISTANCE_SENSOR = 132        # rangefinder/sonar: current_distance (cm) + orientation + sensor type
 STORAGE_INFORMATION = 261    # camera storage: total/used/available capacity (MB) + status
 CAMERA_CAPTURE_STATUS = 262  # camera: image/video capture status, recording time, free capacity
+CAMERA_SETTINGS = 260        # camera: current mode (0 photo / 1 video / 2 survey) + zoom/focus
+CAMERA_IMAGE_CAPTURED = 263  # camera: one photo captured -- index + result + position (file_url skipped)
 MAG_CAL_PROGRESS = 191       # compass onboard cal progress: completion_pct + cal_status + direction
 MAG_CAL_REPORT = 192         # compass onboard cal result: cal_status + fitness
 GPS_RTK = 127                # RTK GPS status: baseline (mm), accuracy, nsats, rtk_health (primary receiver)
@@ -133,6 +135,8 @@ MSG_NAME = {
     DISTANCE_SENSOR: "DISTANCE_SENSOR",
     STORAGE_INFORMATION: "STORAGE_INFORMATION",
     CAMERA_CAPTURE_STATUS: "CAMERA_CAPTURE_STATUS",
+    CAMERA_SETTINGS: "CAMERA_SETTINGS",
+    CAMERA_IMAGE_CAPTURED: "CAMERA_IMAGE_CAPTURED",
     MAG_CAL_PROGRESS: "MAG_CAL_PROGRESS",
     MAG_CAL_REPORT: "MAG_CAL_REPORT",
     GPS_RTK: "GPS_RTK",
@@ -195,6 +199,7 @@ CRC_EXTRA = {
     ALTITUDE: 47, BATTERY_STATUS: 154, VIBRATION: 90, RADIO_STATUS: 185,
     NAV_CONTROLLER_OUTPUT: 183, POWER_STATUS: 203, DISTANCE_SENSOR: 85,
     STORAGE_INFORMATION: 179, CAMERA_CAPTURE_STATUS: 12,
+    CAMERA_SETTINGS: 146, CAMERA_IMAGE_CAPTURED: 133,
     MAG_CAL_PROGRESS: 92, MAG_CAL_REPORT: 36,
     GPS_RTK: 25, GPS2_RTK: 226, GPS_RTCM_DATA: 35,
     TERRAIN_CHECK: 203, TERRAIN_REPORT: 1,
@@ -229,6 +234,9 @@ FIELDS = {
                           "read_speed", "write_speed", "storage_id", "storage_count", "status"],
     CAMERA_CAPTURE_STATUS: ["time_boot_ms", "image_interval", "recording_time_ms",
                             "available_capacity", "image_status", "video_status"],
+    CAMERA_SETTINGS: ["time_boot_ms", "mode_id"],
+    CAMERA_IMAGE_CAPTURED: ["time_utc", "time_boot_ms", "lat", "lon", "alt", "relative_alt",
+                            "q0", "q1", "q2", "q3", "image_index", "camera_id", "capture_result"],
     MAG_CAL_PROGRESS: ["direction_x", "direction_y", "direction_z",
                        "compass_id", "cal_mask", "cal_status", "attempt", "completion_pct"],
     MAG_CAL_REPORT: ["fitness", "ofs_x", "ofs_y", "ofs_z", "diag_x", "diag_y", "diag_z",
@@ -953,6 +961,11 @@ _WIRE = {
     CAMERA_CAPTURE_STATUS: ("<IfIfBB",
                             ["time_boot_ms", "image_interval", "recording_time_ms",
                              "available_capacity", "image_status", "video_status"], 18),
+    CAMERA_SETTINGS: ("<IB", ["time_boot_ms", "mode_id"], 5),
+    # decode only the 50-byte prefix; file_url (char[205]) is skipped. Full msg = 255 B.
+    CAMERA_IMAGE_CAPTURED: ("<QIiiiiffffiBb",
+                            ["time_utc", "time_boot_ms", "lat", "lon", "alt", "relative_alt",
+                             "q0", "q1", "q2", "q3", "image_index", "camera_id", "capture_result"], 50),
     # decode only the 17-byte prefix; completion_mask (uint8[10]) is skipped. base 27, but len=17 so
     # the parser truncates the mask off before unpack (CRC 92 is computed over the full field set).
     MAG_CAL_PROGRESS: ("<fffBBBBB",
