@@ -44,6 +44,8 @@ class Link(QObject):
         self.gcs_compid = gcs_compid
         self.seq = 0
         self._rtcm_seq = 0         # GPS_RTCM_DATA sequence id (0..31), increments per RTCM message
+        self._fwd = None           # QUdpSocket re-broadcasting received telemetry (MAVLink forwarding)
+        self._fwd_addr = None      # (QHostAddress, port) the forward socket targets
         self.rx_bytes = 0
         self.rx_mav_v2 = False     # a v2 (0xFD) frame has been received
         self.rx_mav_v1 = False     # a v1 (0xFE) frame has been received
@@ -122,11 +124,36 @@ class Link(QObject):
         if r is not None:
             r.write(data, int(time.time() * 1e6))
 
+    def set_forward(self, host, port):
+        """Re-broadcast every received MAVLink byte to a 2nd UDP endpoint (a companion computer, a
+        second GCS, MAVProxy, an OBS overlay). One-way, like QGC's MAVLink forwarding -- the forwarded
+        endpoint's own traffic is NOT injected back to the vehicle."""
+        self.clear_forward()
+        self._fwd = QUdpSocket(self)
+        self._fwd_addr = (QHostAddress(str(host)), int(port))
+        self.info.emit(f"forwarding telemetry to {host}:{port}")
+
+    def clear_forward(self):
+        if self._fwd is not None:
+            self._fwd.close()
+            self._fwd.deleteLater()
+            self._fwd = None
+        self._fwd_addr = None
+
+    @property
+    def forwarding(self):
+        return self._fwd_addr is not None
+
+    def _forward(self, data: bytes):
+        if self._fwd is not None and self._fwd_addr is not None and data:
+            self._fwd.writeDatagram(data, self._fwd_addr[0], self._fwd_addr[1])
+
     def _ingest(self, data: bytes):
         if not data:
             return
         self.rx_bytes += len(data)
         self._record(data)
+        self._forward(data)
         self._note_framing(data)
         batch = self.parser.feed(data)
         self._dispatch(batch)
@@ -622,6 +649,7 @@ class UdpLink(Link):
             data = bytes(dg.data())
             self.rx_bytes += len(data)
             self._record(data)
+            self._forward(data)
             self._note_framing(data)
             addr, aport = dg.senderAddress(), dg.senderPort()
             if self.remote is None:

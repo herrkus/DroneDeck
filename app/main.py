@@ -326,6 +326,7 @@ class DroneDeck(QMainWindow):
         self.vehicles = {}                 # sysid -> Vehicle (multi-vehicle)
         self.traffic = {}                  # ADSB: ICAO -> {lat, lon, heading, callsign, t}
         self.link = None
+        self._fwd_target = None             # (host, port) for MAVLink forwarding, persisted across links
         self.default_port = port
 
         # settings persistence (only the real app opts in; tests stay deterministic)
@@ -876,6 +877,9 @@ class DroneDeck(QMainWindow):
         act_ftp = tools.addAction("Vehicle Files (FTP)...")
         act_ftp.setToolTip("Browse + download the vehicle's filesystem over MAVLink FTP (PX4 logs, params)")
         act_ftp.triggered.connect(self._open_ftp)
+        act_fwd = tools.addAction("MAVLink Forwarding...")
+        act_fwd.setToolTip("Re-broadcast received telemetry to a 2nd UDP endpoint (companion, 2nd GCS)")
+        act_fwd.triggered.connect(self._open_forward)
         tools.addAction("Export Track (GPX)...").triggered.connect(self._export_track)
         tools.addSeparator()
         act_chute = tools.addAction("Deploy Parachute (emergency)")
@@ -897,6 +901,31 @@ class DroneDeck(QMainWindow):
         from ftpbrowser import FtpBrowserDialog
         os.makedirs(LOG_DIR, exist_ok=True)
         FtpBrowserDialog(lambda: self.link, self._sysid, LOG_DIR, self).exec()
+
+    def _open_forward(self):
+        from PySide6.QtWidgets import QInputDialog
+        cur = f"{self._fwd_target[0]}:{self._fwd_target[1]}" if self._fwd_target else "127.0.0.1:14551"
+        text, ok = QInputDialog.getText(self, "MAVLink Forwarding",
+                                        "Forward received telemetry to (host:port), or blank to stop:",
+                                        text=cur)
+        if not ok:
+            return
+        text = text.strip()
+        if not text:
+            self._fwd_target = None
+            if self.link is not None:
+                self.link.clear_forward()
+            self._on_info("MAVLink forwarding stopped")
+            return
+        host, _, port_s = text.partition(":")
+        port = _parse_port(port_s, 0)
+        if not port:
+            self._on_info(f"invalid forward target: {text!r}")
+            return
+        self._fwd_target = (host or "127.0.0.1", port)
+        if self.link is not None:
+            self.link.set_forward(*self._fwd_target)
+        self._on_info(f"forwarding telemetry to {self._fwd_target[0]}:{self._fwd_target[1]}")
 
     def _export_track(self):
         trail = list(self.vehicle.trail) if self.vehicle else []
@@ -1031,6 +1060,8 @@ class DroneDeck(QMainWindow):
         link.state.connect(self._on_state)
         link.command_unacked.connect(self._on_command_unacked)
         link.recorder = self._recorder        # keep recording across reconnects
+        if self._fwd_target:                  # keep MAVLink forwarding across reconnects too
+            link.set_forward(*self._fwd_target)
         return link
 
     def _on_command_unacked(self, command):
