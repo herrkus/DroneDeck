@@ -138,6 +138,7 @@ check "camera_protocol"     ""                        tests/test_camera_protocol
 check "ftp"                 ""                        tests/test_ftp.py
 check "ftpclient"           ""                        tests/test_ftpclient.py
 check "ftpbrowser"          ""                        tests/test_ftpbrowser.py
+check "components"          ""                        tests/test_components.py
 check "camera"              ""                        tests/test_camera.py
 check "logs"                ""                        tests/test_logs.py
 check "video"               ""                        tests/test_video.py

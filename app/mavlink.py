@@ -323,6 +323,35 @@ MAV_MODE_FLAG_CUSTOM_MODE_ENABLED = 0x01
 # broadcast/target-all value and is spec-forbidden as a source; QGroundControl uses 190.
 MAV_COMP_ID_ALL = 0
 MAV_COMP_ID_MISSIONPLANNER = 190
+MAV_COMP_ID_AUTOPILOT1 = 1
+MAV_COMP_ID_CAMERA = 100
+MAV_COMP_ID_GIMBAL = 154
+MAV_COMP_ID_ADSB = 156
+MAV_COMP_ID_PERIPHERAL = 158
+MAV_COMP_ID_ONBOARD_COMPUTER = 191
+
+
+def component_name(compid):
+    """Human label for a MAVLink component id (MAV_COMP_ID_*), for the detected-components list."""
+    if compid == 1:
+        return "Autopilot"
+    if 100 <= compid <= 106:
+        return "Camera" if compid == 100 else f"Camera {compid - 99}"
+    if compid == 154 or 171 <= compid <= 175:
+        return "Gimbal"
+    if compid == 156:
+        return "ADS-B"
+    if compid == 157:
+        return "OSD"
+    if compid == 158:
+        return "Peripheral"
+    if 191 <= compid <= 194:
+        return "Companion"
+    if compid == 190:
+        return "GCS"
+    if compid == 220:
+        return "GPS"
+    return f"Component {compid}"
 MAV_STATE_ACTIVE = 4
 GPS_FIX_TYPE_3D_FIX = 3
 MAV_CMD_COMPONENT_ARM_DISARM = 400

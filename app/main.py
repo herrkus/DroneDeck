@@ -2610,6 +2610,8 @@ class DroneDeck(QMainWindow):
                                     "reopen this in a moment.")
             return
         ap = {3: "ArduPilot", 12: "PX4"}.get(ve.autopilot, f"autopilot #{ve.autopilot}")
+        comps = ve.active_components()
+        comps_html = ", ".join(f"{name} (#{cid})" for cid, name in comps) or "(only the autopilot seen)"
         caps = mavlink.capability_names(ve.capabilities)
         caps_html = "".join(f"<li>{c}</li>" for c in caps) or "<li>(none reported)</li>"
         html = (f"<h3>Vehicle {self._sysid()} &mdash; {ap}</h3>"
@@ -2621,6 +2623,7 @@ class DroneDeck(QMainWindow):
                 f"<td>0x{ve.vendor_id:04x} / 0x{ve.product_id:04x}</td></tr>"
                 f"<tr><td><b>MAVLink</b></td>"
                 f"<td>{(self.link.mavlink_version_str if self.link else None) or 'unknown'}</td></tr>"
+                f"<tr><td><b>Components</b></td><td>{comps_html}</td></tr>"
                 "</table>"
                 f"<p><b>Capabilities</b> (0x{ve.capabilities:x}):</p><ul>{caps_html}</ul>")
         QMessageBox.information(self, "Vehicle Info", html)

@@ -167,6 +167,7 @@ class Vehicle(QObject):
         self.reached_wp = -1        # last waypoint completed (from MISSION_ITEM_REACHED)
         # status
         self.sysid = 0
+        self.components = {}                 # compid -> (mav_type, autopilot, last_seen) from HEARTBEATs
         self.mav_type = 0
         self.autopilot = 0
         self.base_mode = 0
@@ -194,11 +195,23 @@ class Vehicle(QObject):
             self.msg_count += 1
             if self.sysid == 0 and m.sysid:
                 self.sysid = m.sysid
+            # Enumerate every component beating on this vehicle (autopilot, gimbal, camera, companion,
+            # ...). The FC-state handler below deliberately ignores non-autopilot heartbeats to avoid
+            # flapping; this records them so the user can see what peripherals are present + alive.
+            if m.msgid == mavlink.HEARTBEAT and (self.sysid == 0 or m.sysid == self.sysid):
+                self.components[m.compid] = (int(m.fields.get("type", 0)),
+                                             int(m.fields.get("autopilot", 0)), time.monotonic())
             handler = self._H.get(m.msgid)
             if handler:
                 handler(self, m.fields)
         if msgs:
             self.updated.emit()
+
+    def active_components(self, ttl=5.0):
+        """Detected components seen within `ttl` seconds, as [(compid, name), ...] sorted by compid."""
+        now = time.monotonic()
+        return [(cid, mavlink.component_name(cid))
+                for cid, (_t, _ap, seen) in sorted(self.components.items()) if now - seen <= ttl]
 
     def _on_heartbeat(self, f):
         # Only the flight controller's heartbeat carries vehicle state. Real drones commonly have
