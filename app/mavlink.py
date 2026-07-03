@@ -66,6 +66,8 @@ VFR_HUD = 74
 NAV_CONTROLLER_OUTPUT = 62   # autopilot nav output: nav/target bearing, wp dist, alt/aspd/xtrack error
 POWER_STATUS = 125           # 5V rail (Vcc) + servo rail (Vservo) voltage + power flags
 DISTANCE_SENSOR = 132        # rangefinder/sonar: current_distance (cm) + orientation + sensor type
+STORAGE_INFORMATION = 261    # camera storage: total/used/available capacity (MB) + status
+CAMERA_CAPTURE_STATUS = 262  # camera: image/video capture status, recording time, free capacity
 COMMAND_INT = 75
 COMMAND_LONG = 76
 COMMAND_ACK = 77
@@ -122,6 +124,8 @@ MSG_NAME = {
     NAV_CONTROLLER_OUTPUT: "NAV_CONTROLLER_OUTPUT",
     POWER_STATUS: "POWER_STATUS",
     DISTANCE_SENSOR: "DISTANCE_SENSOR",
+    STORAGE_INFORMATION: "STORAGE_INFORMATION",
+    CAMERA_CAPTURE_STATUS: "CAMERA_CAPTURE_STATUS",
     REQUEST_DATA_STREAM: "REQUEST_DATA_STREAM",
     ALTITUDE: "ALTITUDE",
     BATTERY_STATUS: "BATTERY_STATUS",
@@ -176,6 +180,7 @@ CRC_EXTRA = {
     MISSION_REQUEST_INT: 196, MISSION_ITEM_INT: 38, MANUAL_CONTROL: 243, RC_CHANNELS: 118,
     ALTITUDE: 47, BATTERY_STATUS: 154, VIBRATION: 90, RADIO_STATUS: 185,
     NAV_CONTROLLER_OUTPUT: 183, POWER_STATUS: 203, DISTANCE_SENSOR: 85,
+    STORAGE_INFORMATION: 179, CAMERA_CAPTURE_STATUS: 12,
     EKF_STATUS_REPORT: 71, ESTIMATOR_STATUS: 163, WIND_COV: 105, MOUNT_ORIENTATION: 26,
     HOME_POSITION: 104, EXTENDED_SYS_STATE: 130, AUTOPILOT_VERSION: 178,
     ESC_STATUS: 10, TIME_ESTIMATE_TO_TARGET: 232, GNSS_INTEGRITY: 169,
@@ -203,6 +208,10 @@ FIELDS = {
     POWER_STATUS: ["Vcc", "Vservo", "flags"],
     DISTANCE_SENSOR: ["time_boot_ms", "min_distance", "max_distance", "current_distance",
                       "type", "id", "orientation", "covariance"],
+    STORAGE_INFORMATION: ["time_boot_ms", "total_capacity", "used_capacity", "available_capacity",
+                          "read_speed", "write_speed", "storage_id", "storage_count", "status"],
+    CAMERA_CAPTURE_STATUS: ["time_boot_ms", "image_interval", "recording_time_ms",
+                            "available_capacity", "image_status", "video_status"],
     ALTITUDE: ["time_usec", "altitude_monotonic", "altitude_amsl", "altitude_local",
                "altitude_relative", "altitude_terrain", "bottom_clearance"],
     VIBRATION: ["time_usec", "vibration_x", "vibration_y", "vibration_z",
@@ -899,6 +908,12 @@ _WIRE = {
     DISTANCE_SENSOR: ("<IHHHBBBB",
                       ["time_boot_ms", "min_distance", "max_distance", "current_distance",
                        "type", "id", "orientation", "covariance"], 14),
+    STORAGE_INFORMATION: ("<IfffffBBB",
+                          ["time_boot_ms", "total_capacity", "used_capacity", "available_capacity",
+                           "read_speed", "write_speed", "storage_id", "storage_count", "status"], 27),
+    CAMERA_CAPTURE_STATUS: ("<IfIfBB",
+                            ["time_boot_ms", "image_interval", "recording_time_ms",
+                             "available_capacity", "image_status", "video_status"], 18),
     ALTITUDE: ("<Qffffff",
                ["time_usec", "altitude_monotonic", "altitude_amsl", "altitude_local",
                 "altitude_relative", "altitude_terrain", "bottom_clearance"], 32),

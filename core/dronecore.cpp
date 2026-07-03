@@ -120,6 +120,8 @@ constexpr MsgInfo MSGS[] = {
     { 62, 183, 26},  // NAV_CONTROLLER_OUTPUT (nav/target bearing, wp_dist, alt/aspd/xtrack error)
     {125, 203,  6},  // POWER_STATUS (Vcc, Vservo mV; flags)
     {132,  85, 14},  // DISTANCE_SENSOR (rangefinder current_distance cm + orientation + type)
+    {261, 179, 27},  // STORAGE_INFORMATION (total/used/available MB + status)
+    {262,  12, 18},  // CAMERA_CAPTURE_STATUS (image/video status, recording ms, free MB)
 };
 
 const MsgInfo* find_info(uint32_t id) {
@@ -190,6 +192,14 @@ void decode(uint32_t msgid, const uint8_t* pl, Decoded& d) {
     case 132: // DISTANCE_SENSOR: time_boot_ms, min, max, current (cm), type, id, orientation, covariance
         push(rd_u32(pl + 0)); push(rd_u16(pl + 4)); push(rd_u16(pl + 6)); push(rd_u16(pl + 8));
         push(pl[10]); push(pl[11]); push(pl[12]); push(pl[13]);
+        break;
+    case 261: // STORAGE_INFORMATION: time_boot_ms, total, used, available, read, write (MB), storage_id, count, status
+        push(rd_u32(pl + 0)); push(rd_f32(pl + 4)); push(rd_f32(pl + 8)); push(rd_f32(pl + 12));
+        push(rd_f32(pl + 16)); push(rd_f32(pl + 20)); push(pl[24]); push(pl[25]); push(pl[26]);
+        break;
+    case 262: // CAMERA_CAPTURE_STATUS: time_boot_ms, image_interval, recording_time_ms, available_capacity, image_status, video_status
+        push(rd_u32(pl + 0)); push(rd_f32(pl + 4)); push(rd_u32(pl + 8)); push(rd_f32(pl + 12));
+        push(pl[16]); push(pl[17]);
         break;
     case 141: // ALTITUDE: time_usec, monotonic, amsl, local, relative, terrain, bottom_clearance
         push(rd_u64(pl + 0));

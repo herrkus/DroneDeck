@@ -373,7 +373,12 @@ class CameraPanel(QWidget):
         zrow.addWidget(btn_zoom_out)
         zrow.addWidget(btn_zoom_in)
         g.addLayout(zrow, 6, 0, 1, 2)
-        g.setRowStretch(7, 1)
+        # live camera storage + capture state (STORAGE_INFORMATION / CAMERA_CAPTURE_STATUS)
+        self.cam_status = QLabel("")
+        self.cam_status.setFont(_MONO)
+        self.cam_status.setWordWrap(True)
+        g.addWidget(self.cam_status, 7, 0, 1, 2)
+        g.setRowStretch(8, 1)
 
     def _on_video(self, on):
         self.btn_video.setText("Video ■" if on else "Video ●")
@@ -395,6 +400,17 @@ class CameraPanel(QWidget):
         self.pitch.setValue(0)
         self.yaw.setValue(0)
         self._emit_gimbal()
+
+    def update_status(self, ve):
+        """Refresh the storage + capture readout from the vehicle's camera telemetry (or blank)."""
+        parts = []
+        if ve is not None and ve.storage_available_mb is not None:
+            total = (ve.storage_total_mb or 0.0) / 1024.0
+            avail = ve.storage_available_mb / 1024.0
+            parts.append(f"SD {avail:.1f}/{total:.1f} GB")
+        if ve is not None and ve.cam_recording is not None:
+            parts.append(f"REC {int(ve.cam_recording_time_s or 0)}s" if ve.cam_recording else "not rec")
+        self.cam_status.setText("   ".join(parts))
 
 
 class MavlinkConsole(QWidget):

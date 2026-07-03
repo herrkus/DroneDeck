@@ -79,6 +79,13 @@ class Vehicle(QObject):
         self.power_vcc = None               # 5V rail, volts
         self.power_vservo = None            # servo rail, volts
         self.power_flags = None
+        # camera storage + capture status (STORAGE_INFORMATION / CAMERA_CAPTURE_STATUS); None = not reporting
+        self.storage_total_mb = None
+        self.storage_available_mb = None
+        self.storage_status = None          # 0 empty, 1 unformatted, 2 ready, 3 not-supported, 4 failed
+        self.cam_image_status = None        # 0 idle, 1 capture in progress, ...
+        self.cam_recording = None           # bool: video capture running
+        self.cam_recording_time_s = None
         # sensor health bitmasks (SYS_STATUS)
         self.sensors_present = 0
         self.sensors_enabled = 0
@@ -273,6 +280,16 @@ class Vehicle(QObject):
         self.power_vcc = int(f.get("Vcc", 0)) / 1000.0        # mV -> V
         self.power_vservo = int(f.get("Vservo", 0)) / 1000.0
         self.power_flags = int(f.get("flags", 0))
+
+    def _on_storage_information(self, f):
+        self.storage_total_mb = float(f.get("total_capacity", 0.0))
+        self.storage_available_mb = float(f.get("available_capacity", 0.0))
+        self.storage_status = int(f.get("status", 0))
+
+    def _on_camera_capture_status(self, f):
+        self.cam_image_status = int(f.get("image_status", 0))
+        self.cam_recording = int(f.get("video_status", 0)) != 0
+        self.cam_recording_time_s = int(f.get("recording_time_ms", 0)) / 1000.0
 
     def _on_rc_channels(self, f):
         # RC_CHANNELS.rssi is 0..254 (0 = no signal, 254 = full); 255 = unknown/not-reporting.
@@ -491,6 +508,8 @@ class Vehicle(QObject):
         mavlink.DISTANCE_SENSOR: _on_distance_sensor,
         mavlink.NAV_CONTROLLER_OUTPUT: _on_nav_controller_output,
         mavlink.POWER_STATUS: _on_power_status,
+        mavlink.STORAGE_INFORMATION: _on_storage_information,
+        mavlink.CAMERA_CAPTURE_STATUS: _on_camera_capture_status,
         mavlink.RC_CHANNELS: _on_rc_channels,
         mavlink.GPS_RAW_INT: _on_gps_raw,
         mavlink.VFR_HUD: _on_vfr_hud,

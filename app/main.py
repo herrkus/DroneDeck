@@ -2489,6 +2489,7 @@ class DroneDeck(QMainWindow):
                 if n and 0 <= cw < n:
                     nav["wp_num"] = f"{cw + 1} / {n}"
         self.panel.update_all(ve, state, self._rate, ok, drop, nav, loss=loss)
+        self.camera.update_status(ve)
         self._update_status_strip(ve, is_open, drop, loss)
         self._update_link_banner(ve, is_open)
 
