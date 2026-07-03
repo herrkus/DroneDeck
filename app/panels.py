@@ -80,7 +80,8 @@ class TelemetryPanel(QWidget):
                            ("wp_num", "Waypoint"), ("wp_dist", "Dist to WP"),
                            ("wp_eta", "WP ETA"), ("rtl_time", "RTL time"),
                            ("mission_eta", "Mission ETA"), ("odometer", "Distance flown")],
-            "GPS": [("fix", "Fix"), ("sats", "Satellites"), ("hdop", "HDOP"), ("pos_acc", "Pos acc")],
+            "GPS": [("fix", "Fix"), ("sats", "Satellites"), ("hdop", "HDOP"), ("pos_acc", "Pos acc"),
+                    ("rtk", "RTK")],
         }
         # Wide-and-short: this panel lives in a wide bottom dock, so the groups flow
         # across columns instead of one tall stack (kills the old cramped scroll).
@@ -217,6 +218,13 @@ class TelemetryPanel(QWidget):
                       "#37d67a" if h < 2 else "#e0a030" if h < 5 else "#e05050")
         else:
             self._set("pos_acc", "--")
+        if ve.rtk_health is not None:                     # GPS_RTK reporting -> RTK receiver present
+            healthy = ve.rtk_health > 0
+            self._set("rtk", f"{'OK' if healthy else 'no fix'}  {ve.rtk_nsats or 0} sat  "
+                             f"+/-{ve.rtk_accuracy_mm or 0} mm",
+                      "#37d67a" if healthy else "#e0a030")
+        else:
+            self._set("rtk", "--")
 
         nav = nav or {}
         self._set("home_dist", nav.get("home_dist", "--"))

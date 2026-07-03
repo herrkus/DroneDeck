@@ -91,6 +91,11 @@ class Vehicle(QObject):
         self.mag_cal_status = None          # cal_status enum (1 running .. 4 success, 5 failed)
         self.mag_cal_fitness = None         # report fitness (lower = better)
         self.mag_cal_done = None            # bool: a report arrived (cal finished)
+        # RTK GPS status (GPS_RTK, primary receiver); None = no RTK receiver reporting
+        self.rtk_health = None              # 0 = no/invalid RTK solution, >0 = receiving valid baselines
+        self.rtk_nsats = None               # satellites used in the RTK solution
+        self.rtk_baseline_m = None          # 3D baseline length to the base station, metres
+        self.rtk_accuracy_mm = None         # baseline accuracy estimate, mm
         # sensor health bitmasks (SYS_STATUS)
         self.sensors_present = 0
         self.sensors_enabled = 0
@@ -285,6 +290,15 @@ class Vehicle(QObject):
         self.power_vcc = int(f.get("Vcc", 0)) / 1000.0        # mV -> V
         self.power_vservo = int(f.get("Vservo", 0)) / 1000.0
         self.power_flags = int(f.get("flags", 0))
+
+    def _on_gps_rtk(self, f):
+        a = int(f.get("baseline_a_mm", 0))
+        b = int(f.get("baseline_b_mm", 0))
+        c = int(f.get("baseline_c_mm", 0))
+        self.rtk_baseline_m = (a * a + b * b + c * c) ** 0.5 / 1000.0   # mm -> m, 3D magnitude
+        self.rtk_health = int(f.get("rtk_health", 0))
+        self.rtk_nsats = int(f.get("nsats", 0))
+        self.rtk_accuracy_mm = int(f.get("accuracy", 0))
 
     def _on_storage_information(self, f):
         self.storage_total_mb = float(f.get("total_capacity", 0.0))
@@ -524,6 +538,7 @@ class Vehicle(QObject):
         mavlink.DISTANCE_SENSOR: _on_distance_sensor,
         mavlink.NAV_CONTROLLER_OUTPUT: _on_nav_controller_output,
         mavlink.POWER_STATUS: _on_power_status,
+        mavlink.GPS_RTK: _on_gps_rtk,
         mavlink.STORAGE_INFORMATION: _on_storage_information,
         mavlink.CAMERA_CAPTURE_STATUS: _on_camera_capture_status,
         mavlink.MAG_CAL_PROGRESS: _on_mag_cal_progress,

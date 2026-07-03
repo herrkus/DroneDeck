@@ -70,6 +70,8 @@ STORAGE_INFORMATION = 261    # camera storage: total/used/available capacity (MB
 CAMERA_CAPTURE_STATUS = 262  # camera: image/video capture status, recording time, free capacity
 MAG_CAL_PROGRESS = 191       # compass onboard cal progress: completion_pct + cal_status + direction
 MAG_CAL_REPORT = 192         # compass onboard cal result: cal_status + fitness
+GPS_RTK = 127                # RTK GPS status: baseline (mm), accuracy, nsats, rtk_health (primary receiver)
+GPS2_RTK = 128               # RTK GPS status for a 2nd receiver (identical field layout to GPS_RTK)
 COMMAND_INT = 75
 COMMAND_LONG = 76
 COMMAND_ACK = 77
@@ -130,6 +132,8 @@ MSG_NAME = {
     CAMERA_CAPTURE_STATUS: "CAMERA_CAPTURE_STATUS",
     MAG_CAL_PROGRESS: "MAG_CAL_PROGRESS",
     MAG_CAL_REPORT: "MAG_CAL_REPORT",
+    GPS_RTK: "GPS_RTK",
+    GPS2_RTK: "GPS2_RTK",
     REQUEST_DATA_STREAM: "REQUEST_DATA_STREAM",
     ALTITUDE: "ALTITUDE",
     BATTERY_STATUS: "BATTERY_STATUS",
@@ -186,6 +190,7 @@ CRC_EXTRA = {
     NAV_CONTROLLER_OUTPUT: 183, POWER_STATUS: 203, DISTANCE_SENSOR: 85,
     STORAGE_INFORMATION: 179, CAMERA_CAPTURE_STATUS: 12,
     MAG_CAL_PROGRESS: 92, MAG_CAL_REPORT: 36,
+    GPS_RTK: 25, GPS2_RTK: 226,
     EKF_STATUS_REPORT: 71, ESTIMATOR_STATUS: 163, WIND_COV: 105, MOUNT_ORIENTATION: 26,
     HOME_POSITION: 104, EXTENDED_SYS_STATE: 130, AUTOPILOT_VERSION: 178,
     ESC_STATUS: 10, TIME_ESTIMATE_TO_TARGET: 232, GNSS_INTEGRITY: 169,
@@ -222,6 +227,12 @@ FIELDS = {
     MAG_CAL_REPORT: ["fitness", "ofs_x", "ofs_y", "ofs_z", "diag_x", "diag_y", "diag_z",
                      "offdiag_x", "offdiag_y", "offdiag_z",
                      "compass_id", "cal_mask", "cal_status", "autosaved"],
+    GPS_RTK: ["time_last_baseline_ms", "tow", "baseline_a_mm", "baseline_b_mm", "baseline_c_mm",
+              "accuracy", "iar_num_hypotheses", "wn", "rtk_receiver_id", "rtk_health", "rtk_rate",
+              "nsats", "baseline_coords_type"],
+    GPS2_RTK: ["time_last_baseline_ms", "tow", "baseline_a_mm", "baseline_b_mm", "baseline_c_mm",
+               "accuracy", "iar_num_hypotheses", "wn", "rtk_receiver_id", "rtk_health", "rtk_rate",
+               "nsats", "baseline_coords_type"],
     ALTITUDE: ["time_usec", "altitude_monotonic", "altitude_amsl", "altitude_local",
                "altitude_relative", "altitude_terrain", "bottom_clearance"],
     VIBRATION: ["time_usec", "vibration_x", "vibration_y", "vibration_z",
@@ -943,6 +954,14 @@ _WIRE = {
                      ["fitness", "ofs_x", "ofs_y", "ofs_z", "diag_x", "diag_y", "diag_z",
                       "offdiag_x", "offdiag_y", "offdiag_z",
                       "compass_id", "cal_mask", "cal_status", "autosaved"], 44),
+    GPS_RTK: ("<IIiiiIiHBBBBB",
+              ["time_last_baseline_ms", "tow", "baseline_a_mm", "baseline_b_mm", "baseline_c_mm",
+               "accuracy", "iar_num_hypotheses", "wn", "rtk_receiver_id", "rtk_health", "rtk_rate",
+               "nsats", "baseline_coords_type"], 35),
+    GPS2_RTK: ("<IIiiiIiHBBBBB",
+               ["time_last_baseline_ms", "tow", "baseline_a_mm", "baseline_b_mm", "baseline_c_mm",
+                "accuracy", "iar_num_hypotheses", "wn", "rtk_receiver_id", "rtk_health", "rtk_rate",
+                "nsats", "baseline_coords_type"], 35),
     ALTITUDE: ("<Qffffff",
                ["time_usec", "altitude_monotonic", "altitude_amsl", "altitude_local",
                 "altitude_relative", "altitude_terrain", "bottom_clearance"], 32),

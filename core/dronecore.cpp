@@ -124,6 +124,8 @@ constexpr MsgInfo MSGS[] = {
     {262,  12, 18},  // CAMERA_CAPTURE_STATUS (image/video status, recording ms, free MB)
     {191,  92, 17},  // MAG_CAL_PROGRESS (prefix only: direction + status + pct; skips completion_mask[10])
     {192,  36, 44},  // MAG_CAL_REPORT (fitness + offsets/diagonals + cal_status)
+    {127,  25, 35},  // GPS_RTK (RTK baseline mm + accuracy + nsats + rtk_health, primary receiver)
+    {128, 226, 35},  // GPS2_RTK (2nd RTK receiver, identical layout)
 };
 
 const MsgInfo* find_info(uint32_t id) {
@@ -212,6 +214,14 @@ void decode(uint32_t msgid, const uint8_t* pl, Decoded& d) {
         push(rd_f32(pl + 16)); push(rd_f32(pl + 20)); push(rd_f32(pl + 24));
         push(rd_f32(pl + 28)); push(rd_f32(pl + 32)); push(rd_f32(pl + 36));
         push(pl[40]); push(pl[41]); push(pl[42]); push(pl[43]);
+        break;
+    case 127: // GPS_RTK
+    case 128: // GPS2_RTK (identical layout): time_last_baseline_ms, tow, baseline_a/b/c_mm, accuracy, iar_num_hypotheses, wn, rtk_receiver_id, rtk_health, rtk_rate, nsats, baseline_coords_type
+        push(rd_u32(pl + 0)); push(rd_u32(pl + 4));
+        push(rd_i32(pl + 8)); push(rd_i32(pl + 12)); push(rd_i32(pl + 16));
+        push(rd_u32(pl + 20)); push(rd_i32(pl + 24));
+        push(rd_u16(pl + 28));
+        push(pl[30]); push(pl[31]); push(pl[32]); push(pl[33]); push(pl[34]);
         break;
     case 141: // ALTITUDE: time_usec, monotonic, amsl, local, relative, terrain, bottom_clearance
         push(rd_u64(pl + 0));
