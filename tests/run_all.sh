@@ -145,6 +145,7 @@ check "geotag"              ""                        tests/test_geotag.py
 check "geotagdialog"        ""                        tests/test_geotagdialog.py
 check "parammeta"           ""                        tests/test_parammeta.py
 check "newmsgfuzz"          ""                        tests/test_newmsgfuzz.py
+check "ftpcaps"             ""                        tests/test_ftpcaps.py
 check "camera"              ""                        tests/test_camera.py
 check "logs"                ""                        tests/test_logs.py
 check "video"               ""                        tests/test_video.py

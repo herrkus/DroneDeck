@@ -84,6 +84,9 @@ class FtpClient:
     a time. Reads pull CHUNK bytes per request until a short chunk / filesize / EOF-NAK; directory
     listings request rising offsets until an empty ACK or EOF-NAK."""
     CHUNK = DATA_MAX     # request up to 239 data bytes per read
+    MAX_READ = 64 * 1024 * 1024   # abort a read past 64 MB -- a rogue/buggy autopilot (or a corrupt
+                                  # filesize) must not exhaust GCS memory; real config/param files are tiny
+    MAX_ENTRIES = 16384           # abort a listing past 16k entries -- a misbehaving FC must not loop forever
 
     def __init__(self, send):
         self._send = send
@@ -97,7 +100,7 @@ class FtpClient:
         self.op = None
         self.path = ""
         self.offset = 0
-        self.buffer = b""
+        self.buffer = bytearray()    # bytearray, not bytes: += is in-place O(chunk), so a big read is O(n) not O(n^2)
         self.entries = []
         self.filesize = None
         self.done = False
@@ -157,7 +160,7 @@ class FtpClient:
                 if self.op == "list":
                     self._finish(self.entries)
                 else:
-                    data = self.buffer
+                    data = bytes(self.buffer)
                     self._terminate()
                     self._finish(data)
             else:
@@ -190,6 +193,8 @@ class FtpClient:
             # 'S' (skip) or anything else: still counted toward the offset, not listed
         if n == 0:
             self._finish(self.entries)               # empty ACK -> end of listing
+        elif len(self.entries) > self.MAX_ENTRIES:   # misbehaving FC listing without end
+            self._finish(self.entries, error=f"listing truncated at {self.MAX_ENTRIES} entries")
         else:
             self.offset += n
             self._issue(OP_LIST_DIRECTORY, offset=self.offset, data=self.path.encode("utf-8"))
@@ -200,14 +205,18 @@ class FtpClient:
             self.session = pkt.get("session", 0)
             d = pkt.get("data") or b""
             self.filesize = struct.unpack("<I", d[:4])[0] if len(d) >= 4 else None
-            self.offset, self.buffer = 0, b""
+            self.offset, self.buffer = 0, bytearray()
             self._issue(OP_READ_FILE, offset=0, data=b"", size=self.CHUNK, session=self.session)
             return
         chunk = pkt.get("data") or b""
         self.buffer += chunk
         self.offset += len(chunk)
+        if len(self.buffer) > self.MAX_READ:             # rogue/buggy FC streaming without end
+            self._terminate()
+            self._finish(error=f"file exceeds {self.MAX_READ} byte limit (aborted at {len(self.buffer)} bytes)")
+            return
         if (not chunk) or (self.filesize is not None and self.offset >= self.filesize):
-            data = self.buffer
+            data = bytes(self.buffer)
             self._terminate()
             self._finish(data)
         else:
