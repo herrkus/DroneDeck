@@ -130,6 +130,7 @@ constexpr MsgInfo MSGS[] = {
     {260, 146,  5},  // CAMERA_SETTINGS (current camera mode; zoom/focus are extensions)
     {263, 133, 50},  // CAMERA_IMAGE_CAPTURED (prefix only: index+result+position; skips file_url[205])
     {110,  84, 254}, // FILE_TRANSFER_PROTOCOL (MAVLink FTP: 3 target bytes + 251-byte payload into text)
+    {180,  52, 45},  // CAMERA_FEEDBACK (ArduPilot geotag: per-photo lat/lng/alt at shutter)
 };
 
 const MsgInfo* find_info(uint32_t id) {
@@ -245,6 +246,12 @@ void decode(uint32_t msgid, const uint8_t* pl, Decoded& d) {
     case 110: // FILE_TRANSFER_PROTOCOL: target_network/system/component (u8) + 251-byte FTP payload into text
         push(pl[0]); push(pl[1]); push(pl[2]);
         std::memcpy(d.text, pl + 3, 251);
+        break;
+    case 180: // CAMERA_FEEDBACK: time_usec, lat, lng, alt_msl, alt_rel, roll, pitch, yaw, foc_len, img_idx, target_system, cam_idx, flags
+        push(rd_u64(pl + 0)); push(rd_i32(pl + 8)); push(rd_i32(pl + 12));
+        push(rd_f32(pl + 16)); push(rd_f32(pl + 20)); push(rd_f32(pl + 24));
+        push(rd_f32(pl + 28)); push(rd_f32(pl + 32)); push(rd_f32(pl + 36));
+        push(rd_u16(pl + 40)); push(pl[42]); push(pl[43]); push(pl[44]);
         break;
     case 141: // ALTITUDE: time_usec, monotonic, amsl, local, relative, terrain, bottom_clearance
         push(rd_u64(pl + 0));

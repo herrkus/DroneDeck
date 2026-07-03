@@ -70,6 +70,7 @@ STORAGE_INFORMATION = 261    # camera storage: total/used/available capacity (MB
 CAMERA_CAPTURE_STATUS = 262  # camera: image/video capture status, recording time, free capacity
 CAMERA_SETTINGS = 260        # camera: current mode (0 photo / 1 video / 2 survey) + zoom/focus
 CAMERA_IMAGE_CAPTURED = 263  # camera: one photo captured -- index + result + position (file_url skipped)
+CAMERA_FEEDBACK = 180        # ArduPilot geotag source: per-photo lat/lng/alt at shutter (for GeoTag)
 MAG_CAL_PROGRESS = 191       # compass onboard cal progress: completion_pct + cal_status + direction
 MAG_CAL_REPORT = 192         # compass onboard cal result: cal_status + fitness
 GPS_RTK = 127                # RTK GPS status: baseline (mm), accuracy, nsats, rtk_health (primary receiver)
@@ -138,6 +139,7 @@ MSG_NAME = {
     CAMERA_CAPTURE_STATUS: "CAMERA_CAPTURE_STATUS",
     CAMERA_SETTINGS: "CAMERA_SETTINGS",
     CAMERA_IMAGE_CAPTURED: "CAMERA_IMAGE_CAPTURED",
+    CAMERA_FEEDBACK: "CAMERA_FEEDBACK",
     MAG_CAL_PROGRESS: "MAG_CAL_PROGRESS",
     MAG_CAL_REPORT: "MAG_CAL_REPORT",
     GPS_RTK: "GPS_RTK",
@@ -201,7 +203,7 @@ CRC_EXTRA = {
     ALTITUDE: 47, BATTERY_STATUS: 154, VIBRATION: 90, RADIO_STATUS: 185,
     NAV_CONTROLLER_OUTPUT: 183, POWER_STATUS: 203, DISTANCE_SENSOR: 85,
     STORAGE_INFORMATION: 179, CAMERA_CAPTURE_STATUS: 12,
-    CAMERA_SETTINGS: 146, CAMERA_IMAGE_CAPTURED: 133,
+    CAMERA_SETTINGS: 146, CAMERA_IMAGE_CAPTURED: 133, CAMERA_FEEDBACK: 52,
     MAG_CAL_PROGRESS: 92, MAG_CAL_REPORT: 36,
     GPS_RTK: 25, GPS2_RTK: 226, GPS_RTCM_DATA: 35,
     TERRAIN_CHECK: 203, TERRAIN_REPORT: 1,
@@ -240,6 +242,8 @@ FIELDS = {
     CAMERA_SETTINGS: ["time_boot_ms", "mode_id"],
     CAMERA_IMAGE_CAPTURED: ["time_utc", "time_boot_ms", "lat", "lon", "alt", "relative_alt",
                             "q0", "q1", "q2", "q3", "image_index", "camera_id", "capture_result"],
+    CAMERA_FEEDBACK: ["time_usec", "lat", "lng", "alt_msl", "alt_rel", "roll", "pitch", "yaw",
+                      "foc_len", "img_idx", "target_system", "cam_idx", "flags"],
     MAG_CAL_PROGRESS: ["direction_x", "direction_y", "direction_z",
                        "compass_id", "cal_mask", "cal_status", "attempt", "completion_pct"],
     MAG_CAL_REPORT: ["fitness", "ofs_x", "ofs_y", "ofs_z", "diag_x", "diag_y", "diag_z",
@@ -999,6 +1003,9 @@ _WIRE = {
     CAMERA_IMAGE_CAPTURED: ("<QIiiiiffffiBb",
                             ["time_utc", "time_boot_ms", "lat", "lon", "alt", "relative_alt",
                              "q0", "q1", "q2", "q3", "image_index", "camera_id", "capture_result"], 50),
+    CAMERA_FEEDBACK: ("<QiiffffffHBBB",
+                      ["time_usec", "lat", "lng", "alt_msl", "alt_rel", "roll", "pitch", "yaw",
+                       "foc_len", "img_idx", "target_system", "cam_idx", "flags"], 45),
     # decode only the 17-byte prefix; completion_mask (uint8[10]) is skipped. base 27, but len=17 so
     # the parser truncates the mask off before unpack (CRC 92 is computed over the full field set).
     MAG_CAL_PROGRESS: ("<fffBBBBB",
