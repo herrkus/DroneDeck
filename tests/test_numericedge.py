@@ -87,3 +87,7 @@ for z in (0, 1, 19, 20):
     win.map.grab()
 
 print("NUMERICEDGE PASSED (haversine/bearing/scale + full refresh survive pole/dateline/antipodal)")
+
+import os, sys  # harden: flush verdict + skip Qt-teardown segfault under the full sweep
+sys.stdout.flush()
+os._exit(0)

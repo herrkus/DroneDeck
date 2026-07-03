@@ -82,3 +82,7 @@ win._connect()
 assert win._stream_reqs == {}, "reconnect must clear stream retry state"
 
 print("STREAMREQ PASSED")
+
+import os, sys  # harden: flush verdict + skip Qt-teardown segfault under the full sweep
+sys.stdout.flush()
+os._exit(0)

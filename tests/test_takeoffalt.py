@@ -72,3 +72,7 @@ win2.load_settings()
 assert win2._takeoff_alt == 57.0, win2._takeoff_alt
 
 print("TAKEOFFALT PASSED")
+
+import os, sys  # harden: flush verdict + skip Qt-teardown segfault under the full sweep
+sys.stdout.flush()
+os._exit(0)

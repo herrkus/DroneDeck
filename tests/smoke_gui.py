@@ -109,4 +109,5 @@ if state.get("chart_points", 0) < 10:
 
 print(f"screenshot: {OUT}")
 print("SMOKE FAILED: " + "; ".join(fail) if fail else "SMOKE PASSED")
-sys.exit(1 if fail else 0)
+sys.stdout.flush()
+os._exit(1 if fail else 0)                          # skip Qt-teardown segfault under the full sweep

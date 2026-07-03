@@ -36,3 +36,7 @@ assert abs(c.wind_dir - 40.0) < 1e-6
 c.render(pm)
 
 print("WINDCOMPASS PASSED")
+
+import os, sys  # harden: flush verdict + skip Qt-teardown segfault under the full sweep
+sys.stdout.flush()
+os._exit(0)

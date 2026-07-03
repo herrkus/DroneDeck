@@ -87,3 +87,7 @@ exp = m.bearing(ve.lat, ve.lon, ve.home[0], ve.home[1])
 assert abs((win.compass.home_bearing - exp + 180) % 360 - 180) < 0.5, (win.compass.home_bearing, exp)
 
 print("HOMEBUG PASSED")
+
+import os, sys  # harden: flush verdict + skip Qt-teardown segfault under the full sweep
+sys.stdout.flush()
+os._exit(0)

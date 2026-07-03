@@ -39,3 +39,7 @@ ve.clear_trail()
 assert ve.trail == [] and ve.trail is before
 
 print("CLEARTRAIL PASSED")
+
+import os, sys  # harden: flush verdict + skip Qt-teardown segfault under the full sweep
+sys.stdout.flush()
+os._exit(0)

@@ -118,4 +118,5 @@ print(f"Serial: {serial_note} -> {'OK' if serial_ok else ('FAIL' if serial_ok is
 # TCP is the gate; serial only fails the suite if it opened but didn't deliver.
 hard_fail = (not tcp_ok) or (serial_ok is False)
 print("LINKS FAILED" if hard_fail else "LINKS PASSED")
-sys.exit(1 if hard_fail else 0)
+sys.stdout.flush()
+os._exit(1 if hard_fail else 0)

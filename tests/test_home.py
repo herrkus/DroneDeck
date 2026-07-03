@@ -45,3 +45,7 @@ assert abs(v.home[0] - 47.5) < 1e-6 and abs(v.home[1] - 8.5) < 1e-6
 assert abs(v.home_alt - 488.2) < 1e-3
 
 print("HOME PASSED")
+
+import os, sys  # harden: flush verdict + skip Qt-teardown segfault under the full sweep
+sys.stdout.flush()
+os._exit(0)

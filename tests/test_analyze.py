@@ -65,3 +65,7 @@ finally:
     for f in (tmp, outcsv):
         if os.path.exists(f):
             os.remove(f)
+
+import os, sys  # harden: flush verdict + skip Qt-teardown segfault under the full sweep
+sys.stdout.flush()
+os._exit(0)

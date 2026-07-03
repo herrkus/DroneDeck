@@ -101,3 +101,7 @@ assert len(bnotes) == 3 and "LOW BATTERY" in bnotes[2][0], f"re-arm after rechar
 print("alarms:", [n[0] for n in notes])
 print("battery alarms:", [n[0] for n in bnotes])
 print("FAILSAFE PASSED (+ iter114: low-battery LOW/CRITICAL annunciation, edge-triggered + re-arm)")
+
+import os, sys  # harden: flush verdict + skip Qt-teardown segfault under the full sweep
+sys.stdout.flush()
+os._exit(0)

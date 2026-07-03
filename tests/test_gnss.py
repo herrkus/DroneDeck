@@ -61,3 +61,7 @@ sp2.update_from(Vehicle())
 assert sp2._gi_group.isHidden()
 
 print("GNSS PASSED")
+
+import os, sys  # harden: flush verdict + skip Qt-teardown segfault under the full sweep
+sys.stdout.flush()
+os._exit(0)

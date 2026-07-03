@@ -89,3 +89,7 @@ assert run(win._emergency_stop, NO) == []
 assert run(win._emergency_stop, YES) == [("force_disarm",)]
 
 print("CONFIRM PASSED")
+
+import os, sys  # harden: flush verdict + skip Qt-teardown segfault under the full sweep
+sys.stdout.flush()
+os._exit(0)

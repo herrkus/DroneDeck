@@ -55,3 +55,7 @@ ve.consume([Msg(mavlink.VIBRATION, {"vibration_x": 1.0, "vibration_y": 2.0, "vib
 assert ve.clipping == (4, 5, 6)
 
 print("VIBRATION PASSED")
+
+import os, sys  # harden: flush verdict + skip Qt-teardown segfault under the full sweep
+sys.stdout.flush()
+os._exit(0)

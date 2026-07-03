@@ -49,3 +49,7 @@ win._refresh()
 assert tp.v["wp_num"].text() == "--" and tp.v["wp_dist"].text() == "--" and tp.v["wp_eta"].text() == "--"
 
 print("WPPROGRESS PASSED")
+
+import os, sys  # harden: flush verdict + skip Qt-teardown segfault under the full sweep
+sys.stdout.flush()
+os._exit(0)

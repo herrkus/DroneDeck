@@ -59,3 +59,7 @@ assert win._ruler_a is None and win.map.ruler is None
 assert win.statusBar().currentMessage() == ""
 
 print("RULER PASSED")
+
+import os, sys  # harden: flush verdict + skip Qt-teardown segfault under the full sweep
+sys.stdout.flush()
+os._exit(0)

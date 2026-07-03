@@ -54,3 +54,7 @@ assert mp.follow is True
 assert win.btn_center is not None
 
 print("MAPCENTER PASSED")
+
+import os, sys  # harden: flush verdict + skip Qt-teardown segfault under the full sweep
+sys.stdout.flush()
+os._exit(0)

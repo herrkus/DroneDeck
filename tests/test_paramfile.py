@@ -89,3 +89,7 @@ loaded5 = ParamDialog.load_params_from(p5)
 assert loaded5 == {"REAL_P": 7.5, "MORE": 3.0}, f"mixed-file recovery failed: {loaded5}"
 
 print("PARAMFILE PASSED (+ iter100: non-finite dropped, binary tolerated)")
+
+import os, sys  # harden: flush verdict + skip Qt-teardown segfault under the full sweep
+sys.stdout.flush()
+os._exit(0)

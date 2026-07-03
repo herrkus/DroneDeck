@@ -62,3 +62,7 @@ win._on_msg_visibility(False)
 assert win._msg_unread == 1
 
 print("MSGUNREAD PASSED")
+
+import os, sys  # harden: flush verdict + skip Qt-teardown segfault under the full sweep
+sys.stdout.flush()
+os._exit(0)

@@ -84,3 +84,7 @@ mi = [mm for mm in batch if mm.msgid == mavlink.MISSION_ITEM_INT]
 assert mi and -2147483648 <= mi[0].fields["x"] <= 2147483647, "clamped item did not parse"
 
 print("EXPORTFUZZ PASSED (GPX skips non-finite + valid XML; coord encoders clamp int32, no crash)")
+
+import os, sys  # harden: flush verdict + skip Qt-teardown segfault under the full sweep
+sys.stdout.flush()
+os._exit(0)

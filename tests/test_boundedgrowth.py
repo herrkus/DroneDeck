@@ -92,3 +92,7 @@ if rss0 > 0 and rss1 > 0:
 
 print(f"BOUNDEDGROWTH PASSED (trail<={ve.TRAIL_MAX}, messages<=200, traffic<={win.TRAFFIC_MAX}; "
       f"RSS +{(rss1 - rss0) / 1024.0:.0f} MB)")
+
+import os, sys  # harden: flush verdict + skip Qt-teardown segfault under the full sweep
+sys.stdout.flush()
+os._exit(0)

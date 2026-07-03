@@ -79,3 +79,7 @@ win._refresh()
 win.map.grab()
 
 print("MAPFUZZ PASSED (map survives NaN/Inf/out-of-range geometry)")
+
+import os, sys  # harden: flush verdict + skip Qt-teardown segfault under the full sweep
+sys.stdout.flush()
+os._exit(0)

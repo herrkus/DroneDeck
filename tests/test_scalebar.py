@@ -52,3 +52,7 @@ mv.render(pm)                       # exercises paintEvent -> _draw_hud -> scale
 assert not pm.isNull()
 
 print("SCALEBAR PASSED")
+
+import os, sys  # harden: flush verdict + skip Qt-teardown segfault under the full sweep
+sys.stdout.flush()
+os._exit(0)

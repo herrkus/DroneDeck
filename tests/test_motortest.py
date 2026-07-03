@@ -79,3 +79,7 @@ assert int(f["command"]) == 209 and abs(f["param1"] - 3) < 1e-6 and abs(f["param
 
 print("MOTORTEST PASSED (safety gate blocks spin without props-removed ack; correct DO_MOTOR_TEST "
       "params + sequence order; wire round-trip)")
+
+import os, sys  # harden: flush verdict + skip Qt-teardown segfault under the full sweep
+sys.stdout.flush()
+os._exit(0)

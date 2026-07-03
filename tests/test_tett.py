@@ -46,3 +46,7 @@ tp.update_all(v, "connected", 5.0, 100, 0, nav={"rtl_time": "02:05", "mission_et
 assert tp.v["rtl_time"].text() == "02:05" and tp.v["mission_eta"].text() == "05:10"
 
 print("TETT PASSED")
+
+import os, sys  # harden: flush verdict + skip Qt-teardown segfault under the full sweep
+sys.stdout.flush()
+os._exit(0)

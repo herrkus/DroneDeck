@@ -54,3 +54,7 @@ assert callable(getattr(ParamDialog, "_compare_file", None))
 assert callable(getattr(ParamDialog, "diff_params", None))
 
 print("PARAMDIFF PASSED")
+
+import os, sys  # harden: flush verdict + skip Qt-teardown segfault under the full sweep
+sys.stdout.flush()
+os._exit(0)

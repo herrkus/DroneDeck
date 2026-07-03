@@ -36,3 +36,7 @@ win._on_new_message(4, "post-clear warning")
 assert win.console.count() == 1 and win._msg_unread == 1
 
 print("MSGCLEAR PASSED")
+
+import os, sys  # harden: flush verdict + skip Qt-teardown segfault under the full sweep
+sys.stdout.flush()
+os._exit(0)

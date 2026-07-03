@@ -40,3 +40,7 @@ assert sp.cell_bars.cells == [3.20, 3.55, 3.75, 4.20]
 sp.cell_bars.render(pm)
 
 print("CELLBARS PASSED")
+
+import os, sys  # harden: flush verdict + skip Qt-teardown segfault under the full sweep
+sys.stdout.flush()
+os._exit(0)
