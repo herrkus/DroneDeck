@@ -167,6 +167,7 @@ class RcCalibrationWidget(QWidget):
 
 class SensorCalibrationWidget(QWidget):
     calRequested = Signal(str)             # 'gyro' | 'accel' | 'level' | 'compass'
+    accelPosRequested = Signal(int)        # accel 6-position: 1 level..6 back (ACCELCAL_VEHICLE_POS)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -179,6 +180,20 @@ class SensorCalibrationWidget(QWidget):
             row.addWidget(b)
         row.addStretch(1)
         v.addLayout(row)
+        # accel 6-position row: click each orientation as the vehicle prompts for it (ArduPilot).
+        # Disabled until an accel calibration is started.
+        pos_row = QHBoxLayout()
+        self._pos_btns = []
+        for label, pos in (("Level", mavlink.ACCELCAL_POS_LEVEL), ("Left", mavlink.ACCELCAL_POS_LEFT),
+                           ("Right", mavlink.ACCELCAL_POS_RIGHT), ("Nose Down", mavlink.ACCELCAL_POS_NOSEDOWN),
+                           ("Nose Up", mavlink.ACCELCAL_POS_NOSEUP), ("Back", mavlink.ACCELCAL_POS_BACK)):
+            b = QPushButton(label)
+            b.setEnabled(False)
+            b.clicked.connect(lambda _=False, p=pos: self.accelPosRequested.emit(p))
+            pos_row.addWidget(b)
+            self._pos_btns.append(b)
+        pos_row.addStretch(1)
+        v.addLayout(pos_row)
         self.status = QLabel("Pick a calibration; follow the prompts from the vehicle.")
         self.status.setStyleSheet("color:#8fa3bf;")
         v.addWidget(self.status)
@@ -188,7 +203,11 @@ class SensorCalibrationWidget(QWidget):
 
     def _request(self, kind):
         self.log.clear()
-        self.status.setText(f"{kind} calibration started…")
+        accel = (kind == "accel")
+        for b in self._pos_btns:            # position buttons are only for the accel 6-position dance
+            b.setEnabled(accel)
+        self.status.setText("Accel: place the vehicle in each orientation the log prompts for, then "
+                            "click the matching button." if accel else f"{kind} calibration started…")
         self.calRequested.emit(kind)
 
     def add_status(self, severity, text):

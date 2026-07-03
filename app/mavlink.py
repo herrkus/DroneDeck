@@ -317,6 +317,13 @@ MAV_VTOL_STATE_TEXT = {0: "--", 1: "-> Fixed-wing", 2: "-> Multicopter",
 MAV_CMD_DO_MOUNT_CONTROL = 205          # gimbal v1: param1=pitch, param2=roll, param3=yaw
 MAV_CMD_DO_GIMBAL_MANAGER_PITCHYAW = 1000  # gimbal v2 manager: p1=pitch deg, p2=yaw deg, p3/4=rates, p7=gimbal id
 MAV_CMD_DO_FENCE_ENABLE = 207           # geofence: p1 = 0 disable / 1 enable / 2 disable floor only
+MAV_CMD_ACCELCAL_VEHICLE_POS = 42429    # advance ArduPilot 6-position accel cal (param1 = position 1-6)
+ACCELCAL_POS_LEVEL = 1
+ACCELCAL_POS_LEFT = 2
+ACCELCAL_POS_RIGHT = 3
+ACCELCAL_POS_NOSEDOWN = 4
+ACCELCAL_POS_NOSEUP = 5
+ACCELCAL_POS_BACK = 6
 MAV_CMD_DO_SET_CAM_TRIGG_DIST = 206     # param1=distance m (0 = off)
 MAV_CMD_DO_DIGICAM_CONTROL = 203        # param5=1 -> trigger one shot
 MAV_CMD_IMAGE_START_CAPTURE = 2000      # param3=count (1 = single)

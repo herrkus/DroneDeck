@@ -1144,6 +1144,7 @@ class DroneDeck(QMainWindow):
         dlg = CalibrationDialog(lambda: self.link, self.params, self)
         dlg.radio.saveRequested.connect(self._cal_write_params)
         dlg.sensor.calRequested.connect(self._cal_sensor)
+        dlg.sensor.accelPosRequested.connect(self._cal_accel_pos)
         dlg.motors.motorTestRequested.connect(self._motor_test)
         dlg.exec()
 
@@ -1169,6 +1170,12 @@ class DroneDeck(QMainWindow):
             return
         self.link.calibrate(self._sysid(), kind)
         self._on_info(f"requested {kind} calibration")
+
+    def _cal_accel_pos(self, position):
+        """Advance the accel 6-position calibration (ACCELCAL_VEHICLE_POS)."""
+        if self._has_vehicle():
+            self.link.accel_cal_position(self._sysid(), position)
+            self._on_info(f"accel cal position {position}")
 
     # -- multi-vehicle routing + ADSB traffic ---------------------------------
     def _route(self, batch):

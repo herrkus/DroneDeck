@@ -421,6 +421,13 @@ class Link(QObject):
                                [float(pitch_deg), float(yaw_deg), float("nan"), float("nan"),
                                 0.0, 0.0, float(int(gimbal_id))])
 
+    def accel_cal_position(self, target_sys, position):
+        # ACCELCAL_VEHICLE_POS: advance ArduPilot's interactive 6-position accel calibration.
+        # param1 = position (1 level, 2 left, 3 right, 4 nose-down, 5 nose-up, 6 back), sent after
+        # the vehicle prompts for each orientation via STATUSTEXT.
+        self.send_command_long(target_sys, mavlink.MAV_CMD_ACCELCAL_VEHICLE_POS,
+                               [float(int(position)), 0, 0, 0, 0, 0, 0])
+
     def calibrate(self, target_sys, kind):
         """kind: 'gyro' | 'accel' | 'level' | 'compass' -> MAV_CMD_PREFLIGHT_CALIBRATION."""
         p = [0, 0, 0, 0, 0, 0, 0]
