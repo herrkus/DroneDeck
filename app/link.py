@@ -482,10 +482,11 @@ class Link(QObject):
         payload = bytes((flags & 0xFF, len(chunk) & 0xFF)) + chunk + b"\x00" * (self.RTCM_FRAG_LEN - len(chunk))
         self._send_msg(mavlink.GPS_RTCM_DATA, payload)
 
-    def send_ftp(self, target_sys, seq, session, opcode, offset=0, data=b"", target_comp=1):
-        """Send one MAVLink FTP request packet inside FILE_TRANSFER_PROTOCOL (target_network 0). Returns
-        the encoded FTP packet so a caller/client can track the seq it just issued."""
-        pkt = ftp.encode(seq, session, opcode, offset, data)
+    def send_ftp(self, target_sys, seq, session, opcode, offset=0, data=b"", size=None, target_comp=1):
+        """Send one MAVLink FTP request packet inside FILE_TRANSFER_PROTOCOL (target_network 0). `size`
+        defaults to len(data) but a read request passes it to ask for that many bytes. Returns the
+        encoded FTP packet so a caller/client can track the request it just issued."""
+        pkt = ftp.encode(seq, session, opcode, offset, data, size=size)
         self._send_msg(mavlink.FILE_TRANSFER_PROTOCOL,
                        bytes((0, target_sys & 0xFF, target_comp & 0xFF)) + pkt)
         return pkt
