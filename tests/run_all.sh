@@ -140,6 +140,7 @@ check "ftpclient"           ""                        tests/test_ftpclient.py
 check "ftpbrowser"          ""                        tests/test_ftpbrowser.py
 check "components"          ""                        tests/test_components.py
 check "forward"             ""                        tests/test_forward.py
+check "preflight"           ""                        tests/test_preflight.py
 check "camera"              ""                        tests/test_camera.py
 check "logs"                ""                        tests/test_logs.py
 check "video"               ""                        tests/test_video.py

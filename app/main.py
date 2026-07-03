@@ -880,6 +880,9 @@ class DroneDeck(QMainWindow):
         act_fwd = tools.addAction("MAVLink Forwarding...")
         act_fwd.setToolTip("Re-broadcast received telemetry to a 2nd UDP endpoint (companion, 2nd GCS)")
         act_fwd.triggered.connect(self._open_forward)
+        act_preflight = tools.addAction("Preflight Check...")
+        act_preflight.setToolTip("Arming readiness: GPS / estimator / home / battery / sensor health")
+        act_preflight.triggered.connect(self._open_preflight)
         tools.addAction("Export Track (GPX)...").triggered.connect(self._export_track)
         tools.addSeparator()
         act_chute = tools.addAction("Deploy Parachute (emergency)")
@@ -901,6 +904,10 @@ class DroneDeck(QMainWindow):
         from ftpbrowser import FtpBrowserDialog
         os.makedirs(LOG_DIR, exist_ok=True)
         FtpBrowserDialog(lambda: self.link, self._sysid, LOG_DIR, self).exec()
+
+    def _open_preflight(self):
+        from preflight import PreflightDialog
+        PreflightDialog(lambda: self.vehicle if self._has_vehicle() else None, self).exec()
 
     def _open_forward(self):
         from PySide6.QtWidgets import QInputDialog
