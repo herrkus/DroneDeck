@@ -28,7 +28,7 @@ class Decoded(ctypes.Structure):
         ("seq", ctypes.c_uint8),
         ("nfields", ctypes.c_uint8),
         ("f", ctypes.c_double * 24),
-        ("text", ctypes.c_ubyte * 96),       # NUL-terminated string, or LOG_DATA blob
+        ("text", ctypes.c_ubyte * 256),      # NUL-terminated string, LOG_DATA blob, or FTP payload
     ]
 
 
@@ -121,6 +121,8 @@ class Parser:
                 fields["param_id"] = bytes(d.text).split(b"\x00")[0].decode("utf-8", "replace")
             elif d.msgid in (mavlink.LOG_DATA, mavlink.SERIAL_CONTROL):
                 fields["data"] = bytes(d.text)[:int(fields.get("count", 0))]
+            elif d.msgid == mavlink.FILE_TRANSFER_PROTOCOL:
+                fields["payload"] = bytes(d.text)[:251]        # the 251-byte MAVLink FTP payload
             elif d.msgid == mavlink.ADSB_VEHICLE:
                 fields["callsign"] = bytes(d.text).split(b"\x00")[0].decode("utf-8", "replace")
             out.append(Message(d.msgid, d.sysid, d.compid, d.seq, fields))

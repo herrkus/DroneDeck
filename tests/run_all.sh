@@ -135,6 +135,7 @@ check "gps_rtk"             ""                        tests/test_gps_rtk.py
 check "rtcm_inject"         ""                        tests/test_rtcm_inject.py
 check "terrain_report"      ""                        tests/test_terrain_report.py
 check "camera_protocol"     ""                        tests/test_camera_protocol.py
+check "ftp"                 ""                        tests/test_ftp.py
 check "camera"              ""                        tests/test_camera.py
 check "logs"                ""                        tests/test_logs.py
 check "video"               ""                        tests/test_video.py

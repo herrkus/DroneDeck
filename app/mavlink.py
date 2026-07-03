@@ -105,6 +105,7 @@ LOG_ENTRY = 118
 LOG_REQUEST_DATA = 119
 LOG_DATA = 120
 LOG_REQUEST_END = 122
+FILE_TRANSFER_PROTOCOL = 110   # MAVLink FTP: 3 target bytes + a 251-byte FTP packet (session/opcode/data)
 # MAVLink serial/shell passthrough (PX4 nsh console)
 SERIAL_CONTROL = 126
 SERIAL_CONTROL_DEV_SHELL = 10
@@ -181,6 +182,7 @@ MSG_NAME = {
     LOG_ENTRY: "LOG_ENTRY",
     LOG_REQUEST_DATA: "LOG_REQUEST_DATA",
     LOG_DATA: "LOG_DATA",
+    FILE_TRANSFER_PROTOCOL: "FILE_TRANSFER_PROTOCOL",
     LOG_REQUEST_END: "LOG_REQUEST_END",
     SERIAL_CONTROL: "SERIAL_CONTROL",
     ADSB_VEHICLE: "ADSB_VEHICLE",
@@ -210,6 +212,7 @@ CRC_EXTRA = {
     LOG_REQUEST_LIST: 128, LOG_ENTRY: 56, LOG_REQUEST_DATA: 116,
     LOG_DATA: 134, LOG_REQUEST_END: 203, ADSB_VEHICLE: 184,
     SERIAL_CONTROL: 220,
+    FILE_TRANSFER_PROTOCOL: 84,
 }
 
 # Decoded-field order. Index i here is index i in Decoded.f[] from the C++ core.
@@ -302,6 +305,7 @@ FIELDS = {
     LOG_ENTRY: ["time_utc", "size", "id", "num_logs", "last_log_num"],
     LOG_REQUEST_DATA: ["ofs", "count", "id", "target_system", "target_component"],
     LOG_DATA: ["ofs", "id", "count"],        # `data` (90 bytes) attached separately
+    FILE_TRANSFER_PROTOCOL: ["target_network", "target_system", "target_component"],  # +payload (251 B)
     SERIAL_CONTROL: ["baudrate", "timeout", "device", "flags", "count"],  # `data` (70 B) attached
     LOG_REQUEST_END: ["target_system", "target_component"],
     ADSB_VEHICLE: ["ICAO_address", "lat", "lon", "altitude", "heading", "hor_velocity",
@@ -1065,6 +1069,8 @@ _WIRE = {
     LOG_REQUEST_DATA: ("<IIHBB", ["ofs", "count", "id", "target_system", "target_component"], 12),
     LOG_DATA: ("<IHB90s", ["ofs", "id", "count", "data"], 97),
     SERIAL_CONTROL: ("<IHBBB70s", ["baudrate", "timeout", "device", "flags", "count", "data"], 79),
+    FILE_TRANSFER_PROTOCOL: ("<BBB251s",
+                             ["target_network", "target_system", "target_component", "payload"], 254),
     LOG_REQUEST_END: ("<BB", ["target_system", "target_component"], 2),
     ADSB_VEHICLE: ("<IiiiHHhHHB9sBB",
                    ["ICAO_address", "lat", "lon", "altitude", "heading", "hor_velocity",

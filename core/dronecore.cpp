@@ -129,6 +129,7 @@ constexpr MsgInfo MSGS[] = {
     {136,   1, 22},  // TERRAIN_REPORT (terrain-follow: height above terrain + tiles pending/loaded)
     {260, 146,  5},  // CAMERA_SETTINGS (current camera mode; zoom/focus are extensions)
     {263, 133, 50},  // CAMERA_IMAGE_CAPTURED (prefix only: index+result+position; skips file_url[205])
+    {110,  84, 254}, // FILE_TRANSFER_PROTOCOL (MAVLink FTP: 3 target bytes + 251-byte payload into text)
 };
 
 const MsgInfo* find_info(uint32_t id) {
@@ -148,8 +149,9 @@ struct Decoded {
     uint8_t  seq;       // 6
     uint8_t  nfields;   // 7
     double   f[24];     // 8
-    char     text[96];  // 200: STATUSTEXT/param_id (NUL-terminated) or LOG_DATA's
-                        //      90-byte blob (length given by the `count` field)
+    char     text[256]; // 200: STATUSTEXT/param_id (NUL-terminated), LOG_DATA's 90-byte blob
+                        //      (length in the `count` field), or FILE_TRANSFER_PROTOCOL's 251-byte
+                        //      payload. Trailing field -> size can grow without disturbing f[]/alignment.
 };
 
 namespace {
@@ -239,6 +241,10 @@ void decode(uint32_t msgid, const uint8_t* pl, Decoded& d) {
         push(rd_i32(pl + 12)); push(rd_i32(pl + 16)); push(rd_i32(pl + 20)); push(rd_i32(pl + 24));
         push(rd_f32(pl + 28)); push(rd_f32(pl + 32)); push(rd_f32(pl + 36)); push(rd_f32(pl + 40));
         push(rd_i32(pl + 44)); push(pl[48]); push(int8_t(pl[49]));
+        break;
+    case 110: // FILE_TRANSFER_PROTOCOL: target_network/system/component (u8) + 251-byte FTP payload into text
+        push(pl[0]); push(pl[1]); push(pl[2]);
+        std::memcpy(d.text, pl + 3, 251);
         break;
     case 141: // ALTITUDE: time_usec, monotonic, amsl, local, relative, terrain, bottom_clearance
         push(rd_u64(pl + 0));

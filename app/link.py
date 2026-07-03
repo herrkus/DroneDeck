@@ -14,6 +14,7 @@ from PySide6.QtCore import QObject, Signal, QTimer, QIODeviceBase
 from PySide6.QtNetwork import QUdpSocket, QTcpSocket, QHostAddress
 
 import core
+import ftp
 import mavlink
 
 try:
@@ -480,6 +481,14 @@ class Link(QObject):
         # GPS_RTCM_DATA payload: flags(u8), len(u8), data(u8[180], zero-padded).
         payload = bytes((flags & 0xFF, len(chunk) & 0xFF)) + chunk + b"\x00" * (self.RTCM_FRAG_LEN - len(chunk))
         self._send_msg(mavlink.GPS_RTCM_DATA, payload)
+
+    def send_ftp(self, target_sys, seq, session, opcode, offset=0, data=b"", target_comp=1):
+        """Send one MAVLink FTP request packet inside FILE_TRANSFER_PROTOCOL (target_network 0). Returns
+        the encoded FTP packet so a caller/client can track the seq it just issued."""
+        pkt = ftp.encode(seq, session, opcode, offset, data)
+        self._send_msg(mavlink.FILE_TRANSFER_PROTOCOL,
+                       bytes((0, target_sys & 0xFF, target_comp & 0xFF)) + pkt)
+        return pkt
 
     def terrain_check(self, lat, lon):
         """Ask the vehicle to report its terrain status at (lat, lon degrees) via TERRAIN_CHECK; the
