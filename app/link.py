@@ -428,6 +428,20 @@ class Link(QObject):
         self.send_command_long(target_sys, mavlink.MAV_CMD_ACCELCAL_VEHICLE_POS,
                                [float(int(position)), 0, 0, 0, 0, 0, 0])
 
+    def start_mag_cal(self, target_sys, retry=True, autosave=True):
+        # DO_START_MAG_CAL: begin ArduPilot's onboard compass calibration. p1 = mag mask (0 = all
+        # compasses), p2 = retry on failure, p3 = autosave on success, p4 = delay s, p5 = autoreboot.
+        self.send_command_long(target_sys, mavlink.MAV_CMD_DO_START_MAG_CAL,
+                               [0.0, 1.0 if retry else 0.0, 1.0 if autosave else 0.0, 0.0, 0.0, 0, 0])
+
+    def accept_mag_cal(self, target_sys):
+        # DO_ACCEPT_MAG_CAL: accept + persist the computed offsets (p1 = mag mask, 0 = all).
+        self.send_command_long(target_sys, mavlink.MAV_CMD_DO_ACCEPT_MAG_CAL, [0, 0, 0, 0, 0, 0, 0])
+
+    def cancel_mag_cal(self, target_sys):
+        # DO_CANCEL_MAG_CAL: abort an in-progress compass cal (p1 = mag mask, 0 = all).
+        self.send_command_long(target_sys, mavlink.MAV_CMD_DO_CANCEL_MAG_CAL, [0, 0, 0, 0, 0, 0, 0])
+
     def calibrate(self, target_sys, kind):
         """kind: 'gyro' | 'accel' | 'level' | 'compass' -> MAV_CMD_PREFLIGHT_CALIBRATION."""
         p = [0, 0, 0, 0, 0, 0, 0]

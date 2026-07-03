@@ -1145,6 +1145,8 @@ class DroneDeck(QMainWindow):
         dlg.radio.saveRequested.connect(self._cal_write_params)
         dlg.sensor.calRequested.connect(self._cal_sensor)
         dlg.sensor.accelPosRequested.connect(self._cal_accel_pos)
+        dlg.sensor.compassAccept.connect(self._cal_mag_accept)
+        dlg.sensor.compassCancel.connect(self._cal_mag_cancel)
         dlg.motors.motorTestRequested.connect(self._motor_test)
         dlg.exec()
 
@@ -1168,8 +1170,21 @@ class DroneDeck(QMainWindow):
         if not self._has_vehicle():
             QMessageBox.information(self, "No vehicle", "Connect to a vehicle first.")
             return
-        self.link.calibrate(self._sysid(), kind)
+        if kind == "compass":
+            self.link.start_mag_cal(self._sysid())     # ArduPilot onboard mag cal (DO_START_MAG_CAL)
+        else:
+            self.link.calibrate(self._sysid(), kind)
         self._on_info(f"requested {kind} calibration")
+
+    def _cal_mag_accept(self):
+        if self._has_vehicle():
+            self.link.accept_mag_cal(self._sysid())
+            self._on_info("compass cal accepted")
+
+    def _cal_mag_cancel(self):
+        if self._has_vehicle():
+            self.link.cancel_mag_cal(self._sysid())
+            self._on_info("compass cal cancelled")
 
     def _cal_accel_pos(self, position):
         """Advance the accel 6-position calibration (ACCELCAL_VEHICLE_POS)."""

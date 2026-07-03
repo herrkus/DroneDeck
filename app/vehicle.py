@@ -86,6 +86,11 @@ class Vehicle(QObject):
         self.cam_image_status = None        # 0 idle, 1 capture in progress, ...
         self.cam_recording = None           # bool: video capture running
         self.cam_recording_time_s = None
+        # compass onboard calibration (MAG_CAL_PROGRESS / MAG_CAL_REPORT); None = not calibrating
+        self.mag_cal_pct = None             # completion 0..100
+        self.mag_cal_status = None          # cal_status enum (1 running .. 4 success, 5 failed)
+        self.mag_cal_fitness = None         # report fitness (lower = better)
+        self.mag_cal_done = None            # bool: a report arrived (cal finished)
         # sensor health bitmasks (SYS_STATUS)
         self.sensors_present = 0
         self.sensors_enabled = 0
@@ -290,6 +295,17 @@ class Vehicle(QObject):
         self.cam_image_status = int(f.get("image_status", 0))
         self.cam_recording = int(f.get("video_status", 0)) != 0
         self.cam_recording_time_s = int(f.get("recording_time_ms", 0)) / 1000.0
+
+    def _on_mag_cal_progress(self, f):
+        self.mag_cal_pct = int(f.get("completion_pct", 0))
+        self.mag_cal_status = int(f.get("cal_status", 0))
+        self.mag_cal_done = False
+
+    def _on_mag_cal_report(self, f):
+        self.mag_cal_status = int(f.get("cal_status", 0))
+        self.mag_cal_fitness = float(f.get("fitness", 0.0))
+        self.mag_cal_pct = 100
+        self.mag_cal_done = True
 
     def _on_rc_channels(self, f):
         # RC_CHANNELS.rssi is 0..254 (0 = no signal, 254 = full); 255 = unknown/not-reporting.
@@ -510,6 +526,8 @@ class Vehicle(QObject):
         mavlink.POWER_STATUS: _on_power_status,
         mavlink.STORAGE_INFORMATION: _on_storage_information,
         mavlink.CAMERA_CAPTURE_STATUS: _on_camera_capture_status,
+        mavlink.MAG_CAL_PROGRESS: _on_mag_cal_progress,
+        mavlink.MAG_CAL_REPORT: _on_mag_cal_report,
         mavlink.RC_CHANNELS: _on_rc_channels,
         mavlink.GPS_RAW_INT: _on_gps_raw,
         mavlink.VFR_HUD: _on_vfr_hud,

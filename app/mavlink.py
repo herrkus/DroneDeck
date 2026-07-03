@@ -68,6 +68,8 @@ POWER_STATUS = 125           # 5V rail (Vcc) + servo rail (Vservo) voltage + pow
 DISTANCE_SENSOR = 132        # rangefinder/sonar: current_distance (cm) + orientation + sensor type
 STORAGE_INFORMATION = 261    # camera storage: total/used/available capacity (MB) + status
 CAMERA_CAPTURE_STATUS = 262  # camera: image/video capture status, recording time, free capacity
+MAG_CAL_PROGRESS = 191       # compass onboard cal progress: completion_pct + cal_status + direction
+MAG_CAL_REPORT = 192         # compass onboard cal result: cal_status + fitness
 COMMAND_INT = 75
 COMMAND_LONG = 76
 COMMAND_ACK = 77
@@ -126,6 +128,8 @@ MSG_NAME = {
     DISTANCE_SENSOR: "DISTANCE_SENSOR",
     STORAGE_INFORMATION: "STORAGE_INFORMATION",
     CAMERA_CAPTURE_STATUS: "CAMERA_CAPTURE_STATUS",
+    MAG_CAL_PROGRESS: "MAG_CAL_PROGRESS",
+    MAG_CAL_REPORT: "MAG_CAL_REPORT",
     REQUEST_DATA_STREAM: "REQUEST_DATA_STREAM",
     ALTITUDE: "ALTITUDE",
     BATTERY_STATUS: "BATTERY_STATUS",
@@ -181,6 +185,7 @@ CRC_EXTRA = {
     ALTITUDE: 47, BATTERY_STATUS: 154, VIBRATION: 90, RADIO_STATUS: 185,
     NAV_CONTROLLER_OUTPUT: 183, POWER_STATUS: 203, DISTANCE_SENSOR: 85,
     STORAGE_INFORMATION: 179, CAMERA_CAPTURE_STATUS: 12,
+    MAG_CAL_PROGRESS: 92, MAG_CAL_REPORT: 36,
     EKF_STATUS_REPORT: 71, ESTIMATOR_STATUS: 163, WIND_COV: 105, MOUNT_ORIENTATION: 26,
     HOME_POSITION: 104, EXTENDED_SYS_STATE: 130, AUTOPILOT_VERSION: 178,
     ESC_STATUS: 10, TIME_ESTIMATE_TO_TARGET: 232, GNSS_INTEGRITY: 169,
@@ -212,6 +217,11 @@ FIELDS = {
                           "read_speed", "write_speed", "storage_id", "storage_count", "status"],
     CAMERA_CAPTURE_STATUS: ["time_boot_ms", "image_interval", "recording_time_ms",
                             "available_capacity", "image_status", "video_status"],
+    MAG_CAL_PROGRESS: ["direction_x", "direction_y", "direction_z",
+                       "compass_id", "cal_mask", "cal_status", "attempt", "completion_pct"],
+    MAG_CAL_REPORT: ["fitness", "ofs_x", "ofs_y", "ofs_z", "diag_x", "diag_y", "diag_z",
+                     "offdiag_x", "offdiag_y", "offdiag_z",
+                     "compass_id", "cal_mask", "cal_status", "autosaved"],
     ALTITUDE: ["time_usec", "altitude_monotonic", "altitude_amsl", "altitude_local",
                "altitude_relative", "altitude_terrain", "bottom_clearance"],
     VIBRATION: ["time_usec", "vibration_x", "vibration_y", "vibration_z",
@@ -324,6 +334,9 @@ ACCELCAL_POS_RIGHT = 3
 ACCELCAL_POS_NOSEDOWN = 4
 ACCELCAL_POS_NOSEUP = 5
 ACCELCAL_POS_BACK = 6
+MAV_CMD_DO_START_MAG_CAL = 42424        # start compass onboard calibration (p1 = mag mask, 0 = all)
+MAV_CMD_DO_ACCEPT_MAG_CAL = 42425       # accept + save the compass cal result (p1 = mag mask)
+MAV_CMD_DO_CANCEL_MAG_CAL = 42426       # cancel an in-progress compass cal (p1 = mag mask)
 MAV_CMD_DO_SET_CAM_TRIGG_DIST = 206     # param1=distance m (0 = off)
 MAV_CMD_DO_DIGICAM_CONTROL = 203        # param5=1 -> trigger one shot
 MAV_CMD_IMAGE_START_CAPTURE = 2000      # param3=count (1 = single)
@@ -921,6 +934,15 @@ _WIRE = {
     CAMERA_CAPTURE_STATUS: ("<IfIfBB",
                             ["time_boot_ms", "image_interval", "recording_time_ms",
                              "available_capacity", "image_status", "video_status"], 18),
+    # decode only the 17-byte prefix; completion_mask (uint8[10]) is skipped. base 27, but len=17 so
+    # the parser truncates the mask off before unpack (CRC 92 is computed over the full field set).
+    MAG_CAL_PROGRESS: ("<fffBBBBB",
+                       ["direction_x", "direction_y", "direction_z",
+                        "compass_id", "cal_mask", "cal_status", "attempt", "completion_pct"], 17),
+    MAG_CAL_REPORT: ("<ffffffffffBBBB",
+                     ["fitness", "ofs_x", "ofs_y", "ofs_z", "diag_x", "diag_y", "diag_z",
+                      "offdiag_x", "offdiag_y", "offdiag_z",
+                      "compass_id", "cal_mask", "cal_status", "autosaved"], 44),
     ALTITUDE: ("<Qffffff",
                ["time_usec", "altitude_monotonic", "altitude_amsl", "altitude_local",
                 "altitude_relative", "altitude_terrain", "bottom_clearance"], 32),

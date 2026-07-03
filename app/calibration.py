@@ -14,7 +14,8 @@ from PySide6.QtCore import Qt, Signal, QRectF
 from PySide6.QtGui import QPainter, QColor, QPen, QFont
 from PySide6.QtWidgets import (QDialog, QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
                                QLabel, QTabWidget, QListWidget, QListWidgetItem,
-                               QLineEdit, QFormLayout, QCheckBox, QSpinBox, QGridLayout)
+                               QLineEdit, QFormLayout, QCheckBox, QSpinBox, QGridLayout,
+                               QProgressBar)
 
 import mavlink
 
@@ -168,6 +169,9 @@ class RcCalibrationWidget(QWidget):
 class SensorCalibrationWidget(QWidget):
     calRequested = Signal(str)             # 'gyro' | 'accel' | 'level' | 'compass'
     accelPosRequested = Signal(int)        # accel 6-position: 1 level..6 back (ACCELCAL_VEHICLE_POS)
+    compassAccept = Signal()               # accept + save the compass cal result (DO_ACCEPT_MAG_CAL)
+    compassCancel = Signal()               # cancel an in-progress compass cal (DO_CANCEL_MAG_CAL)
+    MAG_CAL_SUCCESS = 4                    # ArduPilot MAG_CAL_STATUS: 4 = success (>=5 = failure)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -194,6 +198,24 @@ class SensorCalibrationWidget(QWidget):
             self._pos_btns.append(b)
         pos_row.addStretch(1)
         v.addLayout(pos_row)
+        # compass onboard-cal progress + accept/cancel (shown only during a compass calibration)
+        self.mag_row = QWidget()
+        mrow = QHBoxLayout(self.mag_row)
+        mrow.setContentsMargins(0, 0, 0, 0)
+        self.mag_bar = QProgressBar()
+        self.mag_bar.setRange(0, 100)
+        self.btn_mag_accept = QPushButton("Accept")
+        self.btn_mag_cancel = QPushButton("Cancel")
+        self.btn_mag_accept.setEnabled(False)
+        self.btn_mag_cancel.setEnabled(False)
+        self.btn_mag_accept.clicked.connect(lambda: self.compassAccept.emit())
+        self.btn_mag_cancel.clicked.connect(lambda: self.compassCancel.emit())
+        mrow.addWidget(QLabel("Compass"))
+        mrow.addWidget(self.mag_bar, 1)
+        mrow.addWidget(self.btn_mag_accept)
+        mrow.addWidget(self.btn_mag_cancel)
+        self.mag_row.setVisible(False)
+        v.addWidget(self.mag_row)
         self.status = QLabel("Pick a calibration; follow the prompts from the vehicle.")
         self.status.setStyleSheet("color:#8fa3bf;")
         v.addWidget(self.status)
@@ -204,11 +226,40 @@ class SensorCalibrationWidget(QWidget):
     def _request(self, kind):
         self.log.clear()
         accel = (kind == "accel")
+        compass = (kind == "compass")
         for b in self._pos_btns:            # position buttons are only for the accel 6-position dance
             b.setEnabled(accel)
-        self.status.setText("Accel: place the vehicle in each orientation the log prompts for, then "
-                            "click the matching button." if accel else f"{kind} calibration started…")
+        self.mag_row.setVisible(compass)    # progress + accept/cancel are only for compass onboard cal
+        if compass:
+            self.mag_bar.setValue(0)
+            self.btn_mag_accept.setEnabled(False)
+            self.btn_mag_cancel.setEnabled(True)
+        if accel:
+            self.status.setText("Accel: place the vehicle in each orientation the log prompts for, "
+                                "then click the matching button.")
+        elif compass:
+            self.status.setText("Compass: rotate the vehicle through all axes until progress "
+                                "completes, then Accept to save (or Cancel).")
+        else:
+            self.status.setText(f"{kind} calibration started…")
         self.calRequested.emit(kind)
+
+    def set_mag_progress(self, pct, status):
+        """Update the compass onboard-cal progress bar (MAG_CAL_PROGRESS)."""
+        self.mag_row.setVisible(True)
+        self.mag_bar.setValue(max(0, min(100, int(pct))))
+        self.btn_mag_cancel.setEnabled(True)
+
+    def set_mag_report(self, status, fitness):
+        """Show the compass onboard-cal result (MAG_CAL_REPORT); Accept enabled only on success."""
+        ok = (int(status) == self.MAG_CAL_SUCCESS)
+        self.mag_row.setVisible(True)
+        self.mag_bar.setValue(100)
+        self.btn_mag_accept.setEnabled(ok)
+        self.btn_mag_cancel.setEnabled(True)
+        self.status.setText(f"Compass cal succeeded (fitness {fitness:.1f}); Accept to save, or Cancel."
+                            if ok else
+                            f"Compass cal failed (status {int(status)}, fitness {fitness:.1f}); Cancel and retry.")
 
     def add_status(self, severity, text):
         sev = mavlink.MAV_SEVERITY.get(severity, str(severity))
@@ -542,6 +593,12 @@ class CalibrationDialog(QDialog):
             elif m.msgid == mavlink.STATUSTEXT:
                 self.sensor.add_status(int(m.fields.get("severity", 6)),
                                        m.fields.get("text", ""))
+            elif m.msgid == mavlink.MAG_CAL_PROGRESS:
+                self.sensor.set_mag_progress(m.fields.get("completion_pct", 0),
+                                             m.fields.get("cal_status", 0))
+            elif m.msgid == mavlink.MAG_CAL_REPORT:
+                self.sensor.set_mag_report(m.fields.get("cal_status", 0),
+                                           m.fields.get("fitness", 0.0))
 
     def closeEvent(self, e):
         if self._link_obj is not None:

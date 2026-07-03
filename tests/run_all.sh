@@ -130,6 +130,7 @@ check "fence_enable"        ""                        tests/test_fence_enable.py
 check "camera_status"       ""                        tests/test_camera_status.py
 check "joystick_buttons"    ""                        tests/test_joystick_buttons.py
 check "accel_cal"           ""                        tests/test_accel_cal.py
+check "mag_cal"             ""                        tests/test_mag_cal.py
 check "camera"              ""                        tests/test_camera.py
 check "logs"                ""                        tests/test_logs.py
 check "video"               ""                        tests/test_video.py

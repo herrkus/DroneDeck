@@ -122,6 +122,8 @@ constexpr MsgInfo MSGS[] = {
     {132,  85, 14},  // DISTANCE_SENSOR (rangefinder current_distance cm + orientation + type)
     {261, 179, 27},  // STORAGE_INFORMATION (total/used/available MB + status)
     {262,  12, 18},  // CAMERA_CAPTURE_STATUS (image/video status, recording ms, free MB)
+    {191,  92, 17},  // MAG_CAL_PROGRESS (prefix only: direction + status + pct; skips completion_mask[10])
+    {192,  36, 44},  // MAG_CAL_REPORT (fitness + offsets/diagonals + cal_status)
 };
 
 const MsgInfo* find_info(uint32_t id) {
@@ -200,6 +202,16 @@ void decode(uint32_t msgid, const uint8_t* pl, Decoded& d) {
     case 262: // CAMERA_CAPTURE_STATUS: time_boot_ms, image_interval, recording_time_ms, available_capacity, image_status, video_status
         push(rd_u32(pl + 0)); push(rd_f32(pl + 4)); push(rd_u32(pl + 8)); push(rd_f32(pl + 12));
         push(pl[16]); push(pl[17]);
+        break;
+    case 191: // MAG_CAL_PROGRESS: direction_x/y/z (f), compass_id, cal_mask, cal_status, attempt, completion_pct (u8)
+        push(rd_f32(pl + 0)); push(rd_f32(pl + 4)); push(rd_f32(pl + 8));
+        push(pl[12]); push(pl[13]); push(pl[14]); push(pl[15]); push(pl[16]);
+        break;
+    case 192: // MAG_CAL_REPORT: fitness, ofs_x/y/z, diag_x/y/z, offdiag_x/y/z (f), compass_id, cal_mask, cal_status, autosaved (u8)
+        push(rd_f32(pl + 0)); push(rd_f32(pl + 4)); push(rd_f32(pl + 8)); push(rd_f32(pl + 12));
+        push(rd_f32(pl + 16)); push(rd_f32(pl + 20)); push(rd_f32(pl + 24));
+        push(rd_f32(pl + 28)); push(rd_f32(pl + 32)); push(rd_f32(pl + 36));
+        push(pl[40]); push(pl[41]); push(pl[42]); push(pl[43]);
         break;
     case 141: // ALTITUDE: time_usec, monotonic, amsl, local, relative, terrain, bottom_clearance
         push(rd_u64(pl + 0));
