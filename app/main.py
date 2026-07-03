@@ -865,6 +865,9 @@ class DroneDeck(QMainWindow):
         self._tools_menu = tools = self.menuBar().addMenu("&Tools")
         act_analyze = tools.addAction("Analyze Log...")
         act_analyze.triggered.connect(self._open_analyze)
+        act_geotag = tools.addAction("GeoTag Images...")
+        act_geotag.setToolTip("Write GPS EXIF into survey photos from a flight log (CAMERA_FEEDBACK)")
+        act_geotag.triggered.connect(self._open_geotag)
         act_fence = tools.addAction("Geofence from Mission")
         act_fence.triggered.connect(self._fence_from_mission)
         act_fence_on = tools.addAction("Enable Geofence")
@@ -904,6 +907,10 @@ class DroneDeck(QMainWindow):
         from ftpbrowser import FtpBrowserDialog
         os.makedirs(LOG_DIR, exist_ok=True)
         FtpBrowserDialog(lambda: self.link, self._sysid, LOG_DIR, self).exec()
+
+    def _open_geotag(self):
+        from geotagdialog import GeotagDialog
+        GeotagDialog(LOG_DIR, self).exec()
 
     def _open_preflight(self):
         from preflight import PreflightDialog
