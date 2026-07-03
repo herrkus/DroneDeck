@@ -407,6 +407,12 @@ class Link(QObject):
                                [float(pitch_deg), 0.0, float(yaw_deg), 0, 0, 0,
                                 mavlink.MAV_MOUNT_MODE_MAVLINK_TARGETING])
 
+    def fence_enable(self, target_sys, enable: bool):
+        # DO_FENCE_ENABLE: param1 = 1 enable / 0 disable the geofence at runtime (ArduPilot; PX4
+        # enforces the fence via GF_* params rather than this command).
+        self.send_command_long(target_sys, mavlink.MAV_CMD_DO_FENCE_ENABLE,
+                               [1.0 if enable else 0.0, 0, 0, 0, 0, 0, 0])
+
     def set_gimbal_v2(self, target_sys, pitch_deg, yaw_deg, gimbal_id=0):
         # DO_GIMBAL_MANAGER_PITCHYAW (gimbal v2 manager -- the protocol QGC uses for modern gimbals):
         # p1=pitch deg, p2=yaw deg, p3=pitch rate (NaN = command the angle, not a rate), p4=yaw rate

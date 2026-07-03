@@ -866,6 +866,11 @@ class DroneDeck(QMainWindow):
         act_analyze.triggered.connect(self._open_analyze)
         act_fence = tools.addAction("Geofence from Mission")
         act_fence.triggered.connect(self._fence_from_mission)
+        act_fence_on = tools.addAction("Enable Geofence")
+        act_fence_on.setToolTip("Turn on geofence enforcement (DO_FENCE_ENABLE; ArduPilot)")
+        act_fence_on.triggered.connect(lambda: self._fence_enable(True))
+        act_fence_off = tools.addAction("Disable Geofence")
+        act_fence_off.triggered.connect(lambda: self._fence_enable(False))
         act_vinfo = tools.addAction("Vehicle Info...")
         act_vinfo.triggered.connect(self._show_vehicle_info)
         tools.addAction("Export Track (GPX)...").triggered.connect(self._export_track)
@@ -949,6 +954,13 @@ class DroneDeck(QMainWindow):
             QMessageBox.warning(self, "Save Plan", f"Could not save plan:\n{e}")
             return
         self._on_info(f"saved {len(self.mission_items)} waypoints to {os.path.basename(path)}")
+
+    def _fence_enable(self, on):
+        """Turn geofence enforcement on/off at runtime (DO_FENCE_ENABLE)."""
+        if not self._has_vehicle():
+            return
+        self.link.fence_enable(self._sysid(), on)
+        self._on_info(f"geofence {'ENABLED' if on else 'DISABLED'}")
 
     def _fence_from_mission(self):
         """Build an inclusion geofence (convex hull + margin) around the planned mission
