@@ -7,6 +7,7 @@ batches on the Qt main loop.
 """
 from __future__ import annotations
 
+import struct
 import time
 
 from PySide6.QtCore import QObject, Signal, QTimer, QIODeviceBase
@@ -479,6 +480,11 @@ class Link(QObject):
         # GPS_RTCM_DATA payload: flags(u8), len(u8), data(u8[180], zero-padded).
         payload = bytes((flags & 0xFF, len(chunk) & 0xFF)) + chunk + b"\x00" * (self.RTCM_FRAG_LEN - len(chunk))
         self._send_msg(mavlink.GPS_RTCM_DATA, payload)
+
+    def terrain_check(self, lat, lon):
+        """Ask the vehicle to report its terrain status at (lat, lon degrees) via TERRAIN_CHECK; the
+        vehicle answers with TERRAIN_REPORT (height above terrain + tiles pending/loaded)."""
+        self._send_msg(mavlink.TERRAIN_CHECK, struct.pack("<ii", int(lat * 1e7), int(lon * 1e7)))
 
     def calibrate(self, target_sys, kind):
         """kind: 'gyro' | 'accel' | 'level' | 'compass' -> MAV_CMD_PREFLIGHT_CALIBRATION."""

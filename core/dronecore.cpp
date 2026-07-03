@@ -126,6 +126,7 @@ constexpr MsgInfo MSGS[] = {
     {192,  36, 44},  // MAG_CAL_REPORT (fitness + offsets/diagonals + cal_status)
     {127,  25, 35},  // GPS_RTK (RTK baseline mm + accuracy + nsats + rtk_health, primary receiver)
     {128, 226, 35},  // GPS2_RTK (2nd RTK receiver, identical layout)
+    {136,   1, 22},  // TERRAIN_REPORT (terrain-follow: height above terrain + tiles pending/loaded)
 };
 
 const MsgInfo* find_info(uint32_t id) {
@@ -222,6 +223,11 @@ void decode(uint32_t msgid, const uint8_t* pl, Decoded& d) {
         push(rd_u32(pl + 20)); push(rd_i32(pl + 24));
         push(rd_u16(pl + 28));
         push(pl[30]); push(pl[31]); push(pl[32]); push(pl[33]); push(pl[34]);
+        break;
+    case 136: // TERRAIN_REPORT: lat, lon (i32), terrain_height, current_height (f), spacing, pending, loaded (u16)
+        push(rd_i32(pl + 0)); push(rd_i32(pl + 4));
+        push(rd_f32(pl + 8)); push(rd_f32(pl + 12));
+        push(rd_u16(pl + 16)); push(rd_u16(pl + 18)); push(rd_u16(pl + 20));
         break;
     case 141: // ALTITUDE: time_usec, monotonic, amsl, local, relative, terrain, bottom_clearance
         push(rd_u64(pl + 0));

@@ -96,6 +96,11 @@ class Vehicle(QObject):
         self.rtk_nsats = None               # satellites used in the RTK solution
         self.rtk_baseline_m = None          # 3D baseline length to the base station, metres
         self.rtk_accuracy_mm = None         # baseline accuracy estimate, mm
+        # terrain-follow status (TERRAIN_REPORT); None = not reporting terrain
+        self.terrain_height_m = None        # terrain elevation at the vehicle, metres AMSL
+        self.terrain_agl_m = None           # vehicle height above the terrain, metres
+        self.terrain_pending = None         # terrain tiles still awaited from the GCS
+        self.terrain_loaded = None          # terrain tiles loaded on the vehicle
         # sensor health bitmasks (SYS_STATUS)
         self.sensors_present = 0
         self.sensors_enabled = 0
@@ -299,6 +304,12 @@ class Vehicle(QObject):
         self.rtk_health = int(f.get("rtk_health", 0))
         self.rtk_nsats = int(f.get("nsats", 0))
         self.rtk_accuracy_mm = int(f.get("accuracy", 0))
+
+    def _on_terrain_report(self, f):
+        self.terrain_height_m = float(f.get("terrain_height", 0.0))     # terrain elevation AMSL, m
+        self.terrain_agl_m = float(f.get("current_height", 0.0))        # vehicle height above terrain, m
+        self.terrain_pending = int(f.get("pending", 0))
+        self.terrain_loaded = int(f.get("loaded", 0))
 
     def _on_storage_information(self, f):
         self.storage_total_mb = float(f.get("total_capacity", 0.0))
@@ -539,6 +550,7 @@ class Vehicle(QObject):
         mavlink.NAV_CONTROLLER_OUTPUT: _on_nav_controller_output,
         mavlink.POWER_STATUS: _on_power_status,
         mavlink.GPS_RTK: _on_gps_rtk,
+        mavlink.TERRAIN_REPORT: _on_terrain_report,
         mavlink.STORAGE_INFORMATION: _on_storage_information,
         mavlink.CAMERA_CAPTURE_STATUS: _on_camera_capture_status,
         mavlink.MAG_CAL_PROGRESS: _on_mag_cal_progress,

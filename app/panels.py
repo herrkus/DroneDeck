@@ -71,7 +71,7 @@ class TelemetryPanel(QWidget):
             "FLIGHT": [("mode", "Mode"), ("armed", "State"), ("status", "System"), ("type", "Airframe")],
             "BATTERY": [("voltage", "Voltage"), ("current", "Current"), ("remaining", "Remaining")],
             "POSITION": [("lat", "Latitude"), ("lon", "Longitude"), ("alt_msl", "Alt MSL"),
-                         ("alt_rel", "Alt rel"), ("rangefinder", "Rangefinder")],
+                         ("alt_rel", "Alt rel"), ("rangefinder", "Rangefinder"), ("terrain", "Terrain AGL")],
             "MOTION": [("gspeed", "Ground spd"), ("aspeed", "Air spd"), ("climb", "Climb"),
                        ("throttle", "Throttle"), ("hdg", "Heading"), ("wind", "Wind"),
                        ("vibe", "Vibration")],
@@ -186,6 +186,12 @@ class TelemetryPanel(QWidget):
             lo = ve.rangefinder_min_m or 0.0
             self._set("rangefinder", f"{ve.rangefinder_m:6.2f} m",
                       "#e0a030" if ve.rangefinder_m < lo else "#37d67a")
+        if ve.terrain_agl_m is None:
+            self._set("terrain", "--")
+        elif ve.terrain_pending:                          # tiles still loading -> amber
+            self._set("terrain", f"{ve.terrain_agl_m:6.1f} m  ({ve.terrain_pending} pend)", "#e0a030")
+        else:
+            self._set("terrain", f"{ve.terrain_agl_m:6.1f} m", "#37d67a")
 
         self._set("gspeed", _num(ve.groundspeed, "5.1f", " m/s"))
         self._set("aspeed", _num(ve.airspeed, "5.1f", " m/s"))

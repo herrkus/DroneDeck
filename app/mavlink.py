@@ -73,6 +73,8 @@ MAG_CAL_REPORT = 192         # compass onboard cal result: cal_status + fitness
 GPS_RTK = 127                # RTK GPS status: baseline (mm), accuracy, nsats, rtk_health (primary receiver)
 GPS2_RTK = 128               # RTK GPS status for a 2nd receiver (identical field layout to GPS_RTK)
 GPS_RTCM_DATA = 233          # GCS->vehicle RTCM3 correction stream (fragmented; flags + len + data[180])
+TERRAIN_CHECK = 135          # GCS->vehicle: request terrain status at a lat/lon
+TERRAIN_REPORT = 136         # vehicle->GCS: terrain-follow status (height above terrain + tiles pending/loaded)
 COMMAND_INT = 75
 COMMAND_LONG = 76
 COMMAND_ACK = 77
@@ -136,6 +138,8 @@ MSG_NAME = {
     GPS_RTK: "GPS_RTK",
     GPS2_RTK: "GPS2_RTK",
     GPS_RTCM_DATA: "GPS_RTCM_DATA",
+    TERRAIN_CHECK: "TERRAIN_CHECK",
+    TERRAIN_REPORT: "TERRAIN_REPORT",
     REQUEST_DATA_STREAM: "REQUEST_DATA_STREAM",
     ALTITUDE: "ALTITUDE",
     BATTERY_STATUS: "BATTERY_STATUS",
@@ -193,6 +197,7 @@ CRC_EXTRA = {
     STORAGE_INFORMATION: 179, CAMERA_CAPTURE_STATUS: 12,
     MAG_CAL_PROGRESS: 92, MAG_CAL_REPORT: 36,
     GPS_RTK: 25, GPS2_RTK: 226, GPS_RTCM_DATA: 35,
+    TERRAIN_CHECK: 203, TERRAIN_REPORT: 1,
     EKF_STATUS_REPORT: 71, ESTIMATOR_STATUS: 163, WIND_COV: 105, MOUNT_ORIENTATION: 26,
     HOME_POSITION: 104, EXTENDED_SYS_STATE: 130, AUTOPILOT_VERSION: 178,
     ESC_STATUS: 10, TIME_ESTIMATE_TO_TARGET: 232, GNSS_INTEGRITY: 169,
@@ -235,6 +240,7 @@ FIELDS = {
     GPS2_RTK: ["time_last_baseline_ms", "tow", "baseline_a_mm", "baseline_b_mm", "baseline_c_mm",
                "accuracy", "iar_num_hypotheses", "wn", "rtk_receiver_id", "rtk_health", "rtk_rate",
                "nsats", "baseline_coords_type"],
+    TERRAIN_REPORT: ["lat", "lon", "terrain_height", "current_height", "spacing", "pending", "loaded"],
     ALTITUDE: ["time_usec", "altitude_monotonic", "altitude_amsl", "altitude_local",
                "altitude_relative", "altitude_terrain", "bottom_clearance"],
     VIBRATION: ["time_usec", "vibration_x", "vibration_y", "vibration_z",
@@ -964,6 +970,8 @@ _WIRE = {
                ["time_last_baseline_ms", "tow", "baseline_a_mm", "baseline_b_mm", "baseline_c_mm",
                 "accuracy", "iar_num_hypotheses", "wn", "rtk_receiver_id", "rtk_health", "rtk_rate",
                 "nsats", "baseline_coords_type"], 35),
+    TERRAIN_REPORT: ("<iiffHHH",
+                     ["lat", "lon", "terrain_height", "current_height", "spacing", "pending", "loaded"], 22),
     ALTITUDE: ("<Qffffff",
                ["time_usec", "altitude_monotonic", "altitude_amsl", "altitude_local",
                 "altitude_relative", "altitude_terrain", "bottom_clearance"], 32),
