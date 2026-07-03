@@ -63,6 +63,9 @@ ESTIMATOR_GPS_GLITCH = 1024        # GPS glitch detected (risk)
 ESTIMATOR_ACCEL_ERROR = 2048       # bad accel data (risk)
 MANUAL_CONTROL = 69
 VFR_HUD = 74
+NAV_CONTROLLER_OUTPUT = 62   # autopilot nav output: nav/target bearing, wp dist, alt/aspd/xtrack error
+POWER_STATUS = 125           # 5V rail (Vcc) + servo rail (Vservo) voltage + power flags
+DISTANCE_SENSOR = 132        # rangefinder/sonar: current_distance (cm) + orientation + sensor type
 COMMAND_INT = 75
 COMMAND_LONG = 76
 COMMAND_ACK = 77
@@ -116,6 +119,9 @@ MSG_NAME = {
     VFR_HUD: "VFR_HUD",
     RC_CHANNELS: "RC_CHANNELS",
     RADIO_STATUS: "RADIO_STATUS",
+    NAV_CONTROLLER_OUTPUT: "NAV_CONTROLLER_OUTPUT",
+    POWER_STATUS: "POWER_STATUS",
+    DISTANCE_SENSOR: "DISTANCE_SENSOR",
     REQUEST_DATA_STREAM: "REQUEST_DATA_STREAM",
     ALTITUDE: "ALTITUDE",
     BATTERY_STATUS: "BATTERY_STATUS",
@@ -169,6 +175,7 @@ CRC_EXTRA = {
     MISSION_CLEAR_ALL: 232, MISSION_ITEM_REACHED: 11, MISSION_ACK: 153,
     MISSION_REQUEST_INT: 196, MISSION_ITEM_INT: 38, MANUAL_CONTROL: 243, RC_CHANNELS: 118,
     ALTITUDE: 47, BATTERY_STATUS: 154, VIBRATION: 90, RADIO_STATUS: 185,
+    NAV_CONTROLLER_OUTPUT: 183, POWER_STATUS: 203, DISTANCE_SENSOR: 85,
     EKF_STATUS_REPORT: 71, ESTIMATOR_STATUS: 163, WIND_COV: 105, MOUNT_ORIENTATION: 26,
     HOME_POSITION: 104, EXTENDED_SYS_STATE: 130, AUTOPILOT_VERSION: 178,
     ESC_STATUS: 10, TIME_ESTIMATE_TO_TARGET: 232, GNSS_INTEGRITY: 169,
@@ -191,6 +198,11 @@ FIELDS = {
     RC_CHANNELS: (["time_boot_ms"] + [f"chan{i}_raw" for i in range(1, 19)]
                   + ["chancount", "rssi"]),
     RADIO_STATUS: ["rxerrors", "fixed", "rssi", "remrssi", "txbuf", "noise", "remnoise"],
+    NAV_CONTROLLER_OUTPUT: ["nav_roll", "nav_pitch", "alt_error", "aspd_error", "xtrack_error",
+                            "nav_bearing", "target_bearing", "wp_dist"],
+    POWER_STATUS: ["Vcc", "Vservo", "flags"],
+    DISTANCE_SENSOR: ["time_boot_ms", "min_distance", "max_distance", "current_distance",
+                      "type", "id", "orientation", "covariance"],
     ALTITUDE: ["time_usec", "altitude_monotonic", "altitude_amsl", "altitude_local",
                "altitude_relative", "altitude_terrain", "bottom_clearance"],
     VIBRATION: ["time_usec", "vibration_x", "vibration_y", "vibration_z",
@@ -878,6 +890,13 @@ _WIRE = {
                   + ["chancount", "rssi"], 42),
     RADIO_STATUS: ("<HHBBBBB",
                    ["rxerrors", "fixed", "rssi", "remrssi", "txbuf", "noise", "remnoise"], 9),
+    NAV_CONTROLLER_OUTPUT: ("<fffffhhH",
+                            ["nav_roll", "nav_pitch", "alt_error", "aspd_error", "xtrack_error",
+                             "nav_bearing", "target_bearing", "wp_dist"], 26),
+    POWER_STATUS: ("<HHH", ["Vcc", "Vservo", "flags"], 6),
+    DISTANCE_SENSOR: ("<IHHHBBBB",
+                      ["time_boot_ms", "min_distance", "max_distance", "current_distance",
+                       "type", "id", "orientation", "covariance"], 14),
     ALTITUDE: ("<Qffffff",
                ["time_usec", "altitude_monotonic", "altitude_amsl", "altitude_local",
                 "altitude_relative", "altitude_terrain", "bottom_clearance"], 32),

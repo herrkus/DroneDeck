@@ -70,7 +70,8 @@ class TelemetryPanel(QWidget):
                      ("loss", "Packet loss"), ("rc", "RC signal")],
             "FLIGHT": [("mode", "Mode"), ("armed", "State"), ("status", "System"), ("type", "Airframe")],
             "BATTERY": [("voltage", "Voltage"), ("current", "Current"), ("remaining", "Remaining")],
-            "POSITION": [("lat", "Latitude"), ("lon", "Longitude"), ("alt_msl", "Alt MSL"), ("alt_rel", "Alt rel")],
+            "POSITION": [("lat", "Latitude"), ("lon", "Longitude"), ("alt_msl", "Alt MSL"),
+                         ("alt_rel", "Alt rel"), ("rangefinder", "Rangefinder")],
             "MOTION": [("gspeed", "Ground spd"), ("aspeed", "Air spd"), ("climb", "Climb"),
                        ("throttle", "Throttle"), ("hdg", "Heading"), ("wind", "Wind"),
                        ("vibe", "Vibration")],
@@ -177,6 +178,13 @@ class TelemetryPanel(QWidget):
             self._set("lat", "--"); self._set("lon", "--")
         self._set("alt_msl", f"{ve.alt_msl:7.1f} m")
         self._set("alt_rel", f"{ve.alt_rel:7.1f} m")
+        if ve.rangefinder_m is None:
+            self._set("rangefinder", "--")
+        else:
+            # amber if below the sensor's own min range (unreliable), else green
+            lo = ve.rangefinder_min_m or 0.0
+            self._set("rangefinder", f"{ve.rangefinder_m:6.2f} m",
+                      "#e0a030" if ve.rangefinder_m < lo else "#37d67a")
 
         self._set("gspeed", _num(ve.groundspeed, "5.1f", " m/s"))
         self._set("aspeed", _num(ve.airspeed, "5.1f", " m/s"))

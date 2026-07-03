@@ -117,6 +117,9 @@ constexpr MsgInfo MSGS[] = {
     {441, 169, 17},  // GNSS_INTEGRITY (jamming/spoofing/RAIM; development dialect)
     {246, 184, 38},  // ADSB_VEHICLE
     {126, 220, 79},  // SERIAL_CONTROL (PX4 nsh shell passthrough; seed verified vs generated header + crc_extra_calc)
+    { 62, 183, 26},  // NAV_CONTROLLER_OUTPUT (nav/target bearing, wp_dist, alt/aspd/xtrack error)
+    {125, 203,  6},  // POWER_STATUS (Vcc, Vservo mV; flags)
+    {132,  85, 14},  // DISTANCE_SENSOR (rangefinder current_distance cm + orientation + type)
 };
 
 const MsgInfo* find_info(uint32_t id) {
@@ -175,6 +178,18 @@ void decode(uint32_t msgid, const uint8_t* pl, Decoded& d) {
     case 109: // RADIO_STATUS: rxerrors, fixed, rssi, remrssi, txbuf, noise, remnoise
         push(rd_u16(pl + 0)); push(rd_u16(pl + 2));
         push(pl[4]); push(pl[5]); push(pl[6]); push(pl[7]); push(pl[8]);
+        break;
+    case 62: // NAV_CONTROLLER_OUTPUT: nav_roll, nav_pitch, alt_error, aspd_error, xtrack_error, nav_bearing, target_bearing, wp_dist
+        push(rd_f32(pl + 0)); push(rd_f32(pl + 4)); push(rd_f32(pl + 8));
+        push(rd_f32(pl + 12)); push(rd_f32(pl + 16));
+        push(rd_i16(pl + 20)); push(rd_i16(pl + 22)); push(rd_u16(pl + 24));
+        break;
+    case 125: // POWER_STATUS: Vcc, Vservo (mV), flags
+        push(rd_u16(pl + 0)); push(rd_u16(pl + 2)); push(rd_u16(pl + 4));
+        break;
+    case 132: // DISTANCE_SENSOR: time_boot_ms, min, max, current (cm), type, id, orientation, covariance
+        push(rd_u32(pl + 0)); push(rd_u16(pl + 4)); push(rd_u16(pl + 6)); push(rd_u16(pl + 8));
+        push(pl[10]); push(pl[11]); push(pl[12]); push(pl[13]);
         break;
     case 141: // ALTITUDE: time_usec, monotonic, amsl, local, relative, terrain, bottom_clearance
         push(rd_u64(pl + 0));

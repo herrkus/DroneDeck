@@ -124,6 +124,7 @@ check "homebug"             ""                        tests/test_homebug.py
 check "manual"              ""                        tests/test_manual.py
 check "joystick_hw"         ""                        tests/test_joystick_hw.py
 check "command_retry"       ""                        tests/test_command_retry.py
+check "telemetry_msgs"      ""                        tests/test_telemetry_msgs.py
 check "camera"              ""                        tests/test_camera.py
 check "logs"                ""                        tests/test_logs.py
 check "video"               ""                        tests/test_video.py

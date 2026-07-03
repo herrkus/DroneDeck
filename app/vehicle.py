@@ -65,6 +65,20 @@ class Vehicle(QObject):
         self.radio_noise = None
         # RC transmitter signal (RC_CHANNELS.rssi), 0-100%; None = no RC reporting
         self.rc_rssi = None
+        # rangefinder / laser / sonar AGL (DISTANCE_SENSOR); None = no rangefinder reporting
+        self.rangefinder_m = None           # current_distance, metres (cm on the wire)
+        self.rangefinder_min_m = None
+        self.rangefinder_max_m = None
+        self.rangefinder_orientation = None
+        # autopilot nav-controller output (NAV_CONTROLLER_OUTPUT); None = not reporting
+        self.nav_bearing = None             # target heading, deg
+        self.nav_wp_dist = None             # m to the active waypoint
+        self.nav_xtrack_error = None        # crosstrack error, m
+        self.nav_alt_error = None           # altitude error, m
+        # board power rails (POWER_STATUS); None = not reporting
+        self.power_vcc = None               # 5V rail, volts
+        self.power_vservo = None            # servo rail, volts
+        self.power_flags = None
         # sensor health bitmasks (SYS_STATUS)
         self.sensors_present = 0
         self.sensors_enabled = 0
@@ -242,6 +256,23 @@ class Vehicle(QObject):
         self.radio_rssi = int(f.get("rssi", 0))
         self.radio_remrssi = int(f.get("remrssi", 0))
         self.radio_noise = int(f.get("noise", 0))
+
+    def _on_distance_sensor(self, f):
+        self.rangefinder_m = int(f.get("current_distance", 0)) / 100.0     # cm -> m
+        self.rangefinder_min_m = int(f.get("min_distance", 0)) / 100.0
+        self.rangefinder_max_m = int(f.get("max_distance", 0)) / 100.0
+        self.rangefinder_orientation = int(f.get("orientation", 0))
+
+    def _on_nav_controller_output(self, f):
+        self.nav_bearing = int(f.get("nav_bearing", 0))
+        self.nav_wp_dist = int(f.get("wp_dist", 0))
+        self.nav_xtrack_error = float(f.get("xtrack_error", 0.0))
+        self.nav_alt_error = float(f.get("alt_error", 0.0))
+
+    def _on_power_status(self, f):
+        self.power_vcc = int(f.get("Vcc", 0)) / 1000.0        # mV -> V
+        self.power_vservo = int(f.get("Vservo", 0)) / 1000.0
+        self.power_flags = int(f.get("flags", 0))
 
     def _on_rc_channels(self, f):
         # RC_CHANNELS.rssi is 0..254 (0 = no signal, 254 = full); 255 = unknown/not-reporting.
@@ -457,6 +488,9 @@ class Vehicle(QObject):
         mavlink.HOME_POSITION: _on_home_position,
         mavlink.BATTERY_STATUS: _on_battery_status,
         mavlink.RADIO_STATUS: _on_radio_status,
+        mavlink.DISTANCE_SENSOR: _on_distance_sensor,
+        mavlink.NAV_CONTROLLER_OUTPUT: _on_nav_controller_output,
+        mavlink.POWER_STATUS: _on_power_status,
         mavlink.RC_CHANNELS: _on_rc_channels,
         mavlink.GPS_RAW_INT: _on_gps_raw,
         mavlink.VFR_HUD: _on_vfr_hud,
