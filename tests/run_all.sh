@@ -151,6 +151,7 @@ check "ardupilot_dialect"   ""                        tests/test_ardupilot_diale
 check "camera"              ""                        tests/test_camera.py
 check "logs"                ""                        tests/test_logs.py
 check "video"               ""                        tests/test_video.py
+check "video_record"        ""                        tests/test_video_record.py
 check "adsb"                ""                        tests/test_adsb.py
 check "multivehicle"        ""                        tests/test_multivehicle.py
 check "rc_calibration"      ""                        tests/test_rc_calibration.py
