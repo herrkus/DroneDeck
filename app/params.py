@@ -12,6 +12,8 @@ from __future__ import annotations
 import math
 import os
 
+import parammeta
+
 from PySide6.QtCore import QObject, Signal, QTimer, Qt
 from PySide6.QtGui import QFont, QColor
 from PySide6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLineEdit, QPushButton,
@@ -226,6 +228,13 @@ class ParamDialog(QDialog):
         self._loading = False
         self.rows = {}                          # name -> row index
         self.edited = {}                        # name -> new value (pending write)
+        self.meta = parammeta.ParamMeta()       # optional units/range/desc/enum (authoritative file)
+        auto = parammeta.default_path()
+        if auto:
+            try:
+                self.meta.load(auto)
+            except Exception:
+                pass                            # a malformed drop-in file must never break the editor
 
         lay = QVBoxLayout(self)
         top = QHBoxLayout()
@@ -249,12 +258,17 @@ class ParamDialog(QDialog):
         self.btn_reboot = QPushButton("Reboot vehicle")
         self.btn_reboot.setToolTip("Reboot the autopilot to apply parameters that need a restart")
         self.btn_reboot.clicked.connect(self._reboot)
+        self.btn_meta = QPushButton("Metadata...")
+        self.btn_meta.setToolTip("Load an ArduPilot apm.pdef.xml or PX4 parameters.json to show each "
+                                 "parameter's units, range, description and enum values")
+        self.btn_meta.clicked.connect(self._load_meta)
         top.addWidget(self.search, 1)
         top.addWidget(self.btn_refresh)
         top.addWidget(self.btn_write)
         top.addWidget(self.btn_save)
         top.addWidget(self.btn_load)
         top.addWidget(self.btn_compare)
+        top.addWidget(self.btn_meta)
         top.addWidget(self.btn_reboot)
         lay.addLayout(top)
 
@@ -289,6 +303,9 @@ class ParamDialog(QDialog):
             self.table.insertRow(row)
             nitem = QTableWidgetItem(name)
             nitem.setFlags(nitem.flags() & ~Qt.ItemIsEditable)
+            tip = self.meta.tooltip(name)
+            if tip:
+                nitem.setToolTip(tip)
             self.table.setItem(row, 0, nitem)
             self.table.setItem(row, 1, QTableWidgetItem(""))
             self.rows[name] = row
@@ -326,10 +343,38 @@ class ParamDialog(QDialog):
             return
         name = self.table.item(item.row(), 0).text()
         try:
-            self.edited[name] = float(item.text())
-            item.setForeground(QColor("#ffd24a"))      # pending write
+            val = float(item.text())
+            self.edited[name] = val
+            if self.meta.out_of_range(name, val):      # soft warn: documented range, still writable
+                m = self.meta.get(name)
+                item.setForeground(QColor("#ff9f43"))  # orange = out of documented range
+                item.setToolTip(f"outside documented range {m['min']} .. {m['max']}")
+            else:
+                item.setForeground(QColor("#ffd24a"))  # pending write
+                item.setToolTip("")
         except ValueError:
             item.setForeground(QColor("#ff6b6b"))
+
+    def _load_meta(self):
+        path, _ = QFileDialog.getOpenFileName(
+            self, "Load parameter metadata", os.path.expanduser("~"),
+            "Parameter metadata (*.xml *.json);;All files (*)")
+        if not path:
+            return
+        try:
+            added = self.meta.load(path)
+        except Exception as ex:
+            QMessageBox.warning(self, "Metadata", f"Could not read metadata:\n{ex}")
+            return
+        self._apply_meta_tooltips()
+        self.status.setText(f"loaded metadata for {len(self.meta)} parameter(s) (+{added})")
+
+    def _apply_meta_tooltips(self):
+        """(Re)apply name-column tooltips after metadata is loaded, for rows already on screen."""
+        for name, row in self.rows.items():
+            nitem = self.table.item(row, 0)
+            if nitem is not None:
+                nitem.setToolTip(self.meta.tooltip(name))
 
     def _write(self):
         if not self.edited:

@@ -143,6 +143,7 @@ check "forward"             ""                        tests/test_forward.py
 check "preflight"           ""                        tests/test_preflight.py
 check "geotag"              ""                        tests/test_geotag.py
 check "geotagdialog"        ""                        tests/test_geotagdialog.py
+check "parammeta"           ""                        tests/test_parammeta.py
 check "camera"              ""                        tests/test_camera.py
 check "logs"                ""                        tests/test_logs.py
 check "video"               ""                        tests/test_video.py
