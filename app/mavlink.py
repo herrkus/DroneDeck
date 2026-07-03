@@ -305,7 +305,8 @@ MAV_LANDED_STATE_TEXT = {0: "--", 1: "On ground", 2: "In air", 3: "Taking off", 
 MAV_VTOL_STATE_TEXT = {0: "--", 1: "-> Fixed-wing", 2: "-> Multicopter",
                        3: "Multicopter", 4: "Fixed-wing"}
 # camera + gimbal (all carried by COMMAND_LONG)
-MAV_CMD_DO_MOUNT_CONTROL = 205          # gimbal: param1=pitch, param2=roll, param3=yaw
+MAV_CMD_DO_MOUNT_CONTROL = 205          # gimbal v1: param1=pitch, param2=roll, param3=yaw
+MAV_CMD_DO_GIMBAL_MANAGER_PITCHYAW = 1000  # gimbal v2 manager: p1=pitch deg, p2=yaw deg, p3/4=rates, p7=gimbal id
 MAV_CMD_DO_SET_CAM_TRIGG_DIST = 206     # param1=distance m (0 = off)
 MAV_CMD_DO_DIGICAM_CONTROL = 203        # param5=1 -> trigger one shot
 MAV_CMD_IMAGE_START_CAPTURE = 2000      # param3=count (1 = single)

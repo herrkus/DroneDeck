@@ -1387,7 +1387,10 @@ class DroneDeck(QMainWindow):
 
     def _cam_gimbal(self, pitch, yaw):
         if self._has_vehicle():
-            self.link.set_gimbal(self._sysid(), pitch, yaw)
+            if self.camera.gimbal_proto.currentIndex() == 1:     # Manager v2
+                self.link.set_gimbal_v2(self._sysid(), pitch, yaw)
+            else:                                                # Mount v1 (default)
+                self.link.set_gimbal(self._sysid(), pitch, yaw)
 
     # -- onboard logs ---------------------------------------------------------
     def _logs_refresh(self):

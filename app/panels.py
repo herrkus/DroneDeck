@@ -20,7 +20,7 @@ from PySide6.QtWidgets import (QWidget, QVBoxLayout, QFormLayout, QGroupBox, QLa
                                QListWidget, QListWidgetItem, QTableWidget,
                                QTableWidgetItem, QHeaderView, QPushButton, QSlider,
                                QSpinBox, QHBoxLayout, QGridLayout, QProgressBar,
-                               QAbstractItemView, QPlainTextEdit, QLineEdit, QMenu)
+                               QAbstractItemView, QPlainTextEdit, QLineEdit, QMenu, QComboBox)
 
 import mavlink
 
@@ -351,7 +351,13 @@ class CameraPanel(QWidget):
         g.addWidget(self.yaw, 3, 1)
         btn_center = QPushButton("Center gimbal")
         btn_center.clicked.connect(self._center)
-        g.addWidget(btn_center, 4, 0, 1, 2)
+        g.addWidget(btn_center, 4, 0)
+        # gimbal protocol: v1 DO_MOUNT_CONTROL (default, widest support) or v2 gimbal manager
+        # (DO_GIMBAL_MANAGER_PITCHYAW -- what QGC uses for modern gimbals)
+        self.gimbal_proto = QComboBox()
+        self.gimbal_proto.addItems(["Mount v1", "Manager v2"])
+        self.gimbal_proto.setToolTip("Gimbal protocol: v1 DO_MOUNT_CONTROL or v2 gimbal manager")
+        g.addWidget(self.gimbal_proto, 4, 1)
 
         # camera mode (photo/video) + zoom -- SET_CAMERA_MODE / SET_CAMERA_ZOOM
         self.btn_mode = QPushButton("Mode: Photo")

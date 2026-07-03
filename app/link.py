@@ -402,10 +402,18 @@ class Link(QObject):
                                 float(order), 0.0])
 
     def set_gimbal(self, target_sys, pitch_deg, yaw_deg):
-        # DO_MOUNT_CONTROL: param1=pitch, param2=roll, param3=yaw, param7=mode
+        # DO_MOUNT_CONTROL (gimbal v1): param1=pitch, param2=roll, param3=yaw, param7=mode
         self.send_command_long(target_sys, mavlink.MAV_CMD_DO_MOUNT_CONTROL,
                                [float(pitch_deg), 0.0, float(yaw_deg), 0, 0, 0,
                                 mavlink.MAV_MOUNT_MODE_MAVLINK_TARGETING])
+
+    def set_gimbal_v2(self, target_sys, pitch_deg, yaw_deg, gimbal_id=0):
+        # DO_GIMBAL_MANAGER_PITCHYAW (gimbal v2 manager -- the protocol QGC uses for modern gimbals):
+        # p1=pitch deg, p2=yaw deg, p3=pitch rate (NaN = command the angle, not a rate), p4=yaw rate
+        # (NaN), p5=gimbal manager flags (0 = default), p7=gimbal device id (0 = all / primary).
+        self.send_command_long(target_sys, mavlink.MAV_CMD_DO_GIMBAL_MANAGER_PITCHYAW,
+                               [float(pitch_deg), float(yaw_deg), float("nan"), float("nan"),
+                                0.0, 0.0, float(int(gimbal_id))])
 
     def calibrate(self, target_sys, kind):
         """kind: 'gyro' | 'accel' | 'level' | 'compass' -> MAV_CMD_PREFLIGHT_CALIBRATION."""
