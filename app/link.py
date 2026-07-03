@@ -41,6 +41,7 @@ class Link(QObject):
         self.gcs_sysid = gcs_sysid
         self.gcs_compid = gcs_compid
         self.seq = 0
+        self._rtcm_seq = 0         # GPS_RTCM_DATA sequence id (0..31), increments per RTCM message
         self.rx_bytes = 0
         self.rx_mav_v2 = False     # a v2 (0xFD) frame has been received
         self.rx_mav_v1 = False     # a v1 (0xFE) frame has been received
@@ -441,6 +442,43 @@ class Link(QObject):
     def cancel_mag_cal(self, target_sys):
         # DO_CANCEL_MAG_CAL: abort an in-progress compass cal (p1 = mag mask, 0 = all).
         self.send_command_long(target_sys, mavlink.MAV_CMD_DO_CANCEL_MAG_CAL, [0, 0, 0, 0, 0, 0, 0])
+
+    RTCM_FRAG_LEN = 180                     # GPS_RTCM_DATA data[] size; also the per-fragment max
+    RTCM_MAX_FRAGS = 4                       # fragment id is 2 bits -> at most 4 fragments (720 bytes)
+
+    def inject_rtcm(self, data: bytes) -> int:
+        """Inject an RTCM3 correction message (from an NTRIP caster or a base-station receiver) to the
+        vehicle as GPS_RTCM_DATA(233), fragmenting exactly like QGC: a message shorter than 180 bytes
+        goes in a single unfragmented frame; a longer one is split into up to 4 fragments (the protocol
+        cap -- messages over 720 bytes are truncated, logged below). The low flag bit marks a fragmented
+        stream, bits 1-2 carry the fragment id, and bits 3-7 the per-message sequence id. Returns the
+        number of GPS_RTCM_DATA frames sent."""
+        data = bytes(data or b"")
+        if not data:
+            return 0
+        seq = self._rtcm_seq & 0x1F
+        sent = 0
+        if len(data) < self.RTCM_FRAG_LEN:
+            self._send_rtcm(seq << 3, data)          # single, unfragmented (LSB clear)
+            sent = 1
+        else:
+            frags = [data[i:i + self.RTCM_FRAG_LEN]
+                     for i in range(0, len(data), self.RTCM_FRAG_LEN)]
+            if len(frags) > self.RTCM_MAX_FRAGS:
+                dropped = sum(len(f) for f in frags[self.RTCM_MAX_FRAGS:])
+                frags = frags[:self.RTCM_MAX_FRAGS]
+                print(f"[rtcm] message {len(data)} B exceeds {self.RTCM_MAX_FRAGS}-fragment cap; "
+                      f"dropped last {dropped} B")
+            for fid, chunk in enumerate(frags):
+                self._send_rtcm(1 | (fid << 1) | (seq << 3), chunk)   # LSB set = fragmented
+                sent += 1
+        self._rtcm_seq = (self._rtcm_seq + 1) & 0x1F  # one sequence id per whole RTCM message
+        return sent
+
+    def _send_rtcm(self, flags: int, chunk: bytes):
+        # GPS_RTCM_DATA payload: flags(u8), len(u8), data(u8[180], zero-padded).
+        payload = bytes((flags & 0xFF, len(chunk) & 0xFF)) + chunk + b"\x00" * (self.RTCM_FRAG_LEN - len(chunk))
+        self._send_msg(mavlink.GPS_RTCM_DATA, payload)
 
     def calibrate(self, target_sys, kind):
         """kind: 'gyro' | 'accel' | 'level' | 'compass' -> MAV_CMD_PREFLIGHT_CALIBRATION."""

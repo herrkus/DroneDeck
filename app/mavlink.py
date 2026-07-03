@@ -72,6 +72,7 @@ MAG_CAL_PROGRESS = 191       # compass onboard cal progress: completion_pct + ca
 MAG_CAL_REPORT = 192         # compass onboard cal result: cal_status + fitness
 GPS_RTK = 127                # RTK GPS status: baseline (mm), accuracy, nsats, rtk_health (primary receiver)
 GPS2_RTK = 128               # RTK GPS status for a 2nd receiver (identical field layout to GPS_RTK)
+GPS_RTCM_DATA = 233          # GCS->vehicle RTCM3 correction stream (fragmented; flags + len + data[180])
 COMMAND_INT = 75
 COMMAND_LONG = 76
 COMMAND_ACK = 77
@@ -134,6 +135,7 @@ MSG_NAME = {
     MAG_CAL_REPORT: "MAG_CAL_REPORT",
     GPS_RTK: "GPS_RTK",
     GPS2_RTK: "GPS2_RTK",
+    GPS_RTCM_DATA: "GPS_RTCM_DATA",
     REQUEST_DATA_STREAM: "REQUEST_DATA_STREAM",
     ALTITUDE: "ALTITUDE",
     BATTERY_STATUS: "BATTERY_STATUS",
@@ -190,7 +192,7 @@ CRC_EXTRA = {
     NAV_CONTROLLER_OUTPUT: 183, POWER_STATUS: 203, DISTANCE_SENSOR: 85,
     STORAGE_INFORMATION: 179, CAMERA_CAPTURE_STATUS: 12,
     MAG_CAL_PROGRESS: 92, MAG_CAL_REPORT: 36,
-    GPS_RTK: 25, GPS2_RTK: 226,
+    GPS_RTK: 25, GPS2_RTK: 226, GPS_RTCM_DATA: 35,
     EKF_STATUS_REPORT: 71, ESTIMATOR_STATUS: 163, WIND_COV: 105, MOUNT_ORIENTATION: 26,
     HOME_POSITION: 104, EXTENDED_SYS_STATE: 130, AUTOPILOT_VERSION: 178,
     ESC_STATUS: 10, TIME_ESTIMATE_TO_TARGET: 232, GNSS_INTEGRITY: 169,

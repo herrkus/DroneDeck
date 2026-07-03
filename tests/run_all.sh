@@ -132,6 +132,7 @@ check "joystick_buttons"    ""                        tests/test_joystick_button
 check "accel_cal"           ""                        tests/test_accel_cal.py
 check "mag_cal"             ""                        tests/test_mag_cal.py
 check "gps_rtk"             ""                        tests/test_gps_rtk.py
+check "rtcm_inject"         ""                        tests/test_rtcm_inject.py
 check "camera"              ""                        tests/test_camera.py
 check "logs"                ""                        tests/test_logs.py
 check "video"               ""                        tests/test_video.py
