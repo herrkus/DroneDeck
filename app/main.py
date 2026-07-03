@@ -38,6 +38,7 @@ from logdownload import LogManager
 from charts import ChartPanel
 from joystick import VirtualJoystick, HwJoystick, list_joysticks
 from video import VideoPane
+from voice import VoiceAlerts
 from links_manager import LinksDialog
 from calibration import CalibrationDialog
 from instruments import AttitudeIndicator, Compass
@@ -340,6 +341,7 @@ class DroneDeck(QMainWindow):
         self._failsafe_prev = {}                # sysid -> last MAV_STATE (failsafe edge detect)
         self._fence_breached = {}               # geofence breach edge detect, keyed by sysid
         self._batt_band = {}                    # sysid -> last battery band (low-batt edge detect)
+        self.voice = VoiceAlerts(enabled=self.settings.value("voice_alerts", False, type=bool))
 
         # mission planning state
         self.plan_mode = False
@@ -858,6 +860,14 @@ class DroneDeck(QMainWindow):
         self._act_reset = act_reset = view.addAction("Reset Layout")
         act_reset.setShortcut("Ctrl+Shift+L")
         act_reset.triggered.connect(self._reset_layout)
+        view.addSeparator()
+        self._act_voice = act_voice = view.addAction("Voice Alerts")
+        act_voice.setCheckable(True)
+        act_voice.setChecked(self.voice.enabled)
+        act_voice.setEnabled(self.voice.available)
+        act_voice.setToolTip("Speak arm/disarm, mode changes, low battery and failsafe aloud"
+                             if self.voice.available else "No speech backend installed (espeak-ng / speech-dispatcher)")
+        act_voice.toggled.connect(self._toggle_voice)
         view.addSeparator()
         self._panels_menu = panels = view.addMenu("Panels")   # show/hide any dock (QGC-style)
         for d in self.findChildren(QDockWidget):
@@ -2440,6 +2450,13 @@ class DroneDeck(QMainWindow):
             self._notify(f"GEOFENCE BREACH{' #' + str(ve.sysid) if tag else ''}", "#e05050")
         self._fence_breached[ve.sysid] = now
 
+    def _toggle_voice(self, on):
+        self.voice.set_enabled(on)
+        self.settings.setValue("voice_alerts", bool(on))
+        if on:
+            self.voice.say("Voice alerts on")     # immediate spoken confirmation that it works
+        self._on_info(f"voice alerts {'on' if on else 'off'}")
+
     def _check_failsafe(self, ve):
         """Raise a one-shot console note + toast when a vehicle transitions INTO a
         Critical/Emergency (or worse) MAV_STATE. Fires once per entry into the failsafe
@@ -2455,6 +2472,7 @@ class DroneDeck(QMainWindow):
                     8: "FLIGHT TERMINATION"}.get(cur, f"MAV_STATE {cur}")
             self.console.add_note(f"FAILSAFE: vehicle {sid} entered {name}", "#e05050")
             self._notify(f"FAILSAFE: {name}", "#e05050")
+            self.voice.say(f"Failsafe, {name}")
 
     # GCS-side low-battery advisory thresholds (percent remaining). These sit ABOVE a typical
     # autopilot failsafe so the pilot is prompted to return/land first; HYST stops a value jittering
@@ -2494,9 +2512,11 @@ class DroneDeck(QMainWindow):
         if band == 2:
             self.console.add_note(f"CRITICAL BATTERY: {tag}{rem}% -- land now", "#e05050")
             self._notify(f"CRITICAL BATTERY {rem}%", "#e05050")
+            self.voice.say(f"Critical battery, {rem} percent, land now")
         else:
             self.console.add_note(f"LOW BATTERY: {tag}{rem}% -- return soon", "#e0a030")
             self._notify(f"LOW BATTERY {rem}%", "#e0a030")
+            self.voice.say(f"Low battery, {rem} percent")
 
     def _refresh(self):
         ve = self.vehicle
@@ -2506,6 +2526,7 @@ class DroneDeck(QMainWindow):
             self._check_failsafe(v)
             self._check_geofence(v)
             self._check_battery(v)
+            self.voice.update(v)                # spoken arm/disarm + mode-change alerts (if enabled)
         self.adi.set_data(ve.roll, ve.pitch, ve.airspeed or ve.groundspeed,
                           ve.alt_rel, ve.heading, ve.climb)
         self.compass.set_heading(ve.heading)
