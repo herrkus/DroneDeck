@@ -322,8 +322,12 @@ class Vehicle(QObject):
         self.rtk_accuracy_mm = int(f.get("accuracy", 0))
 
     def _on_terrain_report(self, f):
-        self.terrain_height_m = float(f.get("terrain_height", 0.0))     # terrain elevation AMSL, m
-        self.terrain_agl_m = float(f.get("current_height", 0.0))        # vehicle height above terrain, m
+        th = float(f.get("terrain_height", 0.0))                        # terrain elevation AMSL, m
+        ch = float(f.get("current_height", 0.0))                        # vehicle height above terrain, m
+        if not (math.isfinite(th) and math.isfinite(ch)):
+            return                                                      # drop garbage/NaN report (noisy link) -- keep last good
+        self.terrain_height_m = th
+        self.terrain_agl_m = ch
         self.terrain_pending = int(f.get("pending", 0))
         self.terrain_loaded = int(f.get("loaded", 0))
 
