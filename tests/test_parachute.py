@@ -60,4 +60,5 @@ if calls != [8]:
 
 print("PARACHUTE FAILED: " + "; ".join(fail) if fail else
       "PARACHUTE PASSED (DO_PARACHUTE 208 param1=RELEASE 2; GUI guards no-vehicle + requires explicit confirm)")
-sys.exit(1 if fail else 0)
+sys.stdout.flush()
+os._exit(1 if fail else 0)

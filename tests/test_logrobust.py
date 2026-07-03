@@ -114,4 +114,5 @@ check("busy guard switched target", mgr.dl_id == 6 and mgr.fh is not None and no
 print("LOGROBUST FAILED: " + "; ".join(fail) if fail else
       "LOGROBUST PASSED (dropped chunk re-requested, no silent hole; stuck download fails cleanly; "
       "busy guard closes prior fh; short-chunk-after-gap doesn't finish early)")
-sys.exit(1 if fail else 0)
+sys.stdout.flush()
+os._exit(1 if fail else 0)

@@ -120,4 +120,5 @@ print("FTPCLIENT FAILED: " + "; ".join(fail) if fail else
       "FTPCLIENT PASSED (directory listing paginates to EOF with typed entries+sizes; file read opens a "
       "session, reassembles across CHUNK reads, stops on the short chunk, terminates; not-found -> error; "
       "empty file -> b'')")
-sys.exit(1 if fail else 0)
+sys.stdout.flush()
+os._exit(1 if fail else 0)

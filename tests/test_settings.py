@@ -56,4 +56,5 @@ if got["follow"] is not False:
     fail.append(f"follow {got['follow']} != False")
 
 print("SETTINGS FAILED: " + "; ".join(fail) if fail else "SETTINGS PASSED")
-sys.exit(1 if fail else 0)
+sys.stdout.flush()
+os._exit(1 if fail else 0)

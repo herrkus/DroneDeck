@@ -110,4 +110,5 @@ if not steps or not all(ok for ok, _ in steps):
 
 print(f"screenshot: {OUT}")
 print("MISSION GUI FAILED: " + "; ".join(fail) if fail else "MISSION GUI PASSED")
-sys.exit(1 if fail else 0)
+sys.stdout.flush()
+os._exit(1 if fail else 0)

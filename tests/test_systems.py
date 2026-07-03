@@ -70,4 +70,5 @@ if "V" not in snap.get("panel_volt", ""):
     fail.append("Systems panel voltage not updated")
 
 print("SYSTEMS FAILED: " + "; ".join(fail) if fail else "SYSTEMS PASSED")
-sys.exit(1 if fail else 0)
+sys.stdout.flush()
+os._exit(1 if fail else 0)

@@ -70,4 +70,5 @@ if fake.calls != [3]:
 
 print("REBOOT FAILED: " + "; ".join(fail) if fail else
       "REBOOT PASSED (COMMAND 246 param1=1; ParamManager.reboot routes+guards; dialog button confirms)")
-sys.exit(1 if fail else 0)
+sys.stdout.flush()
+os._exit(1 if fail else 0)

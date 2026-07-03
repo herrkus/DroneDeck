@@ -121,4 +121,5 @@ print("RTCM_INJECT FAILED: " + "; ".join(fail) if fail else
       "RTCM_INJECT PASSED (short->1 unfragmented frame; 400 B->3 ordered fragments reassembling to the "
       "original; seq increments per-message + wraps at 32; empty sends nothing; >720 B capped at 4 "
       "fragments; every frame CRC-valid)")
-sys.exit(1 if fail else 0)
+sys.stdout.flush()
+os._exit(1 if fail else 0)

@@ -64,4 +64,5 @@ if "123" not in win.mission_list.item(0).text():
 
 print(f"waypoints: {[(round(w.lat,4), round(w.lon,4), w.alt) for w in win.mission_items]}")
 print("MISSION EDIT FAILED: " + "; ".join(fail) if fail else "MISSION EDIT PASSED")
-sys.exit(1 if fail else 0)
+sys.stdout.flush()
+os._exit(1 if fail else 0)

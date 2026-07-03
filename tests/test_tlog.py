@@ -77,4 +77,5 @@ if not done["v"]:
     fail.append("replay did not finish")
 
 print("TLOG FAILED: " + "; ".join(fail) if fail else "TLOG PASSED")
-sys.exit(1 if fail else 0)
+sys.stdout.flush()
+os._exit(1 if fail else 0)

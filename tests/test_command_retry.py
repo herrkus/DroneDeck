@@ -198,4 +198,5 @@ print("COMMAND_RETRY FAILED: " + "; ".join(fail) if fail else
       "stops resends; unrelated ACK ignored; arm/set_mode/land/rtl opt in; COMMAND_INT takeoff "
       "confirmed + retries; reactive unacked-handler crash-safe; ACK works over real UDP [F1]; "
       "same-id supersede needs its own ack [F2])")
-sys.exit(1 if fail else 0)
+sys.stdout.flush()
+os._exit(1 if fail else 0)

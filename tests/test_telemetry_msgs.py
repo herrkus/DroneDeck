@@ -95,4 +95,5 @@ print("TELEMETRY_MSGS FAILED: " + "; ".join(fail) if fail else
       "TELEMETRY_MSGS PASSED (DISTANCE_SENSOR/NAV_CONTROLLER_OUTPUT/POWER_STATUS decode identically on "
       "native+Python with exact values; vehicle handlers convert cm->m and mV->V; panel shows AGL; "
       "absent = None/--)")
-sys.exit(1 if fail else 0)
+sys.stdout.flush()
+os._exit(1 if fail else 0)

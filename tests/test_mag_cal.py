@@ -144,4 +144,5 @@ print("MAG_CAL FAILED: " + "; ".join(fail) if fail else
       "MAG_CAL PASSED (MAG_CAL_PROGRESS/REPORT decode native==python w/ exact values, completion_mask "
       "skipped; vehicle tracks pct/status/fitness/done; DO_START/ACCEPT/CANCEL_MAG_CAL encode; widget "
       "shows progress for compass only + gates Accept on success + emits; main routes + guards)")
-sys.exit(1 if fail else 0)
+sys.stdout.flush()
+os._exit(1 if fail else 0)

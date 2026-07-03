@@ -84,4 +84,5 @@ if [c[0] for c in calls] != ["v1", "v2"]:
 print("GIMBAL_V2 FAILED: " + "; ".join(fail) if fail else
       "GIMBAL_V2 PASSED (DO_GIMBAL_MANAGER_PITCHYAW angle command w/ NaN rates + gimbal id; v1 "
       "DO_MOUNT_CONTROL unchanged; panel selector defaults v1; main routes v1/v2 per selector)")
-sys.exit(1 if fail else 0)
+sys.stdout.flush()
+os._exit(1 if fail else 0)

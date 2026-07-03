@@ -83,4 +83,5 @@ if cp.cam_status.text() != "":
 print("CAMERA_STATUS FAILED: " + "; ".join(fail) if fail else
       "CAMERA_STATUS PASSED (STORAGE_INFORMATION/CAMERA_CAPTURE_STATUS decode native==python w/ exact "
       "values; vehicle stores storage MB + recording state/time; panel shows SD GB + REC)")
-sys.exit(1 if fail else 0)
+sys.stdout.flush()
+os._exit(1 if fail else 0)

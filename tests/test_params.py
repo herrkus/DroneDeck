@@ -63,4 +63,5 @@ if pm.values.get("RTL_ALT") != 2500.0:
     fail.append(f"set not echoed: RTL_ALT={pm.values.get('RTL_ALT')}")
 
 print("PARAMS FAILED: " + "; ".join(fail) if fail else "PARAMS PASSED")
-sys.exit(1 if fail else 0)
+sys.stdout.flush()
+os._exit(1 if fail else 0)

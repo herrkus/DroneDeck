@@ -61,4 +61,5 @@ if not any("Calibration successful" in ln for ln in lines):
     fail.append("missing success line")
 
 print("SENSOR CAL FAILED: " + "; ".join(fail) if fail else "SENSOR CAL PASSED")
-sys.exit(1 if fail else 0)
+sys.stdout.flush()
+os._exit(1 if fail else 0)

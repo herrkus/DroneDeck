@@ -51,4 +51,5 @@ win2.close()
 
 print("restored configs:", win2.link_configs)
 print("LINKS MANAGER FAILED: " + "; ".join(fail) if fail else "LINKS MANAGER PASSED")
-sys.exit(1 if fail else 0)
+sys.stdout.flush()
+os._exit(1 if fail else 0)

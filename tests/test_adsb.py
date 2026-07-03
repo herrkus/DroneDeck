@@ -65,4 +65,5 @@ if snap.get("panel_callsigns") != ["DRN001", "HEL022"]:
     fail.append(f"panel callsigns {snap.get('panel_callsigns')} != ['DRN001', 'HEL022']")
 
 print("ADSB FAILED: " + "; ".join(fail) if fail else "ADSB PASSED")
-sys.exit(1 if fail else 0)
+sys.stdout.flush()
+os._exit(1 if fail else 0)

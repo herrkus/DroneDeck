@@ -101,4 +101,5 @@ else:
 print("TERRAIN_REPORT FAILED: " + "; ".join(fail) if fail else
       "TERRAIN_REPORT PASSED (TERRAIN_REPORT decodes native==python with exact values; handler stores "
       "height/AGL/tiles; panel shows AGL green/amber/'--'; TERRAIN_CHECK encodes lat/lon deg*1e7)")
-sys.exit(1 if fail else 0)
+sys.stdout.flush()
+os._exit(1 if fail else 0)

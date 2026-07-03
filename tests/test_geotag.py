@@ -93,4 +93,5 @@ print("GEOTAG FAILED: " + "; ".join(fail) if fail else
       "GEOTAG PASSED (CAMERA_FEEDBACK parsed; extract_feedback pulls ordered lat/lon/alt; geotag writes "
       "GPS EXIF that round-trips through Pillow incl. S/W hemispheres; count mismatch reported, min(n) "
       "tagged, no silent truncation)")
-sys.exit(1 if fail else 0)
+sys.stdout.flush()
+os._exit(1 if fail else 0)

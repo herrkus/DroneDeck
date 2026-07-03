@@ -78,4 +78,5 @@ if calls != [2, 6]:
 print("ACCEL_CAL FAILED: " + "; ".join(fail) if fail else
       "ACCEL_CAL PASSED (ACCELCAL_VEHICLE_POS 42429 param1=position; widget enables position buttons "
       "only during accel cal + emits them; main routes + guards no-vehicle)")
-sys.exit(1 if fail else 0)
+sys.stdout.flush()
+os._exit(1 if fail else 0)

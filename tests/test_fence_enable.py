@@ -69,4 +69,5 @@ if calls != [True, False]:
 print("FENCE_ENABLE FAILED: " + "; ".join(fail) if fail else
       "FENCE_ENABLE PASSED (DO_FENCE_ENABLE 207 param1 enable=1/disable=0; menu handler routes + "
       "guards no-vehicle)")
-sys.exit(1 if fail else 0)
+sys.stdout.flush()
+os._exit(1 if fail else 0)

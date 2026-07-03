@@ -47,4 +47,5 @@ except Exception as e:
 
 print("status after drive:", pane.status.text())
 print("VIDEO FAILED: " + "; ".join(fail) if fail else "VIDEO PASSED")
-sys.exit(1 if fail else 0)
+sys.stdout.flush()
+os._exit(1 if fail else 0)

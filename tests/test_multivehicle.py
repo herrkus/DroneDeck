@@ -62,4 +62,5 @@ if snap.get("active_after_switch") != 2:
     fail.append(f"switching selected sysid {snap.get('active_after_switch')}, expected 2")
 
 print("MULTIVEHICLE FAILED: " + "; ".join(fail) if fail else "MULTIVEHICLE PASSED")
-sys.exit(1 if fail else 0)
+sys.stdout.flush()
+os._exit(1 if fail else 0)

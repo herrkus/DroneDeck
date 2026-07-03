@@ -94,4 +94,5 @@ if degen.get("RC1_MIN", 0) >= degen.get("RC1_MAX", 1):
 
 print("RC CAL FAILED: " + "; ".join(fail) if fail else
       "RC CAL PASSED (+ batch 10: unmoved channel skipped, not written as zero-span)")
-sys.exit(1 if fail else 0)
+sys.stdout.flush()
+os._exit(1 if fail else 0)

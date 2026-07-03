@@ -79,4 +79,5 @@ if len([s for s in steps if s[1]]) < 4:
     fail.append("not all 4 transfers succeeded")
 
 print("FENCE/RALLY FAILED: " + "; ".join(fail) if fail else "FENCE/RALLY PASSED")
-sys.exit(1 if fail else 0)
+sys.stdout.flush()
+os._exit(1 if fail else 0)

@@ -86,4 +86,5 @@ print("CAMERA_PROTOCOL FAILED: " + "; ".join(fail) if fail else
       "CAMERA_PROTOCOL PASSED (CAMERA_SETTINGS/CAMERA_IMAGE_CAPTURED decode native==python with exact "
       "values over v2, file_url skipped; vehicle stores mode + capture index/result; panel shows mode "
       "label + image count)")
-sys.exit(1 if fail else 0)
+sys.stdout.flush()
+os._exit(1 if fail else 0)

@@ -103,4 +103,5 @@ if win.hw_joystick is not None:
 print("JOYSTICK_HW FAILED: " + "; ".join(fail) if fail else
       "JOYSTICK_HW PASSED (js_event parse + axis map/invert/normalize/deadzone; disconnect fail-safe; "
       "custom map; GUI source combo defaults to virtual)")
-sys.exit(1 if fail else 0)
+sys.stdout.flush()
+os._exit(1 if fail else 0)

@@ -77,4 +77,5 @@ else:
         fail.append("downloaded bytes do not match the simulator's log content")
 
 print("LOGS FAILED: " + "; ".join(fail) if fail else "LOGS PASSED")
-sys.exit(1 if fail else 0)
+sys.stdout.flush()
+os._exit(1 if fail else 0)

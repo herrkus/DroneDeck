@@ -82,4 +82,5 @@ if len(cex) != 1 or abs(cex[0].param1 - 40.0) > 0.5:
     fail.append(f"exclusion circle wrong: {[(c.param1) for c in cex]}")
 
 print("FENCE SHAPES FAILED: " + "; ".join(fail) if fail else "FENCE SHAPES PASSED")
-sys.exit(1 if fail else 0)
+sys.stdout.flush()
+os._exit(1 if fail else 0)

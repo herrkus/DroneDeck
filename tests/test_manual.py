@@ -99,4 +99,5 @@ if turn < 20.0:
     fail.append(f"yaw command changed heading by only {turn:.1f} deg")
 
 print("MANUAL FAILED: " + "; ".join(fail) if fail else "MANUAL PASSED")
-sys.exit(1 if fail else 0)
+sys.stdout.flush()
+os._exit(1 if fail else 0)

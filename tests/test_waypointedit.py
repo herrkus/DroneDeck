@@ -175,4 +175,5 @@ if 82 not in combo_cmds(m.WaypointEditor(MissionItem(0, 47, 8, 50, command=82),
 print("WAYPOINTEDIT FAILED: " + "; ".join(fail) if fail else
       "WAYPOINTEDIT PASSED (Loiter-turns + Loiter-to-alt + Delay + Set-servo + Condition-Yaw + Cam-trigg: fields/labels/params/"
       "frame correct, no regression)")
-sys.exit(1 if fail else 0)
+sys.stdout.flush()
+os._exit(1 if fail else 0)

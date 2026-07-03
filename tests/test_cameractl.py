@@ -61,4 +61,5 @@ if sent[-1][2][1] != -1:
 
 print("CAMERACTL FAILED: " + "; ".join(fail) if fail else
       "CAMERACTL PASSED (photo/video mode toggle + zoom emit + SET_CAMERA_MODE/ZOOM COMMAND_LONG params)")
-sys.exit(1 if fail else 0)
+sys.stdout.flush()
+os._exit(1 if fail else 0)

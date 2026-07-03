@@ -80,4 +80,5 @@ if calls:
 print("JOYSTICK_BUTTONS FAILED: " + "; ".join(fail) if fail else
       "JOYSTICK_BUTTONS PASSED (INIT snapshot ignored; rising-edge press reported once + cleared; "
       "release/closed replay nothing; A/B/X/Y -> arm/disarm/RTL/land routed + vehicle-guarded)")
-sys.exit(1 if fail else 0)
+sys.stdout.flush()
+os._exit(1 if fail else 0)

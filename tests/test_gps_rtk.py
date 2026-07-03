@@ -92,4 +92,5 @@ print("GPS_RTK FAILED: " + "; ".join(fail) if fail else
       "GPS_RTK PASSED (GPS_RTK/GPS2_RTK decode identically on native+Python with exact values; handler "
       "computes 3D baseline mm->m + stores health/nsats/accuracy; panel shows RTK OK/no-fix and '--' "
       "when absent)")
-sys.exit(1 if fail else 0)
+sys.stdout.flush()
+os._exit(1 if fail else 0)

@@ -94,4 +94,5 @@ print("FTP FAILED: " + "; ".join(fail) if fail else
       "FTP PASSED (FILE_TRANSFER_PROTOCOL round-trips native==python with the full 251-byte payload; "
       "ftp.encode/decode exact; link.send_ftp emits a CRC-valid frame decoding back to the request; "
       "ACK/NAK + NAK error codes read correctly)")
-sys.exit(1 if fail else 0)
+sys.stdout.flush()
+os._exit(1 if fail else 0)

@@ -63,4 +63,5 @@ if snap.get("last_ack") is None:
     fail.append("no COMMAND_ACK received")
 
 print("GUIDED FAILED: " + "; ".join(fail) if fail else "GUIDED PASSED")
-sys.exit(1 if fail else 0)
+sys.stdout.flush()
+os._exit(1 if fail else 0)

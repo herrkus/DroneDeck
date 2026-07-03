@@ -76,4 +76,5 @@ else:
                         f"vs ({a.lat:.5f},{a.lon:.5f},{a.alt:.1f})")
 
 print("MISSION FAILED: " + "; ".join(fail) if fail else "MISSION PASSED")
-sys.exit(1 if fail else 0)
+sys.stdout.flush()
+os._exit(1 if fail else 0)

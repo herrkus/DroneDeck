@@ -67,4 +67,5 @@ if ve.last_ack is None:
     fail.append("no COMMAND_ACK received")
 
 print("CAMERA FAILED: " + "; ".join(fail) if fail else "CAMERA PASSED")
-sys.exit(1 if fail else 0)
+sys.stdout.flush()
+os._exit(1 if fail else 0)
