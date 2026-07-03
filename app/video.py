@@ -17,7 +17,8 @@ import signal
 import shutil
 import subprocess
 
-from PySide6.QtCore import Qt, QUrl
+from PySide6.QtCore import Qt, QUrl, QTimer
+from PySide6.QtGui import QImage, QPainter, QColor
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLineEdit,
                                QPushButton, QLabel)
 
@@ -29,6 +30,115 @@ except Exception:                       # pragma: no cover - depends on the host
     HAVE_MULTIMEDIA = False
 
 HAVE_GST = shutil.which("gst-launch-1.0") is not None
+
+try:
+    import gi
+    gi.require_version("Gst", "1.0")
+    from gi.repository import Gst
+    Gst.init(None)
+    HAVE_GST_PY = True
+except Exception:                       # pragma: no cover - depends on the host
+    HAVE_GST_PY = False
+
+
+class GstVideoWidget(QWidget):
+    """Display a live H.264 stream (udp:// RTP or rtsp://) via GStreamer.
+
+    QtMultimedia's QMediaPlayer cannot open a raw UDP RTP stream (it treats udp://@:PORT as a file and
+    errors) -- which is exactly why QGroundControl renders video through GStreamer. This runs a decode
+    pipeline into an RGB appsink and paints the frames, so a real drone's FPV downlink actually shows.
+    Frames are pulled non-blocking on a QTimer, so GStreamer never blocks the Qt event loop."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setMinimumSize(160, 120)
+        self._img = None
+        self._pipe = None
+        self._sink = None
+        self._status = "no signal"
+        self._timer = QTimer(self)
+        self._timer.setInterval(30)
+        self._timer.timeout.connect(self._pull)
+
+    @staticmethod
+    def available():
+        return HAVE_GST_PY
+
+    @staticmethod
+    def _pipeline_desc(url, sink="ddsink"):
+        """gst pipeline string decoding `url` to an RGB appsink, or None if it isn't a live H.264 URL."""
+        url = (url or "").strip()
+        tail = (f" ! rtph264depay ! h264parse ! avdec_h264 ! videoconvert ! video/x-raw,format=RGB "
+                f"! appsink name={sink} max-buffers=3 drop=true sync=false")
+        if url.startswith("udp://"):
+            port = url[len("udp://"):].lstrip("@").rsplit(":", 1)[-1]
+            if not port.isdigit():
+                return None
+            return (f"udpsrc port={port} caps=application/x-rtp,media=video,encoding-name=H264,payload=96"
+                    f" ! rtpjitterbuffer latency=200" + tail)
+        if url.startswith("rtsp://"):
+            return f"rtspsrc location={url} latency=200 protocols=tcp+udp" + tail
+        return None
+
+    def start(self, url) -> bool:
+        self.stop()
+        if not HAVE_GST_PY:
+            return False
+        desc = self._pipeline_desc(url)
+        if desc is None:
+            return False
+        try:
+            self._pipe = Gst.parse_launch(desc)
+            self._sink = self._pipe.get_by_name("ddsink")
+            self._pipe.set_state(Gst.State.PLAYING)
+        except Exception:
+            self._pipe = self._sink = None
+            return False
+        self._status = "connecting..."
+        self._timer.start()
+        self.update()
+        return True
+
+    def stop(self):
+        self._timer.stop()
+        if self._pipe is not None:
+            self._pipe.set_state(Gst.State.NULL)
+        self._pipe = self._sink = None
+        self._img = None
+        self._status = "no signal"
+        self.update()
+
+    def _pull(self):
+        if self._sink is None:
+            return
+        sample = self._sink.emit("try-pull-sample", 0)      # 0 ns timeout -> non-blocking
+        if not sample:
+            return
+        st = sample.get_caps().get_structure(0)
+        w, h = st.get_value("width"), st.get_value("height")
+        buf = sample.get_buffer()
+        ok, mi = buf.map(Gst.MapFlags.READ)
+        if not ok:
+            return
+        try:
+            stride = mi.size // h                           # gst rounds rows up to 4 bytes; honour it
+            # copy() -- the mapped GStreamer memory is unmapped/reused right after this call
+            self._img = QImage(bytes(mi.data), w, h, stride, QImage.Format_RGB888).copy()
+        finally:
+            buf.unmap(mi)
+        self._status = ""
+        self.update()
+
+    def paintEvent(self, _ev):
+        p = QPainter(self)
+        p.fillRect(self.rect(), QColor("#000000"))
+        if self._img is not None and not self._img.isNull():
+            scaled = self._img.scaled(self.size(), Qt.KeepAspectRatio, Qt.SmoothTransformation)
+            p.drawImage((self.width() - scaled.width()) // 2,
+                        (self.height() - scaled.height()) // 2, scaled)
+        else:
+            p.setPen(QColor("#8a90a0"))
+            p.drawText(self.rect(), Qt.AlignCenter, self._status)
 
 
 class VideoRecorder:
@@ -133,6 +243,8 @@ class VideoPane(QWidget):
         if not HAVE_GST:
             self.btn_rec.setToolTip("Install gst-launch (GStreamer) to record the video stream")
 
+        # Two display backends share the video area, picked per-source by play(): QtMultimedia for
+        # files / http, and GStreamer for live udp:// / rtsp:// (which QtMultimedia cannot open).
         if HAVE_MULTIMEDIA:
             self.player = QMediaPlayer(self)
             self.audio = QAudioOutput(self)
@@ -145,15 +257,22 @@ class VideoPane(QWidget):
             v.addWidget(self.video, 1)
         else:
             self.video = None
-            ph = QLabel("Video unavailable\n\nInstall the PySide6 multimedia plugin\n"
-                        "and a GStreamer backend to view RTSP/UDP/FPV streams.")
+
+        self.gst_video = GstVideoWidget(self) if HAVE_GST_PY else None
+        if self.gst_video is not None:
+            v.addWidget(self.gst_video, 1)
+            self.gst_video.hide()
+
+        if self.video is None and self.gst_video is None:
+            ph = QLabel("Video unavailable\n\nInstall PySide6 QtMultimedia or GStreamer (python-gobject)\n"
+                        "to view RTSP / UDP / FPV streams.")
             ph.setAlignment(Qt.AlignCenter)
             ph.setStyleSheet("color:#8a90a0; background:#000;")
             v.addWidget(ph, 1)
             self.btn_play.setEnabled(False)
             self.btn_stop.setEnabled(False)
 
-        self.status = QLabel("multimedia ready" if HAVE_MULTIMEDIA else "multimedia backend not installed")
+        self.status = QLabel("video ready" if (HAVE_MULTIMEDIA or HAVE_GST_PY) else "no video backend installed")
         self.status.setStyleSheet("color:#8fa3bf;")
         v.addWidget(self.status)
 
@@ -161,22 +280,40 @@ class VideoPane(QWidget):
         self.url.setText(url)
 
     def play(self):
-        if not HAVE_MULTIMEDIA:
-            self.status.setText("video backend unavailable")
-            return
         url = self.url.text().strip()
         if not url:
             self.status.setText("enter a stream URL or file path")
             return
-        qurl = QUrl(url) if "://" in url else QUrl.fromLocalFile(os.path.abspath(url))
-        self.player.setSource(qurl)
-        self.player.play()
-        self.status.setText(f"opening {url}")
+        live = url.startswith(("udp://", "rtsp://"))
+        # live RTP/RTSP -> GStreamer (QtMultimedia can't open raw UDP RTP); files / http -> QtMultimedia
+        if live and self.gst_video is not None:
+            if self.video is not None:
+                self.player.stop()
+                self.video.hide()
+            self.gst_video.show()
+            if self.gst_video.start(url):
+                self.status.setText(f"playing {url} (GStreamer)")
+            else:
+                self.status.setText("could not start the GStreamer pipeline")
+            return
+        if HAVE_MULTIMEDIA:
+            if self.gst_video is not None:
+                self.gst_video.stop()
+                self.gst_video.hide()
+            self.video.show()
+            qurl = QUrl(url) if "://" in url else QUrl.fromLocalFile(os.path.abspath(url))
+            self.player.setSource(qurl)
+            self.player.play()
+            self.status.setText(f"opening {url}")
+            return
+        self.status.setText("live udp:// / rtsp:// needs GStreamer; QtMultimedia handles files / http")
 
     def stop(self):
+        if self.gst_video is not None:
+            self.gst_video.stop()
         if HAVE_MULTIMEDIA:
             self.player.stop()
-            self.status.setText("stopped")
+        self.status.setText("stopped")
 
     def _toggle_record(self):
         if self.recorder.is_recording:
