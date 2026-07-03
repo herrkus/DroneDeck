@@ -52,6 +52,8 @@ class HwJoystick:
         self.axis_map = dict(axis_map or self.DEFAULT_MAP)
         self.deadzone = max(0.0, min(0.9, deadzone))
         self._axes = {}             # axis index -> raw value (-32767..32767)
+        self._buttons = {}          # button index -> bool (current state)
+        self._presses = set()       # button indices that had a rising edge since the last take_presses()
         self._fd = None
         self.open()
 
@@ -74,11 +76,25 @@ class HwJoystick:
             self._fd = None
 
     def feed(self, data):
-        """Fold raw js_event bytes into the current axis state (also the test seam)."""
+        """Fold raw js_event bytes into the current axis + button state (also the test seam)."""
         for i in range(0, len(data) - 7, 8):
             _t, value, etype, number = _JS_EVENT.unpack_from(data, i)
-            if etype & JS_EVENT_AXIS:               # ignore buttons + init-only flags for axes
+            if etype & JS_EVENT_AXIS:               # axis motion
                 self._axes[number] = value
+            elif etype & JS_EVENT_BUTTON:           # button state; INIT bit set = the open-time snapshot
+                if value and not (etype & JS_EVENT_INIT):   # rising edge only (ignore held-at-open)
+                    self._presses.add(number)
+                self._buttons[number] = bool(value)
+
+    def take_presses(self):
+        """Return the set of buttons pressed (rising edge) since the last call, and clear it.
+        Returns empty if the device is closed -- so a disconnect never replays stale presses."""
+        if self._fd is None:
+            self._presses.clear()
+            return set()
+        p = self._presses
+        self._presses = set()
+        return p
 
     def poll(self):
         """Drain pending events without blocking. Closes on unplug (read raises OSError)."""

@@ -1438,15 +1438,36 @@ class DroneDeck(QMainWindow):
         if not (self.manual_on and self._has_vehicle()):
             return
         if self.hw_joystick is not None:
-            self.hw_joystick.poll()               # drain real-device events into its axis state
+            self.hw_joystick.poll()               # drain real-device events into its axis/button state
             if not self.hw_joystick.is_open:      # unplugged mid-flight -> fall back to the pad
                 self._fall_back_to_virtual()
                 x, y, z, r = self.joystick.values()
             else:
+                for b in self.hw_joystick.take_presses():   # gamepad buttons -> mapped actions
+                    self._joy_button(b)
                 x, y, z, r = self.hw_joystick.values()
         else:
             x, y, z, r = self.joystick.values()
         self.link.send_manual_control(self._sysid(), x, y, z, r)
+
+    # default gamepad button -> action (Xbox layout: A/B/X/Y). Fired immediately on press like a
+    # transmitter switch (no modal confirm mid-flight); the link calls are ACK-confirmed + guarded.
+    JOY_BUTTONS = {0: "arm", 1: "disarm", 2: "rtl", 3: "land"}
+
+    def _joy_button(self, idx):
+        act = self.JOY_BUTTONS.get(idx)
+        if not act or not self._has_vehicle():
+            return
+        sysid = self._sysid()
+        if act == "arm":
+            self.link.arm(sysid, True)
+        elif act == "disarm":
+            self.link.arm(sysid, False)
+        elif act == "rtl":
+            self.link.rtl(sysid)
+        elif act == "land":
+            self.link.land(sysid)
+        self._on_info(f"joystick button {idx}: {act.upper()}")
 
     def _refresh_joysticks(self):
         """Populate the input-source dropdown: the on-screen pad plus any real /dev/input/jsN."""

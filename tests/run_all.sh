@@ -128,6 +128,7 @@ check "telemetry_msgs"      ""                        tests/test_telemetry_msgs.
 check "gimbal_v2"           ""                        tests/test_gimbal_v2.py
 check "fence_enable"        ""                        tests/test_fence_enable.py
 check "camera_status"       ""                        tests/test_camera_status.py
+check "joystick_buttons"    ""                        tests/test_joystick_buttons.py
 check "camera"              ""                        tests/test_camera.py
 check "logs"                ""                        tests/test_logs.py
 check "video"               ""                        tests/test_video.py
